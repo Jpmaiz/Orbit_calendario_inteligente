@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ PRINCIPALES ============
+
+model Usuario {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  nombre             String
+  zonaHoraria        String    @default("America/La_Paz") @map("zona_horaria")
+  margenMinimoMin    Int       @default(30) @map("margen_minimo_min")
+  nivelNotificacion  String    @default("importante") @map("nivel_notificacion")
+
+  creadoEn       DateTime  @default(now()) @map("creado_en")
+  modificadoEn   DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn    DateTime? @map("eliminado_en")
+
+  materias        Materia[]
+  eventos         EventoFijo[]
+  tareas          Tarea[]
+  sugerencias     Sugerencia[]
+  recordatorios   Recordatorio[]
+  interpretaciones InterpretacionIA[]
+
+  @@map("usuarios")
+}
+
+model Materia {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  nombre     String
+  color      String   @default("#5A3FA0")
+  semestre   String?
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario  Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  eventos  EventoFijo[]
+  tareas   Tarea[]
+
+  @@map("materias")
+}
+
+model EventoFijo {
+  id               String    @id @default(uuid())
+  usuarioId        String    @map("usuario_id")
+  materiaId        String?   @map("materia_id")
+  titulo           String
+  diaSemana        Int       @map("dia_semana")
+  horaInicio       String    @map("hora_inicio")
+  horaFin          String    @map("hora_fin")
+  ubicacion        String?
+  origen           String    @default("manual")
+  uidExterno       String?   @map("uid_externo")
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  materia  Materia? @relation(fields: [materiaId], references: [id])
+
+  @@index([usuarioId, diaSemana])
+  @@map("eventos_fijos")
+}
+
+model Tarea {
+  id                  String    @id @default(uuid())
+  usuarioId           String    @map("usuario_id")
+  materiaId           String?   @map("materia_id")
+  titulo              String
+  descripcion         String?
+  tipo                String
+  fechaLimite         DateTime  @map("fecha_limite")
+  duracionEstMin      Int       @default(60) @map("duracion_est_min")
+  prioridad           String    @default("media")
+  prioridadCalculada  Float     @default(0) @map("prioridad_calculada")
+  estado              String    @default("pendiente")
+  completadaEn        DateTime? @map("completada_en")
+  origen              String    @default("manual")
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario      Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  materia      Materia?      @relation(fields: [materiaId], references: [id])
+  sugerencias  Sugerencia[]
+
+  @@index([usuarioId, fechaLimite])
+  @@index([usuarioId, estado])
+  @@map("tareas")
+}
+
+model Sugerencia {
+  id            String    @id @default(uuid())
+  usuarioId     String    @map("usuario_id")
+  tareaId       String    @map("tarea_id")
+  fechaInicio   DateTime  @map("fecha_inicio")
+  fechaFin      DateTime  @map("fecha_fin")
+  motivo        String
+  estado        String    @default("propuesta")
+  respondidaEn  DateTime? @map("respondida_en")
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tarea    Tarea    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fechaInicio])
+  @@map("sugerencias")
+}
+
+model Recordatorio {
+  id            String    @id @default(uuid())
+  usuarioId     String    @map("usuario_id")
+  tareaId       String?   @map("tarea_id")
+  eventoId      String?   @map("evento_id")
+  sugerenciaId  String?   @map("sugerencia_id")
+  fechaEnvio    DateTime  @map("fecha_envio")
+  mensaje       String
+  estado        String    @default("pendiente")
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fechaEnvio])
+  @@map("recordatorios")
+}
+
+// ============ IA / TRAZABILIDAD ============
+
+model InterpretacionIA {
+  id                String    @id @default(uuid())
+  usuarioId         String    @map("usuario_id")
+  tipoEntrada       String    @map("tipo_entrada")
+  entradaOriginal   String    @map("entrada_original")
+  respuestaIa       Json      @map("respuesta_ia")
+  confianza         Float?
+  fueCorregida      Boolean   @default(false) @map("fue_corregida")
+  estado            String    @default("pendiente")
+  modeloUsado       String    @map("modelo_usado")
+  tiempoRespuestaMs Int?      @map("tiempo_respuesta_ms")
+
+  creadoEn  DateTime  @default(now()) @map("creado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, creadoEn])
+  @@map("interpretaciones_ia")
+}
