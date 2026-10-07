@@ -21,3 +21,11 @@ export async function crearClienteServidor() {
     }
   );
 }
+
+export async function obtenerUsuario() {
+  const supabase = await crearClienteServidor();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+}
