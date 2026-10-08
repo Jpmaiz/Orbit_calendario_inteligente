@@ -46,7 +46,7 @@ export default function PaginaRegistro({
         </form>
 
         <p className="text-center text-gray-400 text-sm">
-          ¿Ya tenés cuenta?{' '}
+          ¿Ya tienes una cuenta en orbit o que pex?{' '}
           <Link href="/login" className="text-indigo-400 hover:underline">
             Iniciá sesión
           </Link>
