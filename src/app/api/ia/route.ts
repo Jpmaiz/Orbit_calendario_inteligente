@@ -26,9 +26,23 @@ export async function POST(req: NextRequest) {
     const interpretacion = await ia.interpretarTexto(texto);
     const latencia = Date.now() - inicio;
 
+    // Buscar si el usuario ya tiene una materia con ese nombre
+    let materiaId: string | null = null;
+    if (interpretacion.materia) {
+      const materia = await prisma.materia.findFirst({
+        where: {
+          usuarioId: user.id,
+          eliminadoEn: null,
+          nombre: { equals: interpretacion.materia, mode: 'insensitive' },
+        },
+        select: { id: true },
+      });
+      materiaId = materia?.id ?? null;
+    }
+
     await prisma.interpretacionIA.create({
       data: {
-        usuarioId: user.id, // del login, no del body
+        usuarioId: user.id,
         tipoEntrada: 'texto',
         entradaOriginal: texto,
         respuestaIa: interpretacion as object,
@@ -39,7 +53,11 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ interpretacion });
+    return NextResponse.json({
+      interpretacion,
+      materiaId, // el id real si existe, o null
+      materiaSugerida: interpretacion.materia ?? null, // el nombre que detectó la IA
+    });
   } catch (error) {
     console.error('Error en /api/ia:', error);
     return NextResponse.json({ error: 'Error al interpretar el texto' }, { status: 500 });
