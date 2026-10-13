@@ -1,16 +1,21 @@
+import TarjetaTarea from '@/components/calendario/TarjetaTarea';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 
-export default async function PaginaDia() {
+async function cargarTareas() {
   const user = await obtenerUsuario();
 
-  const tareas = user
+  return user
     ? await prisma.tarea.findMany({
         where: { usuarioId: user.id, eliminadoEn: null },
         orderBy: { fechaLimite: 'asc' },
         include: { materia: { select: { nombre: true, color: true } } },
       })
     : [];
+}
+
+export default async function PaginaDia() {
+  const tareas = await cargarTareas();
 
   return (
     <div className="space-y-4">
@@ -23,18 +28,18 @@ export default async function PaginaDia() {
       ) : (
         <ul className="space-y-2">
           {tareas.map((t) => (
-            <li
-              key={t.id}
-              className="rounded-lg bg-gray-800 p-4 flex items-center justify-between"
-            >
-              <div>
-                <p className="font-medium">{t.titulo}</p>
-                <p className="text-sm text-gray-400">
-                  {t.materia?.nombre ?? 'Sin materia'} ·{' '}
-                  {new Date(t.fechaLimite).toLocaleDateString('es-BO')}
-                </p>
-              </div>
-              <span className="text-xs text-gray-500">{t.estado}</span>
+            <li key={t.id}>
+              <TarjetaTarea
+                tarea={{
+                  id: t.id,
+                  titulo: t.titulo,
+                  fechaLimite: t.fechaLimite.toISOString(),
+                  tipo: t.tipo,
+                  prioridad: t.prioridad,
+                  estado: t.estado,
+                  materia: t.materia,
+                }}
+              />
             </li>
           ))}
         </ul>
