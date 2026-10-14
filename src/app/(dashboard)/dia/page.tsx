@@ -36,7 +36,6 @@ async function cargarDatosDia() {
 export default async function PaginaDia() {
   const { tareas, nombre, fechaActual } = await cargarDatosDia();
   const primerNombre = nombre.trim().split(/\s+/)[0] || 'estudiante';
-  const inicial = primerNombre.slice(0, 1).toLocaleUpperCase('es');
   const fechaFormateada = fechaActual.toLocaleDateString('es-BO', {
     weekday: 'long', day: 'numeric', month: 'long',
     timeZone: 'America/La_Paz',
@@ -64,9 +63,6 @@ export default async function PaginaDia() {
             {fechaFormateada}
           </time>
         </div>
-        <span role="img" aria-label={'Avatar de ' + nombre} className="mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full border-4 border-white bg-[#E3EADB] text-lg font-semibold text-[#436244] shadow-sm md:h-14 md:w-14">
-          {inicial}
-        </span>
       </header>
 
       <section aria-labelledby="titulo-tareas" className="space-y-5">
