@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import IconoDashboard from './IconoDashboard';
 
-type Panel = 'Semana' | 'Calendario' | 'Orbit' | 'Perfil' | 'Agregar tarea';
+type Panel = 'Semana' | 'Calendario' | 'Orbit' | 'Perfil';
 
 export default function ControlesDashboard({
   ubicacion,
@@ -36,10 +36,10 @@ export default function ControlesDashboard({
               Semana
             </button>
           </div>
-          <button type="button" onClick={() => abrirPanel('Agregar tarea')} className={'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-[#35695D] transition-colors hover:bg-[#E7EDE6] md:text-sm ' + foco}>
+          <Link href="/dia/nueva" className={'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-[#35695D] transition-colors hover:bg-[#E7EDE6] md:text-sm ' + foco}>
             <IconoDashboard nombre="mas" className="h-4 w-4" />
             Agregar tarea
-          </button>
+          </Link>
         </div>
       ) : (
         <>
@@ -95,8 +95,6 @@ export default function ControlesDashboard({
           <p className="mt-4 text-sm leading-6 text-[#647168]">
             {panel === 'Orbit'
               ? 'Tu asistente Orbit estará disponible aquí próximamente.'
-              : panel === 'Agregar tarea'
-                ? 'El formulario para agregar tareas está en preparación.'
                 : 'La vista semanal del calendario está en preparación. Por ahora puedes consultar tus tareas en Hoy.'}
           </p>
         )}
