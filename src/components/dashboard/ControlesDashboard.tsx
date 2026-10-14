@@ -76,8 +76,8 @@ export default function ControlesDashboard({
       <dialog ref={dialogo} aria-labelledby={tituloId} className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm overflow-y-auto [overflow-wrap:anywhere] md:max-w-md rounded-3xl border border-[#E4E8DF] bg-[#FAFBF7] p-6 text-[#263D34] shadow-xl backdrop:bg-[#142E27]/35">
         <div className="flex items-center justify-between gap-4">
           <h2 id={tituloId} className="min-w-0 text-xl font-semibold">{panel}</h2>
-          <button type="button" onClick={() => dialogo.current?.close()} aria-label="Cerrar" className={'flex h-11 w-11 shrink-0 items-center justify-center rounded-full hover:bg-[#E9EEE5] ' + foco}>
-            <IconoDashboard nombre="cerrar" />
+          <button type="button" onClick={() => dialogo.current?.close()} className={'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-[#35695D] hover:bg-[#E9EEE5] ' + foco}>
+            Cerrar
           </button>
         </div>
         {panel === 'Perfil' ? (
