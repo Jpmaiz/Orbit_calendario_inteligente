@@ -1,5 +1,5 @@
-import Link from 'next/link';
 import { cerrarSesion } from '../(auth)/acciones';
+import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
 
 export default function LayoutDashboard({
   children,
@@ -7,27 +7,11 @@ export default function LayoutDashboard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
-      <nav className="border-b border-gray-800 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <span className="text-xl font-bold">Orbit 🪐</span>
-          <Link href="/dia" className="text-gray-300 hover:text-white">
-            Día
-          </Link>
-          <Link href="/semana" className="text-gray-300 hover:text-white">
-            Semana
-          </Link>
-        </div>
-        <form action={cerrarSesion}>
-          <button
-            type="submit"
-            className="text-sm text-gray-400 hover:text-white"
-          >
-            Cerrar sesión
-          </button>
-        </form>
-      </nav>
-      <main className="p-6 max-w-3xl mx-auto">{children}</main>
+    <div className="min-h-dvh bg-[#F6F7F2] font-sans text-[#263D34] selection:bg-[#DCE8D5]">
+      <main id="contenido-principal" className="mx-auto w-full min-w-0 max-w-none px-4 pb-[calc(11rem+env(safe-area-inset-bottom))] pt-6 md:max-w-3xl md:px-6 md:pt-10 lg:max-w-5xl lg:px-8 lg:pt-12">
+        {children}
+      </main>
+      <ControlesDashboard ubicacion="navegacion" cerrarSesionAction={cerrarSesion} />
     </div>
   );
 }
