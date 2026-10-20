@@ -1,7 +1,10 @@
+import type { PrioridadCalculada } from '@/tipos/tarea';
+
 type TareaConFechas = {
   estado: string;
   fechaLimite: Date;
   completadaEn: Date | null;
+  prioridadCalculada?: Pick<PrioridadCalculada, 'puntaje'>;
 };
 
 const formatoDiaBolivia = new Intl.DateTimeFormat('en-US', {
@@ -42,10 +45,17 @@ export function organizarTareasDia<T extends TareaConFechas>(
       }
       continue;
     }
+    if (tarea.estado !== 'pendiente' && tarea.estado !== 'en_proceso') continue;
     const diaLimite = diaEnBolivia(tarea.fechaLimite);
     if (diaLimite < hoy) vencidas.push(tarea);
     else if (diaLimite === hoy) paraHoy.push(tarea);
     else if (diaLimite < finProximosDias) proximas.push(tarea);
+  }
+  // Ordenar los puntajes recibidos sin calcular prioridades.
+  for (const seccion of [vencidas, paraHoy, proximas]) {
+    seccion.sort((a, b) =>
+      (b.prioridadCalculada?.puntaje ?? 0) - (a.prioridadCalculada?.puntaje ?? 0) ||
+      a.fechaLimite.getTime() - b.fechaLimite.getTime());
   }
   return [
     { id: 'vencidas', titulo: 'Vencidas', tareas: vencidas },

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import FormularioTarea from '@/components/formularios/FormularioTarea';
+import { esDificultad } from '@/tipos/tarea';
 import type { ValoresTarea } from '@/components/formularios/FormularioTarea';
 
 type Carga =
@@ -26,7 +27,8 @@ function leerTarea(datos: unknown, id: string): ValoresTarea | null {
       !('fechaLimite' in tarea) || typeof tarea.fechaLimite !== 'string' ||
       Number.isNaN(new Date(tarea.fechaLimite).getTime()) ||
       !('prioridad' in tarea) || typeof tarea.prioridad !== 'string' ||
-      !('duracionEstMin' in tarea) || typeof tarea.duracionEstMin !== 'number' ||
+      !('duracionEstMin' in tarea) || (tarea.duracionEstMin !== null && typeof tarea.duracionEstMin !== 'number') ||
+      !('dificultad' in tarea) || !esDificultad(tarea.dificultad) ||
       !('descripcion' in tarea) || (tarea.descripcion !== null && typeof tarea.descripcion !== 'string') ||
       !('materiaId' in tarea) || (tarea.materiaId !== null && typeof tarea.materiaId !== 'string')) {
     throw new Error('Los datos de la tarea no son válidos.');
@@ -37,7 +39,7 @@ function leerTarea(datos: unknown, id: string): ValoresTarea | null {
     ? { id: tarea.materia.id, nombre: tarea.materia.nombre } : null;
   return {
     titulo: tarea.titulo, tipo: tarea.tipo, fechaLimite: tarea.fechaLimite,
-    prioridad: tarea.prioridad, duracionEstMin: tarea.duracionEstMin,
+    prioridad: tarea.prioridad, duracionEstMin: tarea.duracionEstMin, dificultad: tarea.dificultad,
     descripcion: tarea.descripcion, materiaId: tarea.materiaId, materia,
   };
 }

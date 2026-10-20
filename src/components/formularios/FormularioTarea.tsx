@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+import { esDificultad } from '@/tipos/tarea';
+import type { Dificultad } from '@/tipos/tarea';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
@@ -11,7 +13,8 @@ export type ValoresTarea = {
   tipo: string;
   fechaLimite: string;
   prioridad: string;
-  duracionEstMin: number;
+  duracionEstMin: number | null;
+  dificultad: Dificultad;
   descripcion: string | null;
   materiaId: string | null;
   materia?: Materia | null;
@@ -29,7 +32,16 @@ export function fechaParaInput(valor: string): string {
     dosDigitos(fecha.getMinutes());
 }
 
-type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'duracionEstMin' | 'prioridad';
+type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'duracionEstMin' | 'prioridad' | 'dificultad';
+type DatosCreacion = Omit<ValoresTarea, 'materia'>;
+type Duplicado = { pregunta: string; sugerenciasDiferencia: string[]; datos: DatosCreacion };
+
+function leerDuplicado(valor: unknown): valor is { pregunta: string; sugerenciasDiferencia: string[] } {
+  return typeof valor === 'object' && valor !== null &&
+    'pregunta' in valor && typeof valor.pregunta === 'string' &&
+    'sugerenciasDiferencia' in valor && Array.isArray(valor.sugerenciasDiferencia) &&
+    valor.sugerenciasDiferencia.every((opcion: unknown) => typeof opcion === 'string');
+}
 const tipos = [
   ['tarea', 'Tarea'], ['examen', 'Examen'], ['entrega', 'Entrega'],
   ['exposicion', 'Exposición'], ['proyecto', 'Proyecto'],
@@ -73,6 +85,15 @@ export default function FormularioTarea(props: Props = {}) {
   const [error, establecerError] = useState<string | null>(null);
   const [enviando, establecerEnviando] = useState(false);
   const solicitudEnCurso = useRef(false);
+  const avisoDuplicado = useRef<HTMLDivElement>(null);
+  const [duplicado, establecerDuplicado] = useState<Duplicado | null>(null);
+  const [otroNombre, establecerOtroNombre] = useState(false);
+  const [nuevoTitulo, establecerNuevoTitulo] = useState('');
+  const [errorTitulo, establecerErrorTitulo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (duplicado) avisoDuplicado.current?.focus();
+  }, [duplicado]);
 
   useEffect(() => {
     const controlador = new AbortController();
@@ -114,14 +135,18 @@ export default function FormularioTarea(props: Props = {}) {
 
   async function enviar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
-    if (solicitudEnCurso.current) return;
+    if (solicitudEnCurso.current || duplicado) return;
     const formulario = evento.currentTarget;
     const datos = new FormData(formulario);
     const titulo = String(datos.get('titulo') ?? '').trim();
     const tipo = String(datos.get('tipo') ?? '');
     const fechaLocal = String(datos.get('fechaLimite') ?? '');
     const prioridad = String(datos.get('prioridad') ?? '');
-    const duracionEstMin = Number(datos.get('duracionEstMin'));
+    const duracionTexto = String(datos.get('duracionEstMin') ?? '').trim();
+    const duracionInvalida = (formulario.elements.namedItem('duracionEstMin') as HTMLInputElement).validity.badInput;
+    const duracionEstMin = duracionTexto === '' ? null : Number(duracionTexto);
+    const dificultadTexto = String(datos.get('dificultad') ?? '');
+    const dificultad = dificultadTexto === '' ? null : Number(dificultadTexto);
     const descripcion = String(datos.get('descripcion') ?? '').trim();
     const materiaId = materiaSeleccionada;
     const nuevosErrores: Partial<Record<Campo, string>> = {};
@@ -129,9 +154,10 @@ export default function FormularioTarea(props: Props = {}) {
     else if (titulo.length > 200) nuevosErrores.titulo = 'El título debe tener como máximo 200 caracteres.';
     if (!tipos.some(([valor]) => valor === tipo)) nuevosErrores.tipo = 'Selecciona un tipo de tarea.';
     if (!fechaLocal || Number.isNaN(new Date(fechaLocal).getTime())) nuevosErrores.fechaLimite = 'Selecciona una fecha y hora válidas.';
-    if (!Number.isInteger(duracionEstMin) || duracionEstMin <= 0 || duracionEstMin > 1440) {
-      nuevosErrores.duracionEstMin = 'Ingresa una duración de 1 a 1440 minutos, sin decimales.';
+    if (duracionInvalida || (duracionEstMin !== null && (!Number.isInteger(duracionEstMin) || duracionEstMin <= 0 || duracionEstMin > 6000))) {
+      nuevosErrores.duracionEstMin = 'Ingresa una duración de 1 a 6000 minutos, sin decimales, o deja el campo vacío.';
     }
+    if (!esDificultad(dificultad)) nuevosErrores.dificultad = 'Selecciona una dificultad de 1 a 5 o Sin definir.';
     if (!prioridades.some(([valor]) => valor === prioridad)) nuevosErrores.prioridad = 'Selecciona una prioridad.';
     establecerErrores(nuevosErrores);
     establecerError(null);
@@ -142,6 +168,8 @@ export default function FormularioTarea(props: Props = {}) {
       return;
     }
 
+    if (!esDificultad(dificultad)) return;
+
     const cambios: Partial<Omit<ValoresTarea, 'materia'>> = {};
     if (iniciales) {
       if (titulo !== iniciales.titulo) cambios.titulo = titulo;
@@ -150,6 +178,7 @@ export default function FormularioTarea(props: Props = {}) {
       if (fechaLocal !== fechaInicial) cambios.fechaLimite = new Date(fechaLocal).toISOString();
       if (prioridad !== iniciales.prioridad) cambios.prioridad = prioridad;
       if (duracionEstMin !== iniciales.duracionEstMin) cambios.duracionEstMin = duracionEstMin;
+      if (dificultad !== iniciales.dificultad) cambios.dificultad = dificultad;
       if (descripcion !== (iniciales.descripcion ?? '')) cambios.descripcion = descripcion || null;
       if (materiaId !== (iniciales.materiaId ?? '')) cambios.materiaId = materiaId || null;
       if (Object.keys(cambios).length === 0) {
@@ -158,21 +187,39 @@ export default function FormularioTarea(props: Props = {}) {
       }
     }
 
+    const creacion: DatosCreacion = {
+      titulo, tipo, fechaLimite: new Date(fechaLocal).toISOString(),
+      prioridad, duracionEstMin, dificultad,
+      descripcion: descripcion || null, materiaId: materiaId || null,
+    };
+    establecerDuplicado(null);
+    await guardar(editando ? cambios : creacion, false, editando ? undefined : creacion);
+  }
+
+  async function guardar(
+    datos: Partial<DatosCreacion>,
+    confirmarNueva = false,
+    creacion?: DatosCreacion,
+  ) {
+    if (solicitudEnCurso.current) return;
     solicitudEnCurso.current = true;
     establecerEnviando(true);
+    establecerError(null);
     try {
       const respuesta = await fetch(editando ? '/api/tareas/' + encodeURIComponent(props.tareaId) : '/api/tareas', {
         method: editando ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editando ? cambios : {
-          titulo, tipo, fechaLimite: new Date(fechaLocal).toISOString(),
-          prioridad, duracionEstMin,
-          ...(descripcion ? { descripcion } : {}),
-          ...(materiaId ? { materiaId } : {}),
-        }),
+        body: JSON.stringify({ ...datos, ...(!editando && confirmarNueva ? { confirmarNueva: true } : {}) }),
       });
       if (!respuesta.ok) {
         const resultado: unknown = await respuesta.json().catch(() => null);
+        if (!editando && respuesta.status === 409 && creacion && leerDuplicado(resultado)) {
+          establecerDuplicado({ pregunta: resultado.pregunta, sugerenciasDiferencia: resultado.sugerenciasDiferencia, datos: creacion });
+          establecerOtroNombre(false);
+          establecerNuevoTitulo('');
+          establecerErrorTitulo(null);
+          return;
+        }
         establecerError(mensajeError(resultado, editando ? 'No se pudieron guardar los cambios. Intenta de nuevo.' : 'No se pudo crear la tarea. Intenta de nuevo.'));
         return;
       }
@@ -186,10 +233,24 @@ export default function FormularioTarea(props: Props = {}) {
     }
   }
 
+  function confirmarDuplicado(titulo: string) {
+    if (!duplicado || solicitudEnCurso.current) return;
+    const final = titulo.trim();
+    if (!final || final.length > 200) {
+      establecerOtroNombre(true);
+      establecerNuevoTitulo(titulo);
+      establecerErrorTitulo('El título debe tener entre 1 y 200 caracteres.');
+      return;
+    }
+    establecerErrorTitulo(null);
+    const datos = { ...duplicado.datos, titulo: final };
+    void guardar(datos, true, datos);
+  }
+
   return (
     <form onSubmit={enviar} noValidate aria-busy={enviando} className="min-w-0 rounded-[28px] border border-[#E4E8DF] bg-white p-5 shadow-[0_3px_14px_rgba(38,61,52,0.035)] md:p-8">
       <p className="mb-6 text-sm leading-6 text-[#647168]">Los campos con * son obligatorios.</p>
-      <fieldset disabled={enviando} className="min-w-0 space-y-5">
+      <fieldset disabled={enviando || duplicado !== null} className="min-w-0 space-y-5">
         <legend className="sr-only">{editando ? 'Datos de la tarea' : 'Datos de la nueva tarea'}</legend>
         <div>
           <label htmlFor={prefijo + '-titulo'} className="text-sm font-semibold">Título *</label>
@@ -219,9 +280,21 @@ export default function FormularioTarea(props: Props = {}) {
             {errorCampo('prioridad')}
           </div>
           <div>
-            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Duración estimada (minutos) *</label>
-            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" required min={1} max={1440} step={1} defaultValue={iniciales?.duracionEstMin ?? 60} className={estiloCampo} />
+            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Duración estimada (minutos) <span className="font-normal text-[#647168]">(opcional)</span></label>
+            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" min={1} max={6000} step={1} placeholder="Sin estimar" defaultValue={iniciales?.duracionEstMin ?? ''} className={estiloCampo} />
             {errorCampo('duracionEstMin')}
+          </div>
+          <div>
+            <label htmlFor={prefijo + '-dificultad'} className="text-sm font-semibold">Dificultad <span className="font-normal text-[#647168]">(opcional)</span></label>
+            <select {...accesibilidad('dificultad')} name="dificultad" defaultValue={iniciales?.dificultad ?? ''} className={estiloCampo}>
+              <option value="">Sin definir</option>
+              <option value="1">1 Muy fácil</option>
+              <option value="2">2 Fácil</option>
+              <option value="3">3 Media</option>
+              <option value="4">4 Difícil</option>
+              <option value="5">5 Muy difícil</option>
+            </select>
+            {errorCampo('dificultad')}
           </div>
         </div>
         <div>
@@ -242,12 +315,38 @@ export default function FormularioTarea(props: Props = {}) {
           </p>
         </div>
       </fieldset>
+      {duplicado && (
+        <div ref={avisoDuplicado} tabIndex={-1} role="region" aria-labelledby={prefijo + '-duplicado'} className="mt-6 min-w-0 rounded-2xl border border-[#E6D7AC] bg-[#FCF7E8] p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9A7B30]">
+          <p id={prefijo + '-duplicado'} className="whitespace-pre-wrap break-words text-sm leading-6 text-[#675223]">{duplicado.pregunta}</p>
+          <p className="mt-2 text-xs leading-5 text-[#675223]">Se conservaron los datos del formulario.</p>
+          <fieldset disabled={enviando} className="mt-4 min-w-0 space-y-4">
+            <legend className="sr-only">Resolver posible duplicado</legend>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => { establecerDuplicado(null); establecerError(null); }} className={'min-h-11 rounded-xl border border-[#D8C99E] bg-white px-3 py-2 text-sm text-[#675223] disabled:opacity-60 ' + foco}>Es la misma</button>
+              {duplicado.sugerenciasDiferencia.map((opcion, indice) => (
+                <button key={indice} type="button" onClick={() => confirmarDuplicado(duplicado.datos.titulo + ' (' + opcion + ')')} className={'min-h-11 max-w-full break-words rounded-xl border border-[#D8C99E] bg-white px-3 py-2 text-sm text-[#675223] disabled:opacity-60 ' + foco}>{opcion}</button>
+              ))}
+              <button type="button" aria-expanded={otroNombre} aria-controls={prefijo + '-otro-nombre-panel'} onClick={() => establecerOtroNombre(true)} className={'min-h-11 rounded-xl border border-[#D8C99E] bg-white px-3 py-2 text-sm text-[#675223] disabled:opacity-60 ' + foco}>Otro nombre.</button>
+              <button type="button" onClick={() => confirmarDuplicado(duplicado.datos.titulo)} className={'min-h-11 rounded-xl bg-[#234F45] px-3 py-2 text-sm font-semibold text-white disabled:opacity-60 ' + foco}>Guardar igual</button>
+            </div>
+            {otroNombre && (
+              <div id={prefijo + '-otro-nombre-panel'}>
+                <label htmlFor={prefijo + '-otro-nombre'} className="text-sm font-semibold text-[#675223]">Título diferente</label>
+                <input id={prefijo + '-otro-nombre'} type="text" value={nuevoTitulo} onChange={(evento) => establecerNuevoTitulo(evento.target.value)} onKeyDown={(evento) => { if (evento.key === 'Enter') { evento.preventDefault(); confirmarDuplicado(nuevoTitulo); } }} maxLength={200} aria-invalid={!!errorTitulo} aria-describedby={errorTitulo ? prefijo + '-otro-nombre-error' : undefined} className={estiloCampo} />
+                {errorTitulo && <p id={prefijo + '-otro-nombre-error'} role="alert" className="mt-2 text-xs text-[#A34955]">{errorTitulo}</p>}
+                <button type="button" onClick={() => confirmarDuplicado(nuevoTitulo)} className={'mt-3 min-h-11 rounded-xl bg-[#234F45] px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 ' + foco}>Guardar con este título</button>
+              </div>
+            )}
+            <button type="button" onClick={() => { establecerDuplicado(null); establecerError(null); }} className={'min-h-11 rounded-lg px-2 text-sm font-medium text-[#675223] underline underline-offset-4 ' + foco}>Volver al formulario</button>
+          </fieldset>
+        </div>
+      )}
       <div aria-live="polite" aria-atomic="true">
         {error && <p role="alert" className="mt-6 break-words rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">{error}</p>}
       </div>
       <div className="mt-7 flex flex-col gap-3 border-t border-[#EBEEE6] pt-6 sm:flex-row sm:justify-end">
         {enviando ? <span aria-disabled="true" className="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm text-[#78827B]">Cancelar</span> : <Link href="/dia" className={'inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-[#35695D] hover:bg-[#E7EDE6] ' + foco}>Cancelar</Link>}
-        <button type="submit" disabled={enviando} className={'min-h-11 rounded-xl bg-[#234F45] px-6 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-wait disabled:opacity-60 ' + foco}>
+        <button type="submit" disabled={enviando || duplicado !== null} className={'min-h-11 rounded-xl bg-[#234F45] px-6 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-wait disabled:opacity-60 ' + foco}>
           {enviando ? (editando ? 'Guardando cambios…' : 'Creando tarea…') : (editando ? 'Guardar cambios' : 'Crear tarea')}
         </button>
       </div>

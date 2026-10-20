@@ -1,6 +1,7 @@
 import TarjetaTarea from '@/components/calendario/TarjetaTarea';
 import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
 import { organizarTareasDia } from '@/components/calendario/organizarTareasDia';
+import { priorizarTareas } from '@/lib/prioridad';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 
@@ -27,7 +28,8 @@ async function cargarDatosDia() {
         select: { nombre: true },
       }).catch(() => null),
     ]);
-    return { tareas, nombre: perfil?.nombre || nombreSesion, fechaActual };
+    // Usar el mismo motor del backend que GET /api/tareas, solo en el servidor.
+    return { tareas: priorizarTareas(tareas, fechaActual), nombre: perfil?.nombre || nombreSesion, fechaActual };
   } catch {
     console.warn('Carga real de tareas fallida.');
     return { tareas: [], nombre: nombreSesion, fechaActual };
@@ -91,6 +93,7 @@ export default async function PaginaDia() {
                       fechaLimite: tarea.fechaLimite.toISOString(),
                       tipo: tarea.tipo,
                       prioridad: tarea.prioridad,
+                      prioridadCalculada: tarea.prioridadCalculada,
                       estado: tarea.estado,
                       materia: tarea.materia,
                     }} />
