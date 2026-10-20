@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { validarTarea } from '@/lib/validacion/tarea';
+import { priorizarTareas } from '@/lib/prioridad'; // ← nuevo
 
-// GET /api/tareas → tareas del usuario logueado
+// GET /api/tareas → tareas del usuario logueado, con prioridad calculada
 export async function GET() {
   const user = await obtenerUsuario();
   if (!user) {
@@ -16,7 +17,7 @@ export async function GET() {
       orderBy: { fechaLimite: 'asc' },
       include: { materia: { select: { id: true, nombre: true, color: true } } },
     });
-    return NextResponse.json({ tareas });
+    return NextResponse.json({ tareas: priorizarTareas(tareas) }); // ← nuevo
   } catch (error) {
     console.error('Error GET /api/tareas:', error);
     return NextResponse.json({ error: 'Error al obtener tareas' }, { status: 500 });
