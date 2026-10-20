@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ia } from '@/lib/ia/gemini';
+import { ia, modeloIA} from '@/lib/ia';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 
@@ -44,17 +44,17 @@ export async function POST(req: NextRequest) {
     }
 
     await prisma.interpretacionIA.create({
-      data: {
-        usuarioId: user.id,
-        tipoEntrada: 'texto',
-        entradaOriginal: texto,
-        respuestaIa: interpretacion as object,
-        confianza: interpretacion.confianza,
-        modeloUsado: 'gemini-flash-latest',
-        tiempoRespuestaMs: latencia,
-        estado: guardar ? 'aplicada' : 'pendiente',
-      },
-    });
+  data: {
+    usuarioId: user.id,
+    tipoEntrada: 'texto',
+    entradaOriginal: texto,
+    respuestaIa: interpretacion as object,
+    confianza: interpretacion.confianza,
+    modeloUsado: modeloIA,
+    tiempoRespuestaMs: latencia,
+    estado: guardar ? 'aplicada' : 'pendiente',
+  },
+});
 
     // NUEVO: guardado directo como tarea
     if (guardar) {
