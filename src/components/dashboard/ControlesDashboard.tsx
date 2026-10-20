@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useId, useRef, useState } from 'react';
 import IconoDashboard from './IconoDashboard';
+import CapturaRapida from '@/components/ia/CapturaRapida';
 
 type Panel = 'Semana' | 'Calendario' | 'Orbit' | 'Perfil';
 
@@ -16,6 +17,7 @@ export default function ControlesDashboard({
   const dialogo = useRef<HTMLDialogElement>(null);
   const tituloId = useId();
   const [panel, establecerPanel] = useState<Panel>('Orbit');
+  const [orbitOcupado, establecerOrbitOcupado] = useState(false);
 
   function abrirPanel(nombre: Panel) {
     establecerPanel(nombre);
@@ -73,14 +75,16 @@ export default function ControlesDashboard({
         </>
       )}
 
-      <dialog ref={dialogo} aria-labelledby={tituloId} className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm overflow-y-auto [overflow-wrap:anywhere] md:max-w-md rounded-3xl border border-[#E4E8DF] bg-[#FAFBF7] p-6 text-[#263D34] shadow-xl backdrop:bg-[#142E27]/35">
+      <dialog ref={dialogo} onCancel={(evento) => { if (orbitOcupado) evento.preventDefault(); }} aria-labelledby={tituloId} className="fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm overflow-y-auto [overflow-wrap:anywhere] md:max-w-md rounded-3xl border border-[#E4E8DF] bg-[#FAFBF7] p-6 text-[#263D34] shadow-xl backdrop:bg-[#142E27]/35">
         <div className="flex items-center justify-between gap-4">
           <h2 id={tituloId} className="min-w-0 text-xl font-semibold">{panel}</h2>
-          <button type="button" onClick={() => dialogo.current?.close()} className={'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-[#35695D] hover:bg-[#E9EEE5] ' + foco}>
+          <button type="button" disabled={orbitOcupado} onClick={() => dialogo.current?.close()} className={'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-[#35695D] hover:bg-[#E9EEE5] disabled:cursor-wait disabled:opacity-60 ' + foco}>
             Cerrar
           </button>
         </div>
-        {panel === 'Perfil' ? (
+        {panel === 'Orbit' ? (
+          <CapturaRapida onOcupadoChange={establecerOrbitOcupado} onCerrar={() => dialogo.current?.close()} />
+        ) : panel === 'Perfil' ? (
           <div className="mt-4 space-y-5">
             <p className="text-sm leading-6 text-[#647168]">La edición de tu perfil estará disponible próximamente.</p>
             {cerrarSesionAction && (
@@ -93,9 +97,7 @@ export default function ControlesDashboard({
           </div>
         ) : (
           <p className="mt-4 text-sm leading-6 text-[#647168]">
-            {panel === 'Orbit'
-              ? 'Tu asistente Orbit estará disponible aquí próximamente.'
-                : 'La vista semanal del calendario está en preparación. Por ahora puedes consultar tus tareas en Hoy.'}
+            La vista semanal del calendario está en preparación. Por ahora puedes consultar tus tareas en Hoy.
           </p>
         )}
       </dialog>
