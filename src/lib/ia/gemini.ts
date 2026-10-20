@@ -6,7 +6,7 @@ class AdaptadorGemini implements AdaptadorIA {
 
   constructor() {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-    this.modelo = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+    this.modelo = genAI.getGenerativeModel({ model: 'gemini-3.8-flash' });
   }
 
   async interpretarTexto(texto: string): Promise<TareaInterpretada> {

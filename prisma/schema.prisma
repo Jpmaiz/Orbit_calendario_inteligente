@@ -27,6 +27,7 @@ model Usuario {
   sugerencias     Sugerencia[]
   recordatorios   Recordatorio[]
   interpretaciones InterpretacionIA[]
+  aliasMaterias    AliasMateria[]
 
   @@map("usuarios")
 }
@@ -37,6 +38,7 @@ model Materia {
   nombre     String
   color      String   @default("#5A3FA0")
   semestre   String?
+  codigo     String?
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")
@@ -45,6 +47,8 @@ model Materia {
   usuario  Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   eventos  EventoFijo[]
   tareas   Tarea[]
+  alias    AliasMateria[]
+  @@unique([usuarioId, codigo])
 
   @@map("materias")
 }
@@ -80,12 +84,16 @@ model Tarea {
   descripcion         String?
   tipo                String
   fechaLimite         DateTime  @map("fecha_limite")
-  duracionEstMin      Int       @default(60) @map("duracion_est_min")
+  duracionEstMin      Int?      @map("duracion_est_min")
   prioridad           String    @default("media")
-  prioridadCalculada  Float     @default(0) @map("prioridad_calculada")
+  
   estado              String    @default("pendiente")
   completadaEn        DateTime? @map("completada_en")
   origen              String    @default("manual")
+
+  dificultad          Int?
+  planIA              Json?     @map("plan_ia")
+
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")
@@ -159,4 +167,18 @@ model InterpretacionIA {
 
   @@index([usuarioId, creadoEn])
   @@map("interpretaciones_ia")
+}
+
+model AliasMateria {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  materiaId  String   @map("materia_id")
+  alias      String
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  materia  Materia  @relation(fields: [materiaId], references: [id], onDelete: Cascade)
+
+  @@unique([usuarioId, alias])
+  @@map("alias_materias")
 }
