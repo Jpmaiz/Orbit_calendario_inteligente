@@ -3,12 +3,16 @@ export const PRIORIDADES = ['alta', 'media', 'baja'];
 export const ESTADOS = ['pendiente', 'en_proceso', 'completada', 'no_realizada'];
 export const ORIGENES = ['texto', 'manual', 'foto'];
 
+/** Máximo de horas estimables: 100 h (un proyecto grande puede pasar de 24 h). */
+const DURACION_MAX_MIN = 6000;
+
 export interface DatosTarea {
   titulo?: string;
   descripcion?: string | null;
   tipo?: string;
   fechaLimite?: Date;
-  duracionEstMin?: number;
+  duracionEstMin?: number | null; // null = sin estimar (el motor usa horas por tipo)
+  dificultad?: number | null;     // 1–5, null = sin definir
   prioridad?: string;
   estado?: string;
   materiaId?: string | null;
@@ -69,13 +73,22 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
     return { ok: false, error: 'Falta la fecha límite' };
   }
 
-  // duracionEstMin
+  // duracionEstMin: número entero o null (sin estimar)
   if (b.duracionEstMin !== undefined) {
     const d = b.duracionEstMin;
-    if (typeof d !== 'number' || !Number.isInteger(d) || d <= 0 || d > 1440) {
-      return { ok: false, error: 'Duración inválida (1 a 1440 minutos)' };
+    if (d !== null && (typeof d !== 'number' || !Number.isInteger(d) || d <= 0 || d > DURACION_MAX_MIN)) {
+      return { ok: false, error: `Duración inválida (1 a ${DURACION_MAX_MIN} minutos, o null)` };
     }
-    datos.duracionEstMin = d;
+    datos.duracionEstMin = d as number | null;
+  }
+
+  // dificultad: 1–5 o null
+  if (b.dificultad !== undefined) {
+    const d = b.dificultad;
+    if (d !== null && (typeof d !== 'number' || !Number.isInteger(d) || d < 1 || d > 5)) {
+      return { ok: false, error: 'Dificultad inválida (1 a 5, o null)' };
+    }
+    datos.dificultad = d as number | null;
   }
 
   // prioridad
