@@ -141,7 +141,7 @@ export function calcularPrioridad(
 
   // Una tarea vencida ya no compite por tu tiempo: hay que decidir qué hacer con ella.
   if (diasRestantes < 0) {
-    return sinPuntaje("vencida", "Venció. Reprográmala o márcala como no realizada.");
+    return sinPuntaje("vencida", "Esta tarea venció. ¿Quieres reprogramarla o marcarla como no realizada?");
   }
 
   // 1) Holgura: días que quedan menos días de trabajo (esta tarea + las que vencen antes o igual)
@@ -167,15 +167,21 @@ export function calcularPrioridad(
   const horasDemanda = horasNecesarias + horasOtrasTareas;
   const sobrecargaHoras = Math.max(0, horasDemanda - horasDisponibles);
 
+  // Tono de sugerencia: la app propone, el usuario decide.
   let mensaje: string;
   if (holguraDias <= -1) {
     mensaje =
-      `No te alcanza el tiempo: hasta esta entrega tienes ~${redondear(horasDemanda)} h de trabajo ` +
-      `y ~${redondear(horasDisponibles)} h libres. Empieza ya y pide prórroga o reduce el alcance de algo.`;
-  } else if (holguraDias <= 0) {
-    mensaje = `Ya deberías estar trabajando en esto: dedica ~${redondear(horasPorDia)} h por día hasta la entrega.`;
+      `Parece que el tiempo no alcanza: hasta esta entrega hay ~${redondear(horasDemanda)} h de trabajo ` +
+      `y ~${redondear(horasDisponibles)} h libres. Podrías pedir una prórroga o reducir el alcance de algo.`;
   } else if (holguraDias < 2) {
-    mensaje = `Empieza hoy o mañana: ~${redondear(horasPorDia)} h por día te alcanzan.`;
+    // Si compite con otras tareas, el ritmo real es el de toda la carga, no el de esta sola
+    const conOtras = horasOtrasTareas > 0;
+    const ritmo = redondear(conOtras ? horasDemanda / diasUtiles : horasPorDia);
+    const contando = conOtras ? "Contando lo que vence antes o el mismo día, " : "";
+    mensaje =
+      holguraDias <= 0
+        ? `Te sugiero empezar pronto. ${contando}con ~${ritmo} h por día llegarías a tiempo.`
+        : `Te sugiero empezar hoy o mañana. ${contando}~${ritmo} h por día serían suficientes.`;
   } else {
     const dia = inicio.toLocaleDateString("es-BO", {
       weekday: "long",
@@ -183,7 +189,7 @@ export function calcularPrioridad(
       month: "long",
       timeZone: config.zonaHoraria,
     });
-    mensaje = `Tienes margen. Empieza a más tardar el ${dia} (~${redondear(horasNecesarias)} h en total).`;
+    mensaje = `Tienes margen. Te sugiero empezar a más tardar el ${dia} (~${redondear(horasNecesarias)} h en total).`;
   }
 
   const nivel: NivelPrioridad =
@@ -222,7 +228,8 @@ export function priorizarTareas<T extends TareaParaPriorizar>(
 ): (T & { prioridadCalculada: ResultadoPrioridad })[] {
   const activas = tareas
     .filter((t) => !estaCerrada(t) && new Date(t.fechaLimite).getTime() >= ahora.getTime())
-    .map((t) => ({ t, fin: new Date(t.fechaLimite).getTime(), horas: horasNecesariasDe(t, config) }));
+    // Fecha límite al minuto: "23:59:00" y "23:59:59" cuentan como la misma
+    .map((t) => ({ t, fin: Math.floor(new Date(t.fechaLimite).getTime() / 60000), horas: horasNecesariasDe(t, config) }));
 
   const horasOtrasDe = new Map<T, number>();
   for (const a of activas) {

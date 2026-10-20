@@ -56,6 +56,19 @@ export async function POST(req: NextRequest) {
 
     const { titulo, tipo, fechaLimite, ...resto } = v.datos;
 
+        // Evita duplicados (doble clic, doble envío)
+    const duplicada = await prisma.tarea.findFirst({
+      where: {
+        usuarioId: user.id,
+        eliminadoEn: null,
+        titulo: { equals: titulo!, mode: 'insensitive' },
+        fechaLimite: fechaLimite!,
+      },
+    });
+    if (duplicada) {
+      return NextResponse.json({ error: 'Ya tienes una tarea igual', tarea: duplicada }, { status: 409 });
+    }
+
     const tarea = await prisma.tarea.create({
       data: {
         ...resto,
