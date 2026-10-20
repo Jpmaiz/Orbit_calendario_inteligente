@@ -44,9 +44,16 @@ class AdaptadorDeepSeek implements AdaptadorIA {
 Hoy es ${hoy} (zona horaria America/La_Paz).
 Del siguiente texto, extrae UNA tarea y devuelve SOLO un JSON válido, sin explicaciones.
 
+Reglas para "titulo":
+- Nombre formal y corto de la actividad, SIN verbo al inicio (el tipo ya dice la acción).
+- Mayúscula inicial y nombres de materia con mayúsculas. Expande abreviaturas comunes.
+- Ejemplos: "entregar inf de BD el viernes" → titulo "Informe de Base de Datos", tipo "entrega".
+  "parcial de calculo el lunes" → titulo "Parcial de Cálculo", tipo "examen".
+  "hacer el proyecto de facturación" → titulo "Proyecto de Facturación", tipo "proyecto".
+
 Formato exacto:
 {
-  "titulo": "string corto",
+  "titulo": "nombre formal según las reglas",
   "tipo": "examen | tarea | entrega | proyecto | exposicion",
   "fechaLimite": "fecha ISO 8601 completa o null si el texto no dice la fecha",
   "materia": "nombre de la materia o null",
