@@ -1,6 +1,6 @@
 /**
  * Normalización de texto compartida (duplicados, materias).
- * "Entregar el Informe de Redes II" → ["informe", "redes", "2"]
+
  */
 const ROMANOS: Record<string, string> = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6' };
 
