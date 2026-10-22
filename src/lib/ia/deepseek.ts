@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import { AdaptadorIA, TareaInterpretada } from './adaptador';
+import { construirPromptExtraccion, normalizarItems, ContextoExtraccion, ItemExtraido } from './extraccion';
 
 const MODELO = 'deepseek-flash';
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -64,6 +65,12 @@ Texto: "${texto}"`;
 
     const contenido = await this.pedirJson(prompt);
     return JSON.parse(contenido) as TareaInterpretada;
+  }
+
+  /** Fase 2: devuelve TODOS los ítems del texto (tareas, eventos y clases), ya validados. */
+  async extraerItems(texto: string, ctx: ContextoExtraccion): Promise<ItemExtraido[]> {
+    const contenido = await this.pedirJson(construirPromptExtraccion(texto, ctx));
+    return normalizarItems(JSON.parse(contenido));
   }
 }
 
