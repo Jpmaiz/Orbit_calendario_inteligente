@@ -29,6 +29,7 @@ model Usuario {
   recordatorios   Recordatorio[]
   interpretaciones InterpretacionIA[]
   aliasMaterias    AliasMateria[]
+  periodos         PeriodoAcademico[]
 
   @@map("usuarios")
 }
@@ -211,4 +212,21 @@ model Evento {
   @@unique([usuarioId, uidExterno])
   @@index([usuarioId, inicio])
   @@map("eventos")
+}
+
+model PeriodoAcademico {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  nombre     String                        // "II/2026"
+  inicio     DateTime                      // primer día de clases
+  fin        DateTime                      // último día de clases
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fin])
+  @@map("periodos_academicos")
 }
