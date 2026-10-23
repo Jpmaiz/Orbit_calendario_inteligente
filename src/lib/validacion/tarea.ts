@@ -11,6 +11,7 @@ export interface DatosTarea {
   descripcion?: string | null;
   tipo?: string;
   fechaLimite?: Date;
+  horaDefinida?: boolean;         // false = "hora por definir"
   duracionEstMin?: number | null; // null = sin estimar (el motor usa horas por tipo)
   dificultad?: number | null;     // 1–5, null = sin definir
   prioridad?: string;
@@ -71,6 +72,14 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
     datos.fechaLimite = fecha;
   } else if (crear) {
     return { ok: false, error: 'Falta la fecha límite' };
+  }
+
+  // horaDefinida: true si el usuario eligió la hora; false = "hora por definir"
+  if (b.horaDefinida !== undefined) {
+    if (typeof b.horaDefinida !== 'boolean') {
+      return { ok: false, error: 'horaDefinida debe ser true o false' };
+    }
+    datos.horaDefinida = b.horaDefinida;
   }
 
   // duracionEstMin: número entero o null (sin estimar)
