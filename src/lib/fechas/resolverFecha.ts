@@ -51,7 +51,7 @@ function sumarDias(base: Dia, dias: number): Dia {
 }
 
 /** Instante real de "día D a las HH:mm" en la zona del usuario. */
-function instanteEnZona(dia: Dia, hora: string, zona: string): Date {
+export function instanteEnZona(dia: Dia, hora: string, zona: string): Date {
   const [hh, mm] = hora.split(':').map(Number);
   const comoUTC = Date.UTC(dia.y, dia.m - 1, dia.d, hh, mm);
   // Diferencia entre la zona y UTC en ese momento (funciona también con horario de verano)
