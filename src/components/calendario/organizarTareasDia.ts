@@ -15,7 +15,7 @@ const formatoDiaBolivia = new Intl.DateTimeFormat('en-US', {
 });
 
 // Claves ISO de calendario: su orden coincide con el de los dias en Bolivia.
-function diaEnBolivia(fecha: Date): string {
+export function diaEnBolivia(fecha: Date): string {
   const partes = formatoDiaBolivia.formatToParts(fecha);
   const valor = (tipo: Intl.DateTimeFormatPartTypes) =>
     partes.find((parte) => parte.type === tipo)!.value;
