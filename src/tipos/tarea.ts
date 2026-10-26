@@ -1,6 +1,10 @@
 import type { ResultadoPrioridad } from '@/lib/prioridad';
 
 export type PrioridadCalculada = ResultadoPrioridad;
+
+export type TareaConHoraDefinida = {
+  horaDefinida: boolean;
+};
 export type Dificultad = 1 | 2 | 3 | 4 | 5 | null;
 export type EstadoTarea = 'pendiente' | 'en_proceso' | 'completada' | 'no_realizada';
 

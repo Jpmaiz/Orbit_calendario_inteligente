@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import type { EstadoTarea, PrioridadCalculada } from '@/tipos/tarea';
+import type { EstadoTarea, PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
 
-type TareaTarjeta = {
+type TareaTarjeta = TareaConHoraDefinida & {
   id: string;
   titulo: string;
   fechaLimite: string;
@@ -126,7 +126,19 @@ export default function TarjetaTarea({ tarea }: Props) {
               {tarea.titulo}
             </h3>
             <p className="mt-1 text-xs leading-5 text-[#7B847A]">
-              <time dateTime={tarea.fechaLimite} title={fechaLimite.toLocaleString('es-BO', { timeZone: 'America/La_Paz' })} className="inline-block first-letter:uppercase">{fechaFormateada}</time>
+              <time
+                dateTime={tarea.horaDefinida ? tarea.fechaLimite : undefined}
+                title={tarea.horaDefinida
+                  ? fechaLimite.toLocaleString('es-BO', { timeZone: 'America/La_Paz' })
+                  : fechaFormateada}
+                className="inline-block first-letter:uppercase"
+              >{fechaFormateada}</time>
+              {tarea.horaDefinida === false && (
+                <span className="mt-1 flex items-center gap-1.5 font-medium text-[#657360]">
+                  <span aria-hidden="true">⏱</span>
+                  Hora por definir
+                </span>
+              )}
             </p>
           </div>
           <span className={'mt-0.5 max-w-full rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.06em] ' + (coloresTipo[tarea.tipo] ?? coloresTipo.lectura).etiqueta}>

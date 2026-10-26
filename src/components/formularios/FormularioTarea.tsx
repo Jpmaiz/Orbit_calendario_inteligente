@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { esDificultad } from '@/tipos/tarea';
-import type { Dificultad } from '@/tipos/tarea';
+import type { Dificultad, TareaConHoraDefinida } from '@/tipos/tarea';
+import { HORA_POR_TIPO, instanteEnZona } from '@/lib/fechas/resolverFecha';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 
 type Materia = { id: string; nombre: string };
-export type ValoresTarea = {
+export type ValoresTarea = TareaConHoraDefinida & {
   titulo: string;
   tipo: string;
   fechaLimite: string;
@@ -23,16 +24,34 @@ type Props =
   | { modo?: 'crear'; valoresIniciales?: never; tareaId?: never }
   | { modo: 'editar'; valoresIniciales: ValoresTarea; tareaId: string };
 
-// datetime-local usa la hora del dispositivo; no la representacion UTC del ISO.
+// El formulario y la Vista Dia comparten el calendario de Bolivia.
 export function fechaParaInput(valor: string): string {
-  const fecha = new Date(valor);
-  const dosDigitos = (numero: number) => String(numero).padStart(2, '0');
-  return fecha.getFullYear() + '-' + dosDigitos(fecha.getMonth() + 1) + '-' +
-    dosDigitos(fecha.getDate()) + 'T' + dosDigitos(fecha.getHours()) + ':' +
-    dosDigitos(fecha.getMinutes());
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/La_Paz', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  }).formatToParts(new Date(valor));
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) =>
+    partes.find((valor) => valor.type === tipo)!.value;
+  return parte('year') + '-' + parte('month') + '-' + parte('day') +
+    'T' + parte('hour') + ':' + parte('minute');
 }
 
-type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'duracionEstMin' | 'prioridad' | 'dificultad';
+export function fechaParaEnvio(fecha: string, hora: string, tipo: string, horaDefinida: boolean): Date {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha) ||
+      (horaDefinida && !/^([01]\d|2[0-3]):[0-5]\d$/.test(hora))) {
+    return new Date(NaN);
+  }
+  const [y, m, d] = fecha.split('-').map(Number);
+  const horaInterna = horaDefinida ? hora : HORA_POR_TIPO[tipo] ?? '23:59';
+  const limite = instanteEnZona({ y, m, d }, horaInterna, 'America/La_Paz');
+  if (Number.isNaN(limite.getTime()) || fechaParaInput(limite.toISOString()).slice(0, 10) !== fecha) {
+    return new Date(NaN);
+  }
+  return limite;
+}
+
+type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'horaLimite' | 'duracionEstMin' | 'prioridad' | 'dificultad';
 type DatosCreacion = Omit<ValoresTarea, 'materia'>;
 type Duplicado = { pregunta: string; sugerenciasDiferencia: string[]; datos: DatosCreacion };
 
@@ -75,6 +94,7 @@ export default function FormularioTarea(props: Props = {}) {
   const editando = props.modo === 'editar';
   const iniciales = props.valoresIniciales;
   const fechaInicial = iniciales ? fechaParaInput(iniciales.fechaLimite) : '';
+  const [sinHora, establecerSinHora] = useState(iniciales?.horaDefinida === false);
   const [materiaSeleccionada, establecerMateriaSeleccionada] = useState(iniciales?.materiaId ?? '');
   const router = useRouter();
   const prefijo = useId();
@@ -141,6 +161,9 @@ export default function FormularioTarea(props: Props = {}) {
     const titulo = String(datos.get('titulo') ?? '').trim();
     const tipo = String(datos.get('tipo') ?? '');
     const fechaLocal = String(datos.get('fechaLimite') ?? '');
+    const horaLocal = String(datos.get('horaLimite') ?? '');
+    const horaDefinida = !sinHora;
+    const fechaLimite = fechaParaEnvio(fechaLocal, horaLocal, tipo, horaDefinida);
     const prioridad = String(datos.get('prioridad') ?? '');
     const duracionTexto = String(datos.get('duracionEstMin') ?? '').trim();
     const duracionInvalida = (formulario.elements.namedItem('duracionEstMin') as HTMLInputElement).validity.badInput;
@@ -153,7 +176,12 @@ export default function FormularioTarea(props: Props = {}) {
     if (!titulo) nuevosErrores.titulo = 'Escribe un título.';
     else if (titulo.length > 200) nuevosErrores.titulo = 'El título debe tener como máximo 200 caracteres.';
     if (!tipos.some(([valor]) => valor === tipo)) nuevosErrores.tipo = 'Selecciona un tipo de tarea.';
-    if (!fechaLocal || Number.isNaN(new Date(fechaLocal).getTime())) nuevosErrores.fechaLimite = 'Selecciona una fecha y hora válidas.';
+    if (!fechaLocal || Number.isNaN(fechaParaEnvio(fechaLocal, '', tipo, false).getTime())) {
+      nuevosErrores.fechaLimite = 'Selecciona una fecha válida.';
+    }
+    if (horaDefinida && !/^([01]\d|2[0-3]):[0-5]\d$/.test(horaLocal)) {
+      nuevosErrores.horaLimite = 'Selecciona una hora válida o marca Hora por definir.';
+    }
     if (duracionInvalida || (duracionEstMin !== null && (!Number.isInteger(duracionEstMin) || duracionEstMin <= 0 || duracionEstMin > 6000))) {
       nuevosErrores.duracionEstMin = 'Ingresa una duración de 1 a 6000 minutos, sin decimales, o deja el campo vacío.';
     }
@@ -175,7 +203,12 @@ export default function FormularioTarea(props: Props = {}) {
       if (titulo !== iniciales.titulo) cambios.titulo = titulo;
       if (tipo !== iniciales.tipo) cambios.tipo = tipo;
       // No truncar segundos/milisegundos de la fecha guardada si no se edito.
-      if (fechaLocal !== fechaInicial) cambios.fechaLimite = new Date(fechaLocal).toISOString();
+      if (fechaLocal !== fechaInicial.slice(0, 10) ||
+          horaDefinida !== iniciales.horaDefinida ||
+          (horaDefinida && horaLocal !== fechaInicial.slice(11))) {
+        cambios.fechaLimite = fechaLimite.toISOString();
+      }
+      if (horaDefinida !== iniciales.horaDefinida) cambios.horaDefinida = horaDefinida;
       if (prioridad !== iniciales.prioridad) cambios.prioridad = prioridad;
       if (duracionEstMin !== iniciales.duracionEstMin) cambios.duracionEstMin = duracionEstMin;
       if (dificultad !== iniciales.dificultad) cambios.dificultad = dificultad;
@@ -188,7 +221,7 @@ export default function FormularioTarea(props: Props = {}) {
     }
 
     const creacion: DatosCreacion = {
-      titulo, tipo, fechaLimite: new Date(fechaLocal).toISOString(),
+      titulo, tipo, fechaLimite: fechaLimite.toISOString(), horaDefinida,
       prioridad, duracionEstMin, dificultad,
       descripcion: descripcion || null, materiaId: materiaId || null,
     };
@@ -268,9 +301,31 @@ export default function FormularioTarea(props: Props = {}) {
           </div>
           <div className="min-w-0">
             <label htmlFor={prefijo + '-fechaLimite'} className="text-sm font-semibold">Fecha límite *</label>
-            <input {...accesibilidad('fechaLimite')} name="fechaLimite" defaultValue={fechaInicial} type="datetime-local" required className={estiloCampo} />
+            <input {...accesibilidad('fechaLimite')} name="fechaLimite" defaultValue={fechaInicial.slice(0, 10)} type="date" required className={estiloCampo} />
             {errorCampo('fechaLimite')}
-            <p className="mt-2 text-xs leading-5 text-[#647168]">Se usa la hora local de tu dispositivo.</p>
+            <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-sm text-[#35695D]">
+              <input
+                type="checkbox"
+                name="sinHora"
+                checked={sinHora}
+                onChange={(evento) => {
+                  establecerSinHora(evento.target.checked);
+                  establecerErrores((actuales) => ({ ...actuales, horaLimite: undefined }));
+                }}
+                className="h-4 w-4 shrink-0 accent-[#35695D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2"
+              />
+              Hora por definir
+            </label>
+            {!sinHora && (
+              <div className="mt-2">
+                <label htmlFor={prefijo + '-horaLimite'} className="text-sm font-semibold">Hora límite *</label>
+                <input {...accesibilidad('horaLimite')} name="horaLimite" defaultValue={iniciales?.horaDefinida ? fechaInicial.slice(11) : ''} type="time" required className={estiloCampo} />
+                {errorCampo('horaLimite')}
+              </div>
+            )}
+            <p className="mt-2 text-xs leading-5 text-[#647168]">
+              {sinHora ? 'Elige la fecha. Puedes definir la hora más adelante.' : 'Fecha y hora de Bolivia (America/La_Paz).'}
+            </p>
           </div>
           <div>
             <label htmlFor={prefijo + '-prioridad'} className="text-sm font-semibold">Prioridad</label>

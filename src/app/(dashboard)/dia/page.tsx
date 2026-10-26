@@ -91,6 +91,7 @@ export default async function PaginaDia() {
                       id: tarea.id,
                       titulo: tarea.titulo,
                       fechaLimite: tarea.fechaLimite.toISOString(),
+                      horaDefinida: tarea.horaDefinida,
                       tipo: tarea.tipo,
                       prioridad: tarea.prioridad,
                       prioridadCalculada: tarea.prioridadCalculada,

@@ -1,6 +1,6 @@
-import type { PrioridadCalculada } from '@/tipos/tarea';
+import type { PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
 
-type TareaConFechas = {
+type TareaConFechas = TareaConHoraDefinida & {
   estado: string;
   fechaLimite: Date;
   completadaEn: Date | null;
@@ -32,6 +32,7 @@ export function organizarTareasDia<T extends TareaConFechas>(
   const finProximosDias = new Date(Date.UTC(anio, mes - 1, dia + 8))
     .toISOString().slice(0, 10);
   const vencidas: T[] = [];
+  const sinHora: T[] = [];
   const paraHoy: T[] = [];
   const proximas: T[] = [];
   const completadasHoy: T[] = [];
@@ -48,17 +49,19 @@ export function organizarTareasDia<T extends TareaConFechas>(
     if (tarea.estado !== 'pendiente' && tarea.estado !== 'en_proceso') continue;
     const diaLimite = diaEnBolivia(tarea.fechaLimite);
     if (diaLimite < hoy) vencidas.push(tarea);
-    else if (diaLimite === hoy) paraHoy.push(tarea);
+    else if (diaLimite === hoy && tarea.horaDefinida === false) sinHora.push(tarea);
+    else if (diaLimite === hoy && tarea.horaDefinida === true) paraHoy.push(tarea);
     else if (diaLimite < finProximosDias) proximas.push(tarea);
   }
   // Ordenar los puntajes recibidos sin calcular prioridades.
-  for (const seccion of [vencidas, paraHoy, proximas]) {
+  for (const seccion of [vencidas, sinHora, paraHoy, proximas]) {
     seccion.sort((a, b) =>
       (b.prioridadCalculada?.puntaje ?? 0) - (a.prioridadCalculada?.puntaje ?? 0) ||
       a.fechaLimite.getTime() - b.fechaLimite.getTime());
   }
   return [
     { id: 'vencidas', titulo: 'Vencidas', tareas: vencidas },
+    { id: 'sin-hora', titulo: 'Sin hora', tareas: sinHora },
     { id: 'hoy', titulo: 'Hoy', tareas: paraHoy },
     { id: 'proximas', titulo: 'Próximos 7 días', tareas: proximas },
     { id: 'completadas-hoy', titulo: 'Completadas hoy', tareas: completadasHoy },

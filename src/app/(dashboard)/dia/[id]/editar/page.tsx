@@ -25,6 +25,7 @@ function leerTarea(datos: unknown, id: string): ValoresTarea | null {
       !('titulo' in tarea) || typeof tarea.titulo !== 'string' ||
       !('tipo' in tarea) || typeof tarea.tipo !== 'string' ||
       !('fechaLimite' in tarea) || typeof tarea.fechaLimite !== 'string' ||
+      !('horaDefinida' in tarea) || typeof tarea.horaDefinida !== 'boolean' ||
       Number.isNaN(new Date(tarea.fechaLimite).getTime()) ||
       !('prioridad' in tarea) || typeof tarea.prioridad !== 'string' ||
       !('duracionEstMin' in tarea) || (tarea.duracionEstMin !== null && typeof tarea.duracionEstMin !== 'number') ||
@@ -39,6 +40,7 @@ function leerTarea(datos: unknown, id: string): ValoresTarea | null {
     ? { id: tarea.materia.id, nombre: tarea.materia.nombre } : null;
   return {
     titulo: tarea.titulo, tipo: tarea.tipo, fechaLimite: tarea.fechaLimite,
+    horaDefinida: tarea.horaDefinida,
     prioridad: tarea.prioridad, duracionEstMin: tarea.duracionEstMin, dificultad: tarea.dificultad,
     descripcion: tarea.descripcion, materiaId: tarea.materiaId, materia,
   };
