@@ -23,11 +23,13 @@ model Usuario {
 
   materias        Materia[]
   eventos         EventoFijo[]
+  eventosPuntuales  Evento[]
   tareas          Tarea[]
   sugerencias     Sugerencia[]
   recordatorios   Recordatorio[]
   interpretaciones InterpretacionIA[]
   aliasMaterias    AliasMateria[]
+  periodos         PeriodoAcademico[]
 
   @@map("usuarios")
 }
@@ -46,6 +48,7 @@ model Materia {
 
   usuario  Usuario      @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   eventos  EventoFijo[]
+  eventosPuntuales  Evento[]
   tareas   Tarea[]
   alias    AliasMateria[]
   @@unique([usuarioId, codigo])
@@ -64,6 +67,8 @@ model EventoFijo {
   ubicacion        String?
   origen           String    @default("manual")
   uidExterno       String?   @map("uid_externo")
+  vigenteDesde     DateTime? @map("vigente_desde")  // inicio del semestre
+  vigenteHasta     DateTime? @map("vigente_hasta")  // fin del semestre
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")
@@ -73,6 +78,7 @@ model EventoFijo {
   materia  Materia? @relation(fields: [materiaId], references: [id])
 
   @@index([usuarioId, diaSemana])
+  @@unique([usuarioId, uidExterno])
   @@map("eventos_fijos")
 }
 
@@ -93,6 +99,7 @@ model Tarea {
 
   dificultad          Int?
   planIA              Json?     @map("plan_ia")
+    horaDefinida        Boolean   @default(true) @map("hora_definida") // false = "hora por definir"
 
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
@@ -181,4 +188,45 @@ model AliasMateria {
 
   @@unique([usuarioId, alias])
   @@map("alias_materias")
+}
+
+model Evento {
+  id          String    @id @default(uuid())
+  usuarioId   String    @map("usuario_id")
+  materiaId   String?   @map("materia_id")
+  titulo      String
+  descripcion String?
+  inicio      DateTime
+  fin         DateTime?
+  ubicacion   String?
+  origen      String    @default("manual")   // manual | texto | foto | google
+  uidExterno  String?   @map("uid_externo")  // UID del .ics, para no duplicar al reimportar
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  materia  Materia? @relation(fields: [materiaId], references: [id])
+
+  @@unique([usuarioId, uidExterno])
+  @@index([usuarioId, inicio])
+  @@map("eventos")
+}
+
+model PeriodoAcademico {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  nombre     String                        // "II/2026"
+  inicio     DateTime                      // primer día de clases
+  fin        DateTime                      // último día de clases
+
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+  modificadoEn DateTime  @updatedAt @map("modificado_en")
+  eliminadoEn  DateTime? @map("eliminado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, fin])
+  @@map("periodos_academicos")
 }
