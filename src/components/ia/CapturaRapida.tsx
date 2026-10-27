@@ -2,9 +2,12 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import ConfiguracionPeriodo from '../periodos/ConfiguracionPeriodo';
+import { usePeriodos } from '../periodos/ProveedorPeriodos';
+import { esPeriodoActual, type PeriodoAcademico } from '../periodos/periodosFrontend';
 import TarjetaBorrador, { botonCaptura, campoCaptura } from './TarjetaBorrador';
 import {
-  actualizarRevision, construirConfirmacion, crearRevision, leerBorrador, leerMaterias, leerResultado,
+  actualizarRevision, aplicarPeriodoARevision, construirConfirmacion, crearRevision, leerBorrador, leerMaterias, leerResultado,
   mensajeBackend, problemasItem,
   type Borrador, type ItemRevision, type MateriaUsuario, type ResultadoConfirmacion,
 } from './borradorCaptura';
@@ -28,8 +31,11 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   onCerrar: () => void;
 }) {
   const router = useRouter();
+  const { datos: datosPeriodos, guardando: guardandoPeriodo } = usePeriodos();
   const id = useId();
   const [texto, establecerTexto] = useState('');
+  const [periodoAplicado, establecerPeriodoAplicado] = useState<string | null>(null);
+  const periodoEnCurso = useRef(false);
   const [borrador, establecerBorrador] = useState<Borrador | null>(null);
   const [items, establecerItems] = useState<ItemRevision[]>([]);
   const [corregida, establecerCorregida] = useState(false);
@@ -63,7 +69,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   }
 
   async function extraer() {
-    if (enCurso.current) return;
+    if (enCurso.current || periodoEnCurso.current || guardandoPeriodo) return;
     if (!texto.trim() || texto.length > 2000) {
       establecerError('Escribe entre 1 y 2000 caracteres.');
       return;
@@ -80,6 +86,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       establecerBorrador(nuevo);
       establecerItems(nuevo.items.map(crearRevision));
       establecerCorregida(false);
+      establecerPeriodoAplicado(null);
     } catch (error) {
       establecerError(error instanceof Error ? error.message : 'No se pudo conectar con el servidor.');
     } finally {
@@ -90,14 +97,14 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   }
 
   function cambiarItem(indice: number, cambios: Partial<ItemRevision>) {
-    if (enCurso.current) return;
+    if (enCurso.current || periodoEnCurso.current || guardandoPeriodo) return;
     establecerItems((actuales) => actualizarRevision(actuales, indice, cambios));
     establecerCorregida(true);
     establecerError(null);
   }
 
   async function confirmar() {
-    if (enCurso.current || !borrador) return;
+    if (enCurso.current || periodoEnCurso.current || guardandoPeriodo || !borrador) return;
     let body: ReturnType<typeof construirConfirmacion>;
     try {
       body = construirConfirmacion(borrador.interpretacionId, items, corregida);
@@ -133,9 +140,21 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
     }
   }
 
+  function aplicarPeriodo(periodo: PeriodoAcademico) {
+    if (!esPeriodoActual(periodo)) return;
+    establecerItems((actuales) => aplicarPeriodoARevision(actuales, periodo));
+    establecerBorrador((actual) => actual ? {
+      ...actual, periodo: { nombre: periodo.nombre, inicio: periodo.inicio, fin: periodo.fin },
+    } : null);
+    establecerCorregida(true);
+    establecerPeriodoAplicado(periodo.nombre);
+  }
+
+  const faltaPeriodo = items.some((item) => !item.excluido && item.clase === 'evento_fijo' &&
+    item.original.faltantes.includes('periodo') && !item.original.vigencia);
   const incluidos = items.filter((i) => !i.excluido);
   const pendientes = incluidos.some((i) => problemasItem(i).length > 0);
-  const ocupada = enviando !== null;
+  const ocupada = enviando !== null || guardandoPeriodo;
 
   return (
     <div className="mt-5 min-w-0 space-y-4" aria-busy={ocupada}>
@@ -176,6 +195,17 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
         <section className="min-w-0 space-y-4">
           <h3 ref={tituloRevision} tabIndex={-1} className="rounded-sm text-base font-semibold focus:outline-none">Revisa tu borrador</h3>
           <p className="text-xs text-[#647168]">Aún no se guardaron actividades. Corrige lo necesario y omite las que no quieras agregar.</p>
+          {periodoAplicado && <p role="status" className="rounded-xl bg-[#E7F8EF] p-3 text-xs text-[#1F5D50]">Semestre {periodoAplicado} aplicado a las clases pendientes. Se conservaron las fechas que editaste.</p>}
+          {faltaPeriodo && <fieldset disabled={enviando !== null} className="min-w-0">
+            <legend className="sr-only">Período de las clases</legend>
+            {datosPeriodos?.actual ? <div className="space-y-2 rounded-xl bg-[#EDF4E8] p-3 text-xs text-[#526A5A]">
+              <p>Tu período actual es {datosPeriodos.actual.nombre}. Puedes usarlo para las clases de este borrador.</p>
+              <button type="button" className={botonCaptura} disabled={ocupada} onClick={() => aplicarPeriodo(datosPeriodos.actual!)}>Usar este período</button>
+            </div> : <ConfiguracionPeriodo origen="ia" onCreado={aplicarPeriodo} onOcupadoChange={(ocupado) => {
+              periodoEnCurso.current = ocupado;
+              onOcupadoChange(ocupado);
+            }} />}
+          </fieldset>}
           <details className="text-xs text-[#647168]">
             <summary className="min-h-11 cursor-pointer py-3 font-semibold">Ver texto original</summary>
             <p className="whitespace-pre-wrap break-words">{texto}</p>

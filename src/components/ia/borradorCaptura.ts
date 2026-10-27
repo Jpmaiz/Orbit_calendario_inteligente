@@ -1,3 +1,4 @@
+import { esPeriodoActual, type PeriodoAcademico } from '../periodos/periodosFrontend';
 import { diaEnBolivia } from '../calendario/organizarTareasDia';
 import { fechaElegidaISO } from './flujoCaptura';
 
@@ -249,4 +250,24 @@ export function construirConfirmacion(interpretacionId: string, items: ItemRevis
       };
     }),
   };
+}
+
+export function aplicarPeriodoARevision(
+  items: ItemRevision[], periodo: PeriodoAcademico, ahora = new Date(),
+): ItemRevision[] {
+  if (!esPeriodoActual(periodo, ahora)) return items;
+  return items.map((item) => {
+    if (item.clase !== 'evento_fijo' || !item.original.faltantes.includes('periodo') || item.original.vigencia) return item;
+    const tieneFechasPropias = !!(item.vigenciaDesde || item.vigenciaHasta);
+    return {
+      ...item,
+      original: {
+        ...item.original,
+        faltantes: item.original.faltantes.filter((faltante) => faltante !== 'periodo'),
+        vigencia: { desde: periodo.inicio, hasta: periodo.fin, periodo: periodo.nombre },
+      },
+      vigenciaDesde: tieneFechasPropias ? item.vigenciaDesde : diaISO(periodo.inicio),
+      vigenciaHasta: tieneFechasPropias ? item.vigenciaHasta : diaISO(periodo.fin),
+    };
+  });
 }
