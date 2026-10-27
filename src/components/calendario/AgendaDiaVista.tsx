@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
+import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia } from './organizarTareasDia';
 import {
   combinarTareas, horarioDelDia, leerAgenda, leerTareasConPrioridad,
@@ -47,6 +48,13 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
   const router = useRouter();
   const [carga, establecerCarga] = useState<Carga | null>(null);
   const hoy = diaEnBolivia(new Date(fechaActual));
+  const [revision, establecerRevision] = useState(0);
+
+  useEffect(() => {
+    const actualizar = () => establecerRevision((valor) => valor + 1);
+    window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
+    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
+  }, []);
 
   useEffect(() => {
     const controlador = new AbortController();
@@ -67,7 +75,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
     }
     void cargar();
     return () => controlador.abort();
-  }, [fechaActual, hoy]);
+  }, [fechaActual, hoy, revision]);
 
   if (!carga || carga.fechaActual !== fechaActual) {
     return <p role="status" className="text-sm text-[#35695D]">Cargando tu agenda del día…</p>;

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { leerAgenda, type AgendaDia, type TareaAgenda } from './agendaDia';
 import { diaEnBolivia } from './organizarTareasDia';
+import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import {
   formatoHoraBolivia, inicioDiaBolivia, lunesDeSemana, organizarSemana, sumarDias,
   type BloqueSemana,
@@ -66,6 +67,12 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
   }));
   const [carga, establecerCarga] = useState<Carga | null>(null);
   const [intento, establecerIntento] = useState(0);
+  useEffect(() => {
+    const actualizar = () => establecerIntento((valor) => valor + 1);
+    window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
+    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
+  }, []);
+
   const lunes = seleccion.lunes;
   const domingo = lunes ? sumarDias(lunes, 6) : '';
   const clave = lunes + ':' + intento;
