@@ -1,11 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { useId, useRef, useState } from 'react';
 import IconoDashboard from './IconoDashboard';
 import CapturaRapida from '@/components/ia/CapturaRapida';
 
-type Panel = 'Semana' | 'Calendario' | 'Orbit' | 'Perfil';
+type Panel = 'Orbit' | 'Perfil';
 
 export default function ControlesDashboard({
   ubicacion,
@@ -14,6 +15,7 @@ export default function ControlesDashboard({
   ubicacion: 'selector' | 'navegacion';
   cerrarSesionAction?: () => Promise<void>;
 }) {
+  const esSemana = usePathname() === '/semana';
   const dialogo = useRef<HTMLDialogElement>(null);
   const tituloId = useId();
   const [panel, establecerPanel] = useState<Panel>('Orbit');
@@ -31,12 +33,12 @@ export default function ControlesDashboard({
       {ubicacion === 'selector' ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div role="group" aria-label="Vista del calendario" className="inline-flex min-w-0 max-w-full rounded-full bg-[#EAEDE8] p-1">
-            <button type="button" aria-pressed="true" className={'min-h-11 rounded-full bg-white px-5 md:px-8 text-sm font-semibold text-[#234B43] shadow-sm ' + foco}>
+            <Link href="/dia" aria-current={!esSemana ? 'page' : undefined} className={'inline-flex min-h-11 items-center rounded-full px-5 md:px-8 text-sm font-semibold ' + (!esSemana ? 'bg-white text-[#234B43] shadow-sm ' : 'text-[#66716B] hover:text-[#234B43] ') + foco}>
               Hoy
-            </button>
-            <button type="button" aria-pressed="false" onClick={() => abrirPanel('Semana')} className={'min-h-11 rounded-full px-4 md:px-7 text-sm font-medium text-[#66716B] transition-colors hover:text-[#234B43] ' + foco}>
+            </Link>
+            <Link href="/semana" aria-current={esSemana ? 'page' : undefined} className={'inline-flex min-h-11 items-center rounded-full px-4 md:px-7 text-sm font-semibold ' + (esSemana ? 'bg-white text-[#234B43] shadow-sm ' : 'text-[#66716B] hover:text-[#234B43] ') + foco}>
               Semana
-            </button>
+            </Link>
           </div>
           <Link href="/dia/nueva" className={'inline-flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-xs font-semibold text-[#35695D] transition-colors hover:bg-[#E7EDE6] md:text-sm ' + foco}>
             <IconoDashboard nombre="mas" className="h-4 w-4" />
@@ -54,14 +56,14 @@ export default function ControlesDashboard({
           </div>
           <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
             <div className="mx-auto grid w-full grid-cols-4 px-4 py-2 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8">
-              <Link href="/dia" aria-current="page" className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-semibold text-[#245B4C] ' + foco}>
-                <span className="flex h-8 w-14 items-center justify-center rounded-full bg-[#EAF0E5]"><IconoDashboard nombre="home" /></span>
+              <Link href="/dia" aria-current={!esSemana ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-semibold ' + (!esSemana ? 'text-[#245B4C] ' : 'text-[#78827B] ') + foco}>
+                <span className={'flex h-8 w-14 items-center justify-center rounded-full ' + (!esSemana ? 'bg-[#EAF0E5]' : '')}><IconoDashboard nombre="home" /></span>
                 Home
               </Link>
-              <button type="button" onClick={() => abrirPanel('Calendario')} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium text-[#78827B] transition-colors hover:text-[#245B4C] ' + foco}>
+              <Link href="/semana" aria-current={esSemana ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium transition-colors ' + (esSemana ? 'text-[#245B4C] bg-[#EAF0E5] ' : 'text-[#78827B] hover:text-[#245B4C] ') + foco}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="calendario" /></span>
                 Calendario
-              </button>
+              </Link>
               <button type="button" onClick={() => abrirPanel('Orbit')} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium text-[#78827B] transition-colors hover:text-[#245B4C] ' + foco}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
                 Orbit
@@ -95,11 +97,7 @@ export default function ControlesDashboard({
               </form>
             )}
           </div>
-        ) : (
-          <p className="mt-4 text-sm leading-6 text-[#647168]">
-            La vista semanal del calendario está en preparación. Por ahora puedes consultar tus tareas en Hoy.
-          </p>
-        )}
+        ) : null}
       </dialog>
     </>
   );
