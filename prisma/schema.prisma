@@ -167,6 +167,7 @@ model InterpretacionIA {
   estado            String    @default("pendiente")
   modeloUsado       String    @map("modelo_usado")
   tiempoRespuestaMs Int?      @map("tiempo_respuesta_ms")
+  resultado         Json?
 
   creadoEn  DateTime  @default(now()) @map("creado_en")
 

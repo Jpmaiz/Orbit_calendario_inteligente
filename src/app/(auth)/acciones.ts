@@ -2,49 +2,57 @@
 
 import { crearClienteServidor } from '@/lib/supabase/servidor';
 import { redirect } from 'next/navigation';
-import { prisma } from '@/lib/prisma/cliente';
+import { asegurarPerfil } from '@/lib/usuarios/perfil';
 
 export async function registrarse(formData: FormData) {
   const supabase = await crearClienteServidor();
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
-  const nombre = formData.get('nombre') as string;
+  const email = String(formData.get('email') ?? '').trim();
+  const password = String(formData.get('password') ?? '');
+  const nombre = String(formData.get('nombre') ?? '').trim();
 
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
+    // El nombre queda también en Supabase: permite reconstruir el perfil si falla la base local
+    options: { data: { nombre } },
   });
 
   if (error) {
     redirect('/registro?error=' + encodeURIComponent(error.message));
   }
 
-  // Crear usuario en nuestra tabla
-  if (data.user) {
-    await prisma.usuario.create({
-      data: {
-        id: data.user.id,
-        email,
-        nombre,
-      },
-    });
+  // Correo ya registrado: Supabase responde con un usuario sin identidades (para no revelar cuentas).
+  // No hay que crear nada local con ese id.
+  if (data.user && data.user.identities?.length === 0) {
+    redirect('/registro?error=' + encodeURIComponent('Ese correo ya está registrado. Inicia sesión.'));
   }
 
-  redirect('/login?mensaje=Revisá tu email para confirmar');
+  // Perfil local. Si falla, el registro NO se rompe: se repara solo al confirmar el correo,
+  // al iniciar sesión o al entrar al dashboard (asegurarPerfil es idempotente).
+  if (data.user) {
+    await asegurarPerfil(data.user, nombre);
+  }
+
+  redirect('/login?mensaje=' + encodeURIComponent('Revisa tu correo para confirmar tu cuenta'));
 }
 
 export async function iniciarSesion(formData: FormData) {
   const supabase = await crearClienteServidor();
-  const email = formData.get('email') as string;
-  const password = formData.get('password') as string;
+  const email = String(formData.get('email') ?? '').trim();
+  const password = String(formData.get('password') ?? '');
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
   if (error) {
     redirect('/login?error=' + encodeURIComponent(error.message));
+  }
+
+  // Repara la cuenta si quedó sin perfil local
+  if (data.user) {
+    await asegurarPerfil(data.user);
   }
 
   redirect('/dia');

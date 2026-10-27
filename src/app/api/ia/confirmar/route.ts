@@ -7,10 +7,20 @@ import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { normalizarCodigo, normalizarNombre, esMismaClase, nombreDia, type ClaseFija } from '@/lib/borrador/enriquecer';
 import { validarItem, ItemConfirmado } from '@/lib/borrador/validarConfirmacion';
 
+/** Otra petición ya confirmó esta interpretación (ganó la carrera). */
+class YaConfirmada extends Error {}
+
+type Resultado = {
+  creados: { tareas: string[]; eventos: string[]; clases: string[]; materias: { id: string; nombre: string }[] };
+  omitidos: { indice: number; titulo: string; motivo: string }[];
+};
+
 /**
  * POST /api/ia/confirmar
- * Body: { interpretacionId?, fueCorregida?, items: [...] }  ← el borrador, tal como lo dejó el usuario
+ * Body: { interpretacionId, fueCorregida?, items: [...] }  ← el borrador, tal como lo dejó el usuario
  * Guarda TODO en una transacción: si algo falla, no queda nada a medias.
+ * IDEMPOTENTE: cada interpretacionId se confirma UNA sola vez. Si llega un reintento
+ * (se perdió la respuesta, doble clic, red inestable), devuelve el mismo resultado sin crear nada.
  * - Crea cada materia nueva una sola vez (aunque la usen varios ítems).
  * - Aprende alias: si el usuario vinculó "BD" a "Base de Datos II", la próxima vez lo hace solo.
  * - Una clase de lunes y miércoles se guarda como dos EventoFijo.
@@ -38,7 +48,27 @@ export async function POST(req: NextRequest) {
     items.push(v.valor);
   }
 
+  const interpretacionId = typeof body.interpretacionId === 'string' ? body.interpretacionId : null;
+  if (!interpretacionId) {
+    return NextResponse.json({ error: 'Falta interpretacionId (viene en la respuesta de /api/ia/extraer)' }, { status: 400 });
+  }
+
   try {
+    // Idempotencia (1/2): si este borrador ya se confirmó, devolver el mismo resultado
+    const interpretacion = await prisma.interpretacionIA.findFirst({
+      where: { id: interpretacionId, usuarioId: user.id },
+      select: { estado: true, resultado: true },
+    });
+    if (!interpretacion) {
+      return NextResponse.json({ error: 'Interpretación no encontrada' }, { status: 404 });
+    }
+    if (interpretacion.estado === 'aplicada') {
+      return NextResponse.json({ ...(interpretacion.resultado as Resultado), repetido: true });
+    }
+    if (interpretacion.estado !== 'pendiente') {
+      return NextResponse.json({ error: 'Esta interpretación ya no se puede confirmar' }, { status: 409 });
+    }
+
     // Las materias a vincular tienen que ser del usuario
     const idsVincular = [...new Set(items.flatMap((i) => (i.materia.accion === 'vincular' ? [i.materia.materiaId] : [])))];
     const propias = await prisma.materia.findMany({
@@ -69,7 +99,17 @@ export async function POST(req: NextRequest) {
 
     const periodo = await periodoVigente(user.id);
 
-    const resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const resultado: Resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      // 0) Idempotencia (2/2): "reservar" la interpretación. Solo UNA petición puede pasarla
+      //    de 'pendiente' a 'aplicada'. Si otra llegó primero, Postgres hace esperar a esta y
+      //    después el UPDATE no encuentra filas → no se crea nada.
+      //    Si algo falla más abajo, la transacción se deshace y vuelve a quedar 'pendiente'.
+      const reserva = await tx.interpretacionIA.updateMany({
+        where: { id: interpretacionId, usuarioId: user.id, estado: 'pendiente' },
+        data: { estado: 'aplicada', fueCorregida: body.fueCorregida === true },
+      });
+      if (reserva.count === 0) throw new YaConfirmada();
+
       // 1) Materias nuevas: una sola vez por nombre normalizado (y reusar si ya existe con ese nombre)
       const idPorClave = new Map<string, string>();
       const materiasCreadas: { id: string; nombre: string }[] = [];
@@ -186,19 +226,22 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // 4) Trazabilidad: la interpretación se aplicó (y si el usuario la corrigió)
-      if (typeof body.interpretacionId === 'string') {
-        await tx.interpretacionIA.updateMany({
-          where: { id: body.interpretacionId, usuarioId: user.id },
-          data: { estado: 'aplicada', fueCorregida: body.fueCorregida === true },
-        });
-      }
-
-      return { tareas, eventos, clases, materias: materiasCreadas };
+      // 4) Guardar el resultado: un reintento devolverá exactamente esto
+      const final: Resultado = { creados: { tareas, eventos, clases, materias: materiasCreadas }, omitidos };
+      await tx.interpretacionIA.update({ where: { id: interpretacionId }, data: { resultado: final as object } });
+      return final;
     }, { timeout: 15_000 }); // varios ítems + la latencia a Supabase: más que los 5 s por defecto
 
-    return NextResponse.json({ creados: resultado, omitidos }, { status: 201 });
+    return NextResponse.json(resultado, { status: 201 });
   } catch (error) {
+    if (error instanceof YaConfirmada) {
+      // Perdimos la carrera contra otra petición idéntica: devolver lo que guardó ella
+      const previa = await prisma.interpretacionIA.findFirst({
+        where: { id: interpretacionId, usuarioId: user.id },
+        select: { resultado: true },
+      });
+      return NextResponse.json({ ...(previa?.resultado as Resultado), repetido: true });
+    }
     console.error('Error en /api/ia/confirmar:', error);
     return NextResponse.json({ error: 'Error al guardar el borrador' }, { status: 500 });
   }

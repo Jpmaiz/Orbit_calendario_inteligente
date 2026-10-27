@@ -2,12 +2,18 @@ import { cerrarSesion } from '../(auth)/acciones';
 import ProveedorPeriodos from '@/components/periodos/ProveedorPeriodos';
 import ConfiguracionPeriodo from '@/components/periodos/ConfiguracionPeriodo';
 import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
+import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { asegurarPerfil } from '@/lib/usuarios/perfil';
 
-export default function LayoutDashboard({
+export default async function LayoutDashboard({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Una sesión abierta cuya cuenta quedó sin perfil local se repara aquí (una vez por carga de página)
+  const usuario = await obtenerUsuario();
+  if (usuario) await asegurarPerfil(usuario);
+
   return (
     <ProveedorPeriodos>
       <div className="min-h-dvh bg-[#F6F7F2] font-sans text-[#263D34] selection:bg-[#DCE8D5]">
