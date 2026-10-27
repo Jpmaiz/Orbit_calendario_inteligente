@@ -123,12 +123,16 @@ export function leerAgenda(valor: unknown): AgendaDia {
   };
 }
 export function combinarTareas(agenda: readonly TareaAgenda[], priorizadas: readonly TareaDia[]) {
-  const porId = new Map(priorizadas.map((tarea) => [tarea.id, tarea]));
+  // Conservar las adicionales para las secciones de vencidas y próximas.
+  const porId = new Map<string, TareaAgenda & { prioridadCalculada?: PrioridadCalculada }>(
+    priorizadas.map((tarea) => [tarea.id, tarea]),
+  );
   let sinPrioridad = 0;
   for (const tarea of agenda) {
-    const existente = porId.get(tarea.id);
-    if (existente) porId.set(tarea.id, { ...tarea, prioridadCalculada: existente.prioridadCalculada });
-    else sinPrioridad++;
+    const prioridadCalculada = porId.get(tarea.id)?.prioridadCalculada;
+    if (!prioridadCalculada) sinPrioridad++;
+    // Los datos de agenda prevalecen; la prioridad solo se adjunta si se obtuvo.
+    porId.set(tarea.id, { ...tarea, prioridadCalculada });
   }
   return { tareas: [...porId.values()], sinPrioridad };
 }
@@ -144,7 +148,7 @@ export function horarioDelDia(agenda: AgendaDia, fechaActual: Date) {
       (!clase.vigenteHasta || clase.vigenteHasta >= inicio))
       .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
     eventos: agenda.eventos.filter((evento) =>
-      evento.inicio < fin && (evento.fin ? evento.fin >= inicio : evento.inicio >= inicio))
+      evento.inicio < fin && (evento.fin ? evento.fin > inicio : evento.inicio >= inicio))
       .sort((a, b) => a.inicio.getTime() - b.inicio.getTime()),
   };
 }

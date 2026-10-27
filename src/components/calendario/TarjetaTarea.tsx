@@ -11,7 +11,7 @@ type TareaTarjeta = TareaConHoraDefinida & {
   fechaLimite: string;
   tipo: string;
   prioridad: string;
-  prioridadCalculada: PrioridadCalculada;
+  prioridadCalculada?: PrioridadCalculada | null;
   estado: string;
   materia: { nombre: string; color: string } | null;
 };
@@ -60,10 +60,13 @@ export default function TarjetaTarea({ tarea }: Props) {
   const completada = tarea.estado === 'completada';
   const ocupada = accion !== null || actualizando;
   const calculada = tarea.prioridadCalculada;
-  const estiloNivel = estilosNivel[calculada.nivel];
+  const estiloNivel = calculada ? estilosNivel[calculada.nivel] : null;
   const fechaLimite = new Date(tarea.fechaLimite);
   const fechaFormateada = fechaLimite.toLocaleString('es-BO', {
     weekday: 'long', day: 'numeric', month: 'long',
+    hour: tarea.horaDefinida ? '2-digit' : undefined,
+    minute: tarea.horaDefinida ? '2-digit' : undefined,
+    hourCycle: 'h23',
     timeZone: 'America/La_Paz',
   });
 
@@ -118,7 +121,7 @@ export default function TarjetaTarea({ tarea }: Props) {
       aria-label={tarea.titulo}
       className="relative min-w-0 overflow-hidden [overflow-wrap:anywhere] rounded-[20px] border border-[#EBEEE6] bg-white shadow-[0_3px_14px_rgba(38,61,52,0.035)] transition-shadow hover:shadow-[0_5px_20px_rgba(38,61,52,0.07)]"
     >
-      <span aria-hidden="true" className="absolute inset-y-4 left-0 w-1 rounded-r-full" style={{ backgroundColor: estiloNivel.linea }} />
+      <span aria-hidden="true" className="absolute inset-y-4 left-0 w-1 rounded-r-full" style={{ backgroundColor: estiloNivel?.linea ?? '#9AA69C' }} />
       <div className="px-4 pb-2 pt-4 md:px-6 md:pt-5">
         <div className="flex flex-wrap items-start justify-between gap-2 md:gap-3">
           <div className="min-w-0 basis-40 flex-1">
@@ -150,12 +153,13 @@ export default function TarjetaTarea({ tarea }: Props) {
             {tarea.materia && <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: tarea.materia.color }} />}
             <span className="break-words">{tarea.materia?.nombre ?? 'Sin materia'}</span>
           </span>
-          <span className={'rounded px-2 py-1 font-semibold ' + estiloNivel.etiqueta}>
+          {estiloNivel ? <span className={'rounded px-2 py-1 font-semibold ' + estiloNivel.etiqueta}>
             Prioridad calculada: {estiloNivel.nombre}
-          </span>
+          </span> : <span className="text-[#75816F]">Prioridad calculada no disponible</span>}
           <span className="text-[#75816F]">Elegida: {nombresPrioridad[tarea.prioridad] ?? tarea.prioridad}</span>
           <span className="text-[#75816F]">{nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</span>
         </div>
+        {calculada && <>
         <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-[#526A5A]">{calculada.mensaje}</p>
         {calculada.sobrecargaHoras > 0 && (
           <p className="mt-2 inline-block rounded-lg bg-[#FAF0DB] px-2.5 py-1.5 text-xs font-medium text-[#806020]">
@@ -186,6 +190,7 @@ export default function TarjetaTarea({ tarea }: Props) {
             </dl>
           </div>
         </details>
+        </>}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 border-t border-[#F0F2EC]">
           <label className={'inline-flex min-h-11 items-center gap-2 text-xs font-medium text-[#64805F] ' + (ocupada ? 'cursor-wait opacity-60' : 'cursor-pointer')}>
             <input

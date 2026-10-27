@@ -82,6 +82,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
   }
 
   const combinadas = combinarTareas(carga.agenda?.tareas ?? [], carga.tareas ?? []);
+  const tareasDisponibles = carga.agenda !== null || carga.tareas !== null;
   const secciones = organizarTareasDia(combinadas.tareas, new Date(fechaActual))
     .filter((seccion) => seccion.tareas.length > 0);
   const horario = carga.agenda ? horarioDelDia(carga.agenda, new Date(fechaActual)) : null;
@@ -91,16 +92,16 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
       {(carga.errores.length > 0 || combinadas.sinPrioridad > 0) && (
         <div role="alert" className="space-y-2 rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">
           {carga.errores.map((mensaje) => <p key={mensaje}>{mensaje}</p>)}
-          {combinadas.sinPrioridad > 0 && <p>Hay tareas del día cuya prioridad no se pudo obtener. Actualiza para mostrarlas.</p>}
+          {combinadas.sinPrioridad > 0 && <p>Hay tareas del día sin prioridad calculada. Se muestran con sus datos de agenda.</p>}
           <button type="button" onClick={() => router.refresh()} className="min-h-11 rounded-lg px-2 font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">Volver a cargar</button>
         </div>
       )}
       <section aria-labelledby="titulo-tareas" className="min-w-0 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="titulo-tareas" className="text-lg font-semibold tracking-[-0.02em]">Tus tareas</h2>
-          {carga.tareas !== null && <span className="text-xs text-[#788174]">{combinadas.tareas.length} {combinadas.tareas.length === 1 ? 'tarea' : 'tareas'} en total</span>}
+          {tareasDisponibles && <span className="text-xs text-[#788174]">{combinadas.tareas.length} {combinadas.tareas.length === 1 ? 'tarea' : 'tareas'} en total</span>}
         </div>
-        {carga.tareas !== null && secciones.length === 0 && (
+        {tareasDisponibles && secciones.length === 0 && (
           <p className="text-xs leading-5 text-[#657360]">
             {combinadas.tareas.length === 0 ? 'Aún no tienes tareas.' : 'No hay tareas vencidas, para hoy, para los próximos 7 días ni completadas hoy.'}
           </p>
