@@ -5,6 +5,8 @@ export interface DatosEvento {
   horaFin?: string;
   ubicacion?: string | null;
   materiaId?: string | null;
+  vigenteDesde?: Date | null; // inicio del semestre (o de la clase)
+  vigenteHasta?: Date | null; // fin del semestre (o de la clase)
 }
 
 type Resultado = { ok: true; datos: DatosEvento } | { ok: false; error: string };
@@ -83,9 +85,27 @@ export function validarEvento(body: unknown, modo: 'crear' | 'editar'): Resultad
     datos.materiaId = b.materiaId as string | null;
   }
 
+  // vigencia (opcional; null = sin límite). Si llegan las dos, el fin debe ser posterior.
+  for (const campo of ['vigenteDesde', 'vigenteHasta'] as const) {
+    if (b[campo] !== undefined) {
+      if (b[campo] === null) {
+        datos[campo] = null;
+      } else {
+        const d = typeof b[campo] === 'string' ? new Date(b[campo] as string) : null;
+        if (!d || Number.isNaN(d.getTime())) {
+          return { ok: false, error: `${campo === 'vigenteDesde' ? 'Inicio' : 'Fin'} de vigencia inválido` };
+        }
+        datos[campo] = d;
+      }
+    }
+  }
+  if (datos.vigenteDesde && datos.vigenteHasta && datos.vigenteHasta <= datos.vigenteDesde) {
+    return { ok: false, error: 'El fin de vigencia debe ser posterior al inicio' };
+  }
+
   if (!crear && Object.keys(datos).length === 0) {
     return { ok: false, error: 'No hay nada para actualizar' };
   }
 
   return { ok: true, datos };
-}
+}
