@@ -208,7 +208,11 @@ export function armarFechas(item: ItemExtraido, referencia: Date, zona: string) 
       }
     } else if (item.horaFin) {
       const f = resolverFecha(item.fechaDicha, item.horaFin, 'evento', referencia, zona);
-      if (f.estado === 'ok') base.fin = f.fecha.toISOString();
+      if (f.estado === 'ok') {
+        // "8 pm - 12 am": termina pasada la medianoche, al día siguiente
+        const fin = f.fecha > r.fecha ? f.fecha : new Date(f.fecha.getTime() + 86_400_000);
+        if (fin > r.fecha) base.fin = fin.toISOString();
+      }
     }
   }
   return base;

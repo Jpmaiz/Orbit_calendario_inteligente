@@ -207,7 +207,7 @@ export function normalizarLectura(crudo: unknown): LecturaImagen {
       codigo: texto(m.codigo, 30),
       nombre,
       paralelo: texto(m.paralelo == null ? null : String(m.paralelo), 10),
-      docente: texto(m.docente, 100),
+      docente: /^[\s_.-]*$/.test(String(m.docente ?? '')) ? null : texto(m.docente, 100), // "_______" = sin docente
     });
   }
 
