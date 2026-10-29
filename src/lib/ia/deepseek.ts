@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { AdaptadorIA, TareaInterpretada } from './adaptador';
+import { AdaptadorIA } from './adaptador';
 import { construirPromptExtraccion, normalizarItems, ContextoExtraccion, ItemExtraido } from './extraccion';
 
 const MODELO = 'deepseek-flash';
@@ -37,34 +37,6 @@ class AdaptadorDeepSeek implements AdaptadorIA {
       }
     }
     throw new Error('Inalcanzable');
-  }
-
-  async interpretarTexto(texto: string): Promise<TareaInterpretada> {
-    const hoy = new Date().toISOString();
-    const prompt = `Eres un asistente que extrae tareas académicas de texto en español.
-Hoy es ${hoy} (zona horaria America/La_Paz).
-Del siguiente texto, extrae UNA tarea y devuelve SOLO un JSON válido, sin explicaciones.
-
-Reglas para "titulo":
-- Nombre formal y corto de la actividad, SIN verbo al inicio (el tipo ya dice la acción).
-- Mayúscula inicial y nombres de materia con mayúsculas. Expande abreviaturas comunes.
-- Ejemplos: "entregar inf de BD el viernes" → titulo "Informe de Base de Datos", tipo "entrega".
-  "parcial de calculo el lunes" → titulo "Parcial de Cálculo", tipo "examen".
-  "hacer el proyecto de facturación" → titulo "Proyecto de Facturación", tipo "proyecto".
-
-Formato exacto:
-{
-  "titulo": "nombre formal según las reglas",
-  "tipo": "examen | tarea | entrega | proyecto | exposicion",
-  "fechaLimite": "fecha ISO 8601 completa o null si el texto no dice la fecha",
-  "materia": "nombre de la materia o null",
-  "confianza": 0.0 a 1.0
-}
-
-Texto: "${texto}"`;
-
-    const contenido = await this.pedirJson(prompt);
-    return JSON.parse(contenido) as TareaInterpretada;
   }
 
   /** Fase 2: devuelve TODOS los ítems del texto (tareas, eventos y clases), ya validados. */

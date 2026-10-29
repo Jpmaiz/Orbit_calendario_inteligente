@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AdaptadorIA, TareaInterpretada } from './adaptador';
+import { AdaptadorIA } from './adaptador';
 import { construirPromptExtraccion, normalizarItems, ContextoExtraccion, ItemExtraido } from './extraccion';
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -32,30 +32,6 @@ class AdaptadorGemini implements AdaptadorIA {
   /** Gemini a veces envuelve el JSON en ```json ... ```: se limpia antes de leerlo. */
   private leerJson(respuesta: string): unknown {
     return JSON.parse(respuesta.replace(/```json|```/g, '').trim());
-  }
-
-  async interpretarTexto(texto: string): Promise<TareaInterpretada> {
-    const hoy = new Date().toISOString();
-    const prompt = `Eres un asistente que extrae tareas académicas de texto en español.
-Hoy es ${hoy} (zona horaria America/La_Paz).
-Del siguiente texto, extrae UNA tarea y devuelve SOLO un JSON válido, sin explicaciones.
-
-Reglas para "titulo": nombre formal y corto, SIN verbo al inicio (el tipo ya dice la acción),
-con mayúscula inicial y abreviaturas expandidas. Ej.: "entregar inf de BD" → "Informe de Base de Datos".
-
-Formato exacto:
-{
-  "titulo": "nombre formal según las reglas",
-  "tipo": "examen | tarea | entrega | proyecto | exposicion",
-  "fechaLimite": "fecha ISO 8601 completa o null si el texto no dice la fecha",
-  "materia": "nombre de la materia o null",
-  "confianza": 0.0 a 1.0
-}
-
-Texto: "${texto}"`;
-
-    const respuesta = await this.generarConReintento(prompt);
-    return this.leerJson(respuesta) as TareaInterpretada;
   }
 
   /** Fase 2: devuelve TODOS los ítems del texto (tareas, eventos y clases), ya validados. */
