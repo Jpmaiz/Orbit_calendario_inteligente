@@ -42,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# imágenes de prueba de la IA (pueden tener datos personales)
+/pruebas-ia/

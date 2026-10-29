@@ -13,6 +13,7 @@ export type ItemExtraido = {
   titulo: string;
   tipo: (typeof TIPOS_TAREA)[number] | null; // solo tareas
   fechaDicha: FechaDicha | null;             // tarea y evento
+  fechaFinDicha: FechaDicha | null;          // evento de varios días ("del 20 al 29"): último día
   hora: string | null;                       // "HH:mm" (tarea: hora límite o del examen; evento: inicio)
   horaFin: string | null;                    // evento y evento_fijo
   diasSemana: number[];                      // evento_fijo: 1 = lunes … 7 = domingo
@@ -22,6 +23,7 @@ export type ItemExtraido = {
   ubicacion: string | null;
   confianza: number;                         // 0–1
   evidencia: string;                         // fragmento del texto de donde salió
+  fechaReferencia: string | null;            // AAAA-MM-DD: día en que se dijo (mensaje de una captura). null = hoy
 };
 
 export type ContextoExtraccion = {
@@ -32,23 +34,23 @@ export type ContextoExtraccion = {
 
 const DIAS = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
 
-export function construirPromptExtraccion(texto: string, ctx: ContextoExtraccion): string {
-  const hoy = new Intl.DateTimeFormat('es-BO', {
+/** "miércoles, 28 de octubre de 2026" en la zona del usuario. */
+export const hoyComoTexto = (ctx: ContextoExtraccion) =>
+  new Intl.DateTimeFormat('es-BO', {
     timeZone: ctx.zonaHoraria, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
   }).format(ctx.ahora);
-  const materias = ctx.materias.length ? ctx.materias.map((m) => `"${m}"`).join(', ') : '(ninguna todavía)';
 
-  return `Eres un asistente que lee mensajes de estudiantes universitarios en Bolivia y los desmenuza en actividades.
-Hoy es ${hoy}. Materias del estudiante: ${materias}.
+export const materiasComoTexto = (ctx: ContextoExtraccion) =>
+  ctx.materias.length ? ctx.materias.map((m) => `"${m}"`).join(', ') : '(ninguna todavía)';
 
-Devuelve SOLO un JSON con esta forma: { "items": [ ... ] }. Un ítem por cada actividad del texto (máximo 10).
-
-Cada ítem:
+/** Formato y reglas de cada ítem. Lo comparten el prompt de texto y el de imágenes. */
+export const REGLAS_ITEMS = `Cada ítem:
 {
   "clase": "tarea" | "evento" | "evento_fijo",
   "titulo": string,
   "tipo": "examen" | "tarea" | "entrega" | "proyecto" | "exposicion" | null,
   "fechaDicha": FECHA o null,
+  "fechaFinDicha": FECHA o null,
   "hora": "HH:mm" o null,
   "horaFin": "HH:mm" o null,
   "diasSemana": [números],
@@ -62,7 +64,9 @@ Cada ítem:
 
 CLASE:
 - "tarea": hay que preparar o entregar algo para una fecha (examen, entrega, proyecto, exposición, tarea). Lleva "tipo".
-- "evento": ocurre una vez en un horario (reunión de grupo, charla). "tipo" = null.
+- "evento": ocurre una vez en un horario (reunión de grupo, charla, feria). "tipo" = null.
+    Si dura varios días ("del 20 al 29 de noviembre"), "fechaDicha" = primer día y "fechaFinDicha" = último día.
+    Si es un solo día, "fechaFinDicha" = null.
 - "evento_fijo": se repite cada semana (una clase). Usa "diasSemana" (1 = lunes … 7 = domingo), "hora" de inicio y "horaFin". "fechaDicha" = null.
 
 TITULO: nombre formal y corto, SIN verbo al inicio (el tipo ya dice la acción), con mayúscula inicial y abreviaturas expandidas.
@@ -80,6 +84,18 @@ FECHA (NO calcules fechas; describe lo que dijo el texto):
 MATERIA: si corresponde a una de las materias del estudiante, usa ese nombre exacto. Si no, escríbela como aparece.
 Si solo aparece un código (ej. "SIS-311"), ponlo en "codigoMateria" y deja "materia" en null.
 DESCRIPCION: temas o detalles útiles ("subnetting, VLANs"). Si no hay, null.
+`;
+
+export function construirPromptExtraccion(texto: string, ctx: ContextoExtraccion): string {
+  const hoy = hoyComoTexto(ctx);
+  const materias = materiasComoTexto(ctx);
+
+  return `Eres un asistente que lee mensajes de estudiantes universitarios en Bolivia y los desmenuza en actividades.
+Hoy es ${hoy}. Materias del estudiante: ${materias}.
+
+Devuelve SOLO un JSON con esta forma: { "items": [ ... ] }. Un ítem por cada actividad del texto (máximo 10).
+
+${REGLAS_ITEMS}
 
 Texto del estudiante: """${texto}"""`;
 }
@@ -87,7 +103,7 @@ Texto del estudiante: """${texto}"""`;
 const esHora = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 const texto = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
 
-function normalizarFecha(v: unknown): FechaDicha | null {
+export function normalizarFecha(v: unknown): FechaDicha | null {
   const f = (v ?? null) as Record<string, unknown> | null;
   if (!f || typeof f !== 'object') return null;
   if (f.tipo === 'exacta' && typeof f.fecha === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha)) {
@@ -129,6 +145,7 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       titulo,
       tipo,
       fechaDicha: clase === 'evento_fijo' ? null : normalizarFecha(r.fechaDicha),
+      fechaFinDicha: clase === 'evento' ? normalizarFecha(r.fechaFinDicha) : null,
       hora: esHora(r.hora) ? r.hora : null,
       horaFin: esHora(r.horaFin) ? r.horaFin : null,
       diasSemana,
@@ -138,9 +155,10 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       ubicacion: texto(r.ubicacion, 100),
       confianza: Math.min(1, Math.max(0, Number(r.confianza) || 0.5)),
       evidencia: texto(r.evidencia, 300) ?? '',
+      fechaReferencia: typeof r.fechaReferencia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.fechaReferencia) ? r.fechaReferencia : null,
     });
   }
   return items;
 }
 
-export const NOMBRE_DIA = (d: number) => DIAS[d - 1] ?? '';
+export const NOMBRE_DIA = (d: number) => DIAS[d - 1] ?? '';

@@ -1,5 +1,5 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AdaptadorIA } from './adaptador';
+import { GoogleGenerativeAI, type Part } from '@google/generative-ai';
+import { AdaptadorIA, ImagenEntrada, leerJson } from './adaptador';
 import { construirPromptExtraccion, normalizarItems, ContextoExtraccion, ItemExtraido } from './extraccion';
 
 const espera = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -14,10 +14,10 @@ class AdaptadorGemini implements AdaptadorIA {
   }
 
   /** Reintenta solo en errores temporales (429 / 503). Hasta 3 intentos: espera 1 s y 2 s. */
-  private async generarConReintento(prompt: string, intentos = 3): Promise<string> {
+  private async generarConReintento(contenido: string | Part[], intentos = 3): Promise<string> {
     for (let i = 0; i < intentos; i++) {
       try {
-        const resultado = await this.modelo.generateContent(prompt);
+        const resultado = await this.modelo.generateContent(contenido);
         return resultado.response.text();
       } catch (error) {
         const status = (error as { status?: number })?.status;
@@ -29,15 +29,18 @@ class AdaptadorGemini implements AdaptadorIA {
     throw new Error('Inalcanzable');
   }
 
-  /** Gemini a veces envuelve el JSON en ```json ... ```: se limpia antes de leerlo. */
-  private leerJson(respuesta: string): unknown {
-    return JSON.parse(respuesta.replace(/```json|```/g, '').trim());
-  }
-
   /** Fase 2: devuelve TODOS los ítems del texto (tareas, eventos y clases), ya validados. */
   async extraerItems(texto: string, ctx: ContextoExtraccion): Promise<ItemExtraido[]> {
     const respuesta = await this.generarConReintento(construirPromptExtraccion(texto, ctx));
-    return normalizarItems(this.leerJson(respuesta));
+    return normalizarItems(leerJson(respuesta));
+  }
+
+  async jsonConImagenes(prompt: string, imagenes: ImagenEntrada[]): Promise<unknown> {
+    const partes: Part[] = [
+      { text: prompt },
+      ...imagenes.map((img) => ({ inlineData: { mimeType: img.mime, data: img.base64 } })),
+    ];
+    return leerJson(await this.generarConReintento(partes));
   }
 }
 
