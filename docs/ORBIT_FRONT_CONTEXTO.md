@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.2 · 28/10/2026)
+# Orbit — Contexto del backend para el front (v2.3 · 29/10/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.3 (29/10) — captura por foto y PDF](#novedades-23)
 ★ [Novedades de la v2.2 (28/10) — leer primero si ya integraste la v2.1](#novedades)
 0. [Paso 0 — Pregunta qué hay hecho](#paso-0)
 1. [Qué cambió desde la v1](#cambios)
@@ -20,6 +21,51 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-23"></a>
+## ★ Novedades de la v2.3 (29/10/2026)
+
+Captura por **foto, captura de pantalla o PDF**. Referencia completa de la API: **`docs/openapi.yaml`** (Postman: Import → archivo).
+Cómo funcionan los prompts: `docs/PROMPTS.md`. Por qué se diseñó así: `docs/DECISIONES.md`.
+
+| # | Cambio | ¿Afecta al front? |
+|---|---|---|
+| 1 | **Nuevo** `POST /api/ia/extraer-imagen` | Sí: ya está conectado en `CapturaRapida.tsx` |
+| 2 | **Nuevo** `src/components/ia/capturaArchivo.ts` (prepara foto o PDF en el navegador) | No hay que tocarlo |
+| 3 | `CapturaRapida.tsx`: botón **"Subir foto o PDF"** + línea con el archivo y cómo se verificó | Revisa el diff antes de tu próximo merge |
+| 4 | `confirmar` crea solo el **semestre impreso** en el horario y devuelve `periodoCreado` | Opcional: mostrar "Semestre 2-2026 creado" |
+| 5 | Aviso en `advertencias` si algo **ya pasó** («Reunión…» ya pasó…) | Ya se muestra en la lista de avisos |
+| 6 | Materias nuevas guardan el código como se lee (`SIS-233`, antes `sis233`) | No |
+| 7 | Dependencia nueva: `pdfjs-dist` → corre `npm install` después del merge | Sí |
+
+### 1. `POST /api/ia/extraer-imagen`
+- **Body:** `{ imagenes: string[] (1–3, data URL JPEG/PNG/WebP, ≤ 4 MB c/u), textoAdjunto?: string }`.
+  `capturaArchivo.ts` ya lo arma: achica la foto a 2000 px en JPEG; un PDF se convierte con pdf.js (máx. 3 páginas) y su texto va en `textoAdjunto`.
+- **Respuesta:** **el mismo borrador que `/api/ia/extraer`** (`interpretacionId`, `items`, `periodo`, `advertencias`) → se revisa y se confirma igual. Además trae:
+  ```ts
+  documento: {
+    tipo: 'horario' | 'afiche' | 'captura_chat' | 'pizarra' | 'otro';
+    fechaReferencia: { fecha: 'AAAA-MM-DD'; origen: 'documento' | 'hoy' } | null; // desde qué día se contó "mañana"
+    periodoDetectado: { nombre; inicio; fin; existente: {...} | null } | null;     // semestre impreso en el horario
+    revision: { hecha; coinciden; conflictos; correcciones: string[]; diferencias: string[] };
+    materias: {            // SOLO horarios: clases agrupadas por materia (para la vista de semana)
+      clave; nombre; codigo; color: '#2F6F5E';
+      indices: number[];   // posiciones en items[]
+      sesiones: { diasSemana; hora; horaFin; aula; indice }[];
+      revisar: boolean;    // alguna clase salió de una lectura dudosa
+    }[];
+  }
+  ```
+- **Tarda** de 3 a 12 s (un horario se lee dos veces). Mostrar "Leyendo tu horario…".
+- **Confianza** en las clases de un horario: **0.95** = las dos lecturas coincidieron; **0.6** = hubo diferencia → resaltar "Revisa esta clase".
+- Las clases de un horario ya traen `vigencia` del semestre impreso: **no hace falta preguntar "¿cuándo termina tu semestre?"** si `periodoDetectado` existe.
+
+### 2. Pendiente de UI (lo veremos juntos)
+El borrador de un horario hoy muestra una tarjeta-formulario por clase (10 tarjetas). La propuesta:
+mini grilla "Así quedará tu semana" con `documento.materias` (un color por materia) + **una tarjeta compacta por materia**
+(editar solo al tocar) + arriba solo lo que requiere atención + un botón "Agregar 6 materias y 10 clases".
 
 ---
 

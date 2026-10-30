@@ -1,0 +1,586 @@
+openapi: 3.1.0
+info:
+  title: Orbit API
+  version: "2.3"
+  description: |
+    API del backend de Orbit (organizador inteligente de horarios para estudiantes).
+
+    **Autenticación:** todas las rutas usan la cookie de sesión de Supabase. Sin sesión responden 401.
+    El `usuarioId` NUNCA se envía: el backend lo toma de la sesión.
+
+    **Fechas:** instantes en ISO 8601 (`2026-10-30T20:00:00.000Z`). Los días como `AAAA-MM-DD` se interpretan
+    en la zona horaria del usuario (America/La_Paz por defecto). Días de la semana: 1 = lunes … 7 = domingo.
+
+    **Errores:** siempre `{ "error": "mensaje en español" }`, listo para mostrar.
+
+    **Flujo de captura con IA:** `extraer` o `extraer-imagen` → (el usuario edita; `revisar` recalcula) → `confirmar`.
+    Nada se guarda hasta `confirmar`.
+servers:
+  - url: http://localhost:3000
+    description: Desarrollo local
+security:
+  - sesion: []
+
+tags:
+  - name: IA
+    description: Captura por texto, imagen o PDF → borrador → confirmación
+  - name: Tareas
+  - name: Agenda
+  - name: Clases
+    description: Clases semanales (EventoFijo)
+  - name: Eventos
+    description: Eventos de una sola vez
+  - name: Materias
+  - name: Periodos
+    description: Semestres académicos
+
+paths:
+  /api/ia/extraer:
+    post:
+      tags: [IA]
+      summary: Texto → borrador
+      description: |
+        La IA desmenuza el texto en ítems (tareas, eventos, clases). El sistema calcula fechas, propone materia,
+        propone hora desde el horario, asigna vigencia a las clases y detecta duplicados y choques. NO guarda nada.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [texto]
+              properties:
+                texto: { type: string, minLength: 1, maxLength: 2000, example: "examen de redes el miércoles y reunión mañana a las 16:00" }
+      responses:
+        "200":
+          description: Borrador
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Borrador" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/ia/extraer-imagen:
+    post:
+      tags: [IA]
+      summary: Foto, captura o PDF → borrador
+      description: |
+        Acepta horarios, afiches, capturas de chat y fotos de pizarra. El PDF se convierte a imágenes EN EL NAVEGADOR
+        (pdf.js) y su texto se envía como `textoAdjunto`. La imagen no se guarda.
+
+        Horarios: se leen dos veces de forma independiente (fila por fila y columna por columna); las casillas que no
+        coinciden se consultan a un árbitro y esas clases quedan con confianza 0.6.
+
+        Formato verificado por los primeros bytes (JPEG, PNG, WebP). Máx. 3 imágenes de 4 MB. Tarda de 3 a 12 s.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [imagenes]
+              properties:
+                imagenes:
+                  type: array
+                  minItems: 1
+                  maxItems: 3
+                  items: { type: string, description: "base64 o data URL (data:image/jpeg;base64,...)" }
+                textoAdjunto:
+                  type: string
+                  maxLength: 15000
+                  description: Texto extraído del PDF (opcional). Respaldo para siglas, aulas y fechas.
+      responses:
+        "200":
+          description: Borrador + datos del documento
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Borrador"
+                  - type: object
+                    properties:
+                      documento: { $ref: "#/components/schemas/Documento" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /api/ia/revisar:
+    post:
+      tags: [IA]
+      summary: Recalcula duplicados y choques del borrador editado
+      description: Sin IA y sin guardar. Llamar con debounce (~400 ms) cada vez que el usuario cambia fecha, hora o materia.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items: { type: array, items: { $ref: "#/components/schemas/ItemConfirmado" } }
+      responses:
+        "200":
+          description: Un resultado por ítem, en el mismo orden
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        indice: { type: integer }
+                        duplicado: { type: [object, "null"] }
+                        choques: { type: array, items: { $ref: "#/components/schemas/Choque" } }
+                        error: { type: string, description: "Si el ítem es inválido (en lugar de duplicado/choques)" }
+
+  /api/ia/confirmar:
+    post:
+      tags: [IA]
+      summary: Guarda el borrador (idempotente)
+      description: |
+        Guarda todo en UNA transacción. Cada `interpretacionId` se confirma una sola vez: un reintento devuelve
+        200 con el mismo resultado y `repetido: true`. Crea cada materia nueva una vez, aprende alias, omite
+        duplicados seguros y, si el borrador vino de un horario con semestre impreso, crea ese periodo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [interpretacionId, items]
+              properties:
+                interpretacionId: { type: string, format: uuid }
+                fueCorregida: { type: boolean, description: "true si el usuario editó algo (métrica de precisión)" }
+                items: { type: array, minItems: 1, maxItems: 20, items: { $ref: "#/components/schemas/ItemConfirmado" } }
+      responses:
+        "201":
+          description: Guardado
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResultadoConfirmacion" }
+        "200":
+          description: "Ya estaba confirmado (reintento). Mismo resultado + `repetido: true`."
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { description: Interpretación no encontrada }
+        "409": { description: La interpretación ya no se puede confirmar }
+
+  /api/tareas:
+    get:
+      tags: [Tareas]
+      summary: Tareas del usuario con prioridad calculada
+      description: Ordenadas por el motor de prioridad (holgura). Cada tarea trae `prioridadCalculada`.
+      responses:
+        "200":
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tareas: { type: array, items: { $ref: "#/components/schemas/Tarea" } }
+    post:
+      tags: [Tareas]
+      summary: Crear tarea
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/TareaEntrada"
+                - type: object
+                  required: [titulo, tipo, fechaLimite]
+                  properties:
+                    confirmarNueva: { type: boolean, description: "true = el usuario ya dijo que es otra (ignora duplicado)" }
+      responses:
+        "201": { description: Creada }
+        "409":
+          description: Posible duplicado. Reenviar con `confirmarNueva` si es otra.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  duplicado: { type: object }
+                  pregunta: { type: string }
+
+  /api/tareas/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Tareas]
+      summary: Editar tarea (incluye marcar completada)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TareaEntrada" }
+      responses: { "200": { description: Editada }, "404": { description: No encontrada } }
+    delete:
+      tags: [Tareas]
+      summary: Borrado suave
+      responses: { "200": { description: Eliminada } }
+
+  /api/agenda:
+    get:
+      tags: [Agenda]
+      summary: Todo lo del usuario en un rango de días
+      parameters:
+        - { name: desde, in: query, required: true, schema: { type: string, format: date }, example: "2026-10-26" }
+        - { name: hasta, in: query, required: true, schema: { type: string, format: date }, example: "2026-11-01" }
+      description: Máximo 62 días. Clases vigentes en el rango (una fila por día de semana), eventos y tareas.
+      responses:
+        "200":
+          description: Agenda
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  clases: { type: array, items: { $ref: "#/components/schemas/Clase" } }
+                  eventos: { type: array, items: { $ref: "#/components/schemas/Evento" } }
+                  tareas: { type: array, items: { $ref: "#/components/schemas/Tarea" } }
+
+  /api/eventos:
+    get:
+      tags: [Clases]
+      summary: Clases semanales del usuario
+      responses: { "200": { description: "{ eventos: Clase[] }" } }
+    post:
+      tags: [Clases]
+      summary: Crear clase semanal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClaseEntrada" }
+      responses: { "201": { description: Creada } }
+  /api/eventos/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Clases]
+      summary: Editar clase (horas y vigencia se validan junto con lo guardado)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClaseEntrada" }
+      responses: { "200": { description: Editada } }
+    delete:
+      tags: [Clases]
+      summary: Borrado suave
+      responses: { "200": { description: Eliminada } }
+
+  /api/eventos-puntuales:
+    post:
+      tags: [Eventos]
+      summary: Crear evento de una vez
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: "#/components/schemas/EventoEntrada"
+                - type: object
+                  required: [titulo, inicio]
+                  properties:
+                    confirmarNueva: { type: boolean }
+      responses:
+        "201": { description: "{ evento, choques } — los choques son aviso, no bloquean" }
+        "409": { description: "Ya hay uno igual a menos de 1 h → reenviar con confirmarNueva" }
+  /api/eventos-puntuales/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    get: { tags: [Eventos], summary: Un evento, responses: { "200": { description: "{ evento }" } } }
+    patch:
+      tags: [Eventos]
+      summary: Editar (choques recalculados con los datos nuevos)
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/EventoEntrada" }
+      responses: { "200": { description: "{ evento, choques }" } }
+    delete: { tags: [Eventos], summary: Borrado suave, responses: { "200": { description: Eliminado } } }
+
+  /api/materias:
+    get: { tags: [Materias], summary: Materias del usuario, responses: { "200": { description: "{ materias }" } } }
+    post:
+      tags: [Materias]
+      summary: Crear materia
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MateriaEntrada" }
+      responses: { "201": { description: "{ materia }" } }
+  /api/materias/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Materias]
+      summary: Editar materia
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MateriaEntrada" }
+      responses: { "200": { description: Editada } }
+    delete: { tags: [Materias], summary: Borrado suave, responses: { "200": { description: Eliminada } } }
+
+  /api/periodos:
+    get:
+      tags: [Periodos]
+      summary: Semestres del usuario y el actual
+      responses: { "200": { description: "{ periodos, actual } (actual = el que contiene hoy, o null)" } }
+    post:
+      tags: [Periodos]
+      summary: Crear semestre
+      description: Entre 1 semana y 1 año. Dos semestres no se pueden cruzar (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PeriodoEntrada" }
+      responses:
+        "201": { description: "{ periodo }" }
+        "409": { description: "Se cruza con otro periodo" }
+  /api/periodos/{id}:
+    parameters: [{ $ref: "#/components/parameters/Id" }]
+    patch:
+      tags: [Periodos]
+      summary: Corregir nombre o fechas
+      description: Mueve también la vigencia de las clases que la heredaron (las editadas a mano no se tocan).
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PeriodoEntrada" }
+      responses: { "200": { description: "{ periodo, clasesActualizadas }" } }
+    delete: { tags: [Periodos], summary: Borrado suave, responses: { "200": { description: Eliminado } } }
+
+components:
+  securitySchemes:
+    sesion:
+      type: apiKey
+      in: cookie
+      name: sb-<proyecto>-auth-token
+      description: Cookie de sesión de Supabase. En Postman, copiarla desde el navegador tras iniciar sesión.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  responses:
+    Error:
+      description: Error con mensaje para mostrar
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error: { type: string, example: "El texto debe tener entre 1 y 2000 caracteres" }
+
+  schemas:
+    Choque:
+      type: object
+      properties:
+        titulo: { type: string, example: "Redes de Computadoras II" }
+        cuando: { type: string, example: "lunes 09:00–10:30" }
+
+    PropuestaMateria:
+      description: Cómo propone el sistema la materia (código exacto → alias aprendido → nombre → crear)
+      oneOf:
+        - { type: object, properties: { accion: { const: vincular }, materiaId: { type: string }, nombre: { type: string }, seguro: { type: boolean }, alternativas: { type: array, items: { type: object } } } }
+        - { type: object, properties: { accion: { const: crear }, nombre: { type: string }, codigo: { type: [string, "null"] }, clave: { type: string } } }
+        - { type: object, properties: { accion: { const: preguntar_nombre }, codigo: { type: string } } }
+        - { type: object, properties: { accion: { const: ninguna } } }
+
+    ItemBorrador:
+      type: object
+      properties:
+        clase: { type: string, enum: [tarea, evento, evento_fijo] }
+        titulo: { type: string }
+        tipo: { type: [string, "null"], enum: [examen, tarea, entrega, proyecto, exposicion, null] }
+        inicio: { type: [string, "null"], format: date-time, description: "Tarea: fecha límite. Evento: inicio." }
+        fin: { type: [string, "null"], format: date-time }
+        hora: { type: [string, "null"], example: "09:00" }
+        horaFin: { type: [string, "null"], example: "10:30" }
+        diasSemana: { type: array, items: { type: integer, minimum: 1, maximum: 7 } }
+        horaDefinida: { type: boolean, description: "false = hora por defecto (examen 08:00, entrega 23:59)" }
+        materia: { type: [string, "null"] }
+        codigoMateria: { type: [string, "null"], example: "SIS-233" }
+        ubicacion: { type: [string, "null"] }
+        descripcion: { type: [string, "null"] }
+        confianza: { type: number, minimum: 0, maximum: 1, description: "Horarios: 0.95 si las dos lecturas coinciden, 0.6 si hubo árbitro" }
+        evidencia: { type: string, description: "Texto de donde salió el ítem" }
+        supuestos: { type: array, items: { type: string }, example: [hora, varios_dias] }
+        faltantes: { type: array, items: { type: string }, example: [fecha, periodo] }
+        opcionesFecha: { type: [array, "null"], items: { type: object, properties: { etiqueta: { type: string }, fecha: { type: string } } } }
+        materiaPropuesta: { $ref: "#/components/schemas/PropuestaMateria" }
+        horaPropuesta: { type: [object, "null"] }
+        vigencia: { type: [object, "null"], properties: { desde: { type: string }, hasta: { type: string }, periodo: { type: string } } }
+        duplicado: { type: [object, "null"] }
+        choques: { type: array, items: { $ref: "#/components/schemas/Choque" } }
+
+    Borrador:
+      type: object
+      properties:
+        interpretacionId: { type: string, format: uuid, description: "Se reenvía a /api/ia/confirmar" }
+        items: { type: array, items: { $ref: "#/components/schemas/ItemBorrador" } }
+        periodo: { type: [object, "null"], description: "Semestre vigente del usuario" }
+        advertencias: { type: array, items: { type: string }, example: ["«Reunión» ya pasó (mié 28 oct, 15:00). Omítelo si no quieres guardarlo."] }
+
+    Documento:
+      type: object
+      properties:
+        tipo: { type: string, enum: [horario, afiche, captura_chat, pizarra, otro] }
+        fechaReferencia:
+          type: [object, "null"]
+          description: Desde qué día se contaron "mañana" o "el lunes"
+          properties:
+            fecha: { type: string, format: date }
+            origen: { type: string, enum: [documento, hoy] }
+        periodoDetectado:
+          type: [object, "null"]
+          description: Semestre impreso en el horario. Al confirmar se crea si `existente` es null.
+          properties:
+            nombre: { type: string, example: "2-2026" }
+            inicio: { type: string, format: date-time }
+            fin: { type: string, format: date-time }
+            existente: { type: [object, "null"] }
+        revision:
+          type: object
+          properties:
+            hecha: { type: boolean }
+            coinciden: { type: integer, description: "Casillas en que las dos lecturas coinciden" }
+            conflictos: { type: integer }
+            correcciones: { type: array, items: { type: string } }
+            diferencias: { type: array, items: { type: string } }
+        materias:
+          type: array
+          description: Solo horarios. Clases agrupadas por materia, con color, para la vista de semana del borrador.
+          items:
+            type: object
+            properties:
+              clave: { type: string }
+              nombre: { type: string }
+              codigo: { type: [string, "null"] }
+              color: { type: string, example: "#2F6F5E" }
+              indices: { type: array, items: { type: integer }, description: "Posiciones en items[]" }
+              sesiones: { type: array, items: { type: object } }
+              revisar: { type: boolean }
+
+    MateriaElegida:
+      oneOf:
+        - { type: object, required: [accion, materiaId], properties: { accion: { const: vincular }, materiaId: { type: string } } }
+        - { type: object, required: [accion, nombre], properties: { accion: { const: crear }, nombre: { type: string }, codigo: { type: [string, "null"] } } }
+        - { type: object, properties: { accion: { const: ninguna } } }
+
+    ItemConfirmado:
+      type: object
+      description: Un ítem del borrador tal como lo dejó el usuario
+      required: [clase, titulo]
+      properties:
+        clase: { type: string, enum: [tarea, evento, evento_fijo] }
+        titulo: { type: string, maxLength: 200 }
+        tipo: { type: string, description: "Solo tarea" }
+        inicio: { type: string, format: date-time, description: "Tarea y evento" }
+        fin: { type: [string, "null"], format: date-time, description: "Solo evento" }
+        horaDefinida: { type: boolean }
+        diasSemana: { type: array, items: { type: integer }, description: "Solo clase" }
+        hora: { type: string, description: "Solo clase, HH:mm" }
+        horaFin: { type: string, description: "Solo clase, HH:mm" }
+        vigencia: { type: [object, "null"], properties: { desde: { type: string }, hasta: { type: string } } }
+        ubicacion: { type: [string, "null"] }
+        descripcion: { type: [string, "null"] }
+        materia: { $ref: "#/components/schemas/MateriaElegida" }
+        materiaDetectada: { type: [string, "null"], description: "Lo que leyó la IA; sirve para aprender alias" }
+        confirmarNueva: { type: boolean, description: "Tarea: el usuario dijo que no es duplicado" }
+
+    ResultadoConfirmacion:
+      type: object
+      properties:
+        creados:
+          type: object
+          properties:
+            tareas: { type: array, items: { type: string } }
+            eventos: { type: array, items: { type: string } }
+            clases: { type: array, items: { type: string } }
+            materias: { type: array, items: { type: object, properties: { id: { type: string }, nombre: { type: string } } } }
+        omitidos: { type: array, items: { type: object, properties: { indice: { type: integer }, titulo: { type: string }, motivo: { type: string } } } }
+        periodoCreado: { type: [object, "null"], properties: { id: { type: string }, nombre: { type: string } } }
+        repetido: { type: boolean, description: "Solo en reintentos (200)" }
+
+    TareaEntrada:
+      type: object
+      properties:
+        titulo: { type: string }
+        tipo: { type: string, enum: [examen, tarea, entrega, proyecto, exposicion] }
+        fechaLimite: { type: string, format: date-time }
+        horaDefinida: { type: boolean }
+        prioridad: { type: string, enum: [alta, media, baja] }
+        estado: { type: string, enum: [pendiente, en_proceso, completada, no_realizada], description: "Solo al editar" }
+        materiaId: { type: [string, "null"] }
+        descripcion: { type: [string, "null"] }
+        duracionEstMin: { type: [integer, "null"], minimum: 1, maximum: 6000 }
+        dificultad: { type: [integer, "null"], minimum: 1, maximum: 5 }
+
+    Tarea:
+      allOf:
+        - $ref: "#/components/schemas/TareaEntrada"
+        - type: object
+          properties:
+            id: { type: string }
+            prioridadCalculada:
+              type: object
+              description: Motor de prioridad (holgura). Ver docs/DECISIONES.md.
+              properties:
+                puntaje: { type: integer, minimum: 0, maximum: 100 }
+                nivel: { type: string, enum: [vencida, critica, alta, media, baja, ninguna] }
+                holguraDias: { type: number }
+                horasPorDia: { type: number }
+                fechaInicioSugerida: { type: [string, "null"] }
+                sobrecargaHoras: { type: number }
+                mensaje: { type: string }
+
+    ClaseEntrada:
+      type: object
+      properties:
+        titulo: { type: string }
+        diaSemana: { type: integer, minimum: 1, maximum: 7 }
+        horaInicio: { type: string, example: "09:00" }
+        horaFin: { type: string, example: "10:30" }
+        ubicacion: { type: [string, "null"] }
+        materiaId: { type: [string, "null"] }
+        vigenteDesde: { type: [string, "null"], format: date-time }
+        vigenteHasta: { type: [string, "null"], format: date-time }
+    Clase:
+      allOf: [{ $ref: "#/components/schemas/ClaseEntrada" }, { type: object, properties: { id: { type: string } } }]
+
+    EventoEntrada:
+      type: object
+      properties:
+        titulo: { type: string }
+        inicio: { type: string, format: date-time }
+        fin: { type: [string, "null"], format: date-time }
+        ubicacion: { type: [string, "null"] }
+        descripcion: { type: [string, "null"] }
+        materiaId: { type: [string, "null"] }
+    Evento:
+      allOf: [{ $ref: "#/components/schemas/EventoEntrada" }, { type: object, properties: { id: { type: string } } }]
+
+    MateriaEntrada:
+      type: object
+      properties:
+        nombre: { type: string }
+        color: { type: string, pattern: "^#[0-9A-Fa-f]{6}$" }
+        semestre: { type: [string, "null"] }
+
+    PeriodoEntrada:
+      type: object
+      properties:
+        nombre: { type: string, maxLength: 50, example: "2-2026" }
+        inicio: { type: string, format: date, example: "2026-08-03" }
+        fin: { type: string, format: date, example: "2027-01-09" }
