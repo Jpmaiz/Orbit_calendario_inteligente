@@ -12,6 +12,7 @@ import {
   type Borrador, type ItemRevision, type MateriaUsuario, type ResultadoConfirmacion,
 } from './borradorCaptura';
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
+import { prepararArchivo, resumenDocumento } from './capturaArchivo';
 
 const principal = 'min-h-12 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 
@@ -44,6 +45,10 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   const [exito, establecerExito] = useState<Exito | null>(null);
   const [materias, establecerMaterias] = useState<MateriaUsuario[]>([]);
   const [errorMaterias, establecerErrorMaterias] = useState<string | null>(null);
+  // Captura por foto, captura de pantalla o PDF
+  const [archivo, establecerArchivo] = useState<string | null>(null);
+  const [lectura, establecerLectura] = useState<string | null>(null);
+  const entradaArchivo = useRef<HTMLInputElement>(null);
   const [cargandoMaterias, establecerCargandoMaterias] = useState(false);
   const enCurso = useRef(false);
   const materiasEnCurso = useRef(false);
@@ -83,6 +88,8 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
     void cargarMaterias();
     try {
       const nuevo = leerBorrador(await consultar('/api/ia/extraer', { texto }));
+      establecerArchivo(null);
+      establecerLectura(null);
       establecerBorrador(nuevo);
       establecerItems(nuevo.items.map(crearRevision));
       establecerCorregida(false);
@@ -93,6 +100,36 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       enCurso.current = false;
       establecerEnviando(null);
       onOcupadoChange(false);
+    }
+  }
+
+  /** Foto, captura o PDF → mismo borrador que el texto (revisar y confirmar no cambian). */
+  async function extraerArchivo(seleccionado: File) {
+    if (enCurso.current || periodoEnCurso.current || guardandoPeriodo) return;
+    enCurso.current = true;
+    establecerEnviando('extraer');
+    onOcupadoChange(true);
+    establecerError(null);
+    establecerExito(null);
+    void cargarMaterias();
+    try {
+      const { imagenes, textoAdjunto, paginasOmitidas } = await prepararArchivo(seleccionado);
+      const datos = await consultar('/api/ia/extraer-imagen', { imagenes, textoAdjunto });
+      const nuevo = leerBorrador(datos);
+      if (paginasOmitidas > 0) nuevo.advertencias.unshift(`Solo se leyeron las primeras ${imagenes.length} páginas del PDF.`);
+      establecerArchivo(seleccionado.name);
+      establecerLectura(resumenDocumento(datos));
+      establecerBorrador(nuevo);
+      establecerItems(nuevo.items.map(crearRevision));
+      establecerCorregida(false);
+      establecerPeriodoAplicado(null);
+    } catch (error) {
+      establecerError(error instanceof Error ? error.message : 'No se pudo leer el archivo.');
+    } finally {
+      enCurso.current = false;
+      establecerEnviando(null);
+      onOcupadoChange(false);
+      if (entradaArchivo.current) entradaArchivo.current.value = ''; // permite elegir el mismo archivo otra vez
     }
   }
 
@@ -188,6 +225,13 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
               <p id={id + '-ayuda'} className="mt-2 text-xs leading-5 text-[#647168]">Escribe uno o varios pendientes. Primero revisarás el borrador; las actividades se guardan al confirmar.</p>
             </div>
             <button type="submit" className={principal}>{enviando === 'extraer' ? 'Extrayendo…' : 'Revisar con Orbit'}</button>
+            <div>
+              <input ref={entradaArchivo} id={id + '-archivo'} type="file" accept="image/*,application/pdf" className="sr-only"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void extraerArchivo(f); }} />
+              <label htmlFor={id + '-archivo'} className={botonCaptura + ' flex w-full cursor-pointer items-center justify-center text-center'}>
+                Subir foto o PDF (horario, afiche o captura)
+              </label>
+            </div>
             <button type="button" className={botonCaptura} onClick={() => { onCerrar(); router.push('/dia/nueva'); }}>Crear tarea manualmente</button>
           </fieldset>
         </form>
@@ -206,10 +250,12 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
               onOcupadoChange(ocupado);
             }} />}
           </fieldset>}
-          <details className="text-xs text-[#647168]">
+          {archivo ? <p className="rounded-xl bg-[#EDF4E8] p-3 text-xs text-[#526A5A]">
+            Archivo: <span className="font-semibold">{archivo}</span>{lectura ? ` · ${lectura}` : ''}
+          </p> : <details className="text-xs text-[#647168]">
             <summary className="min-h-11 cursor-pointer py-3 font-semibold">Ver texto original</summary>
             <p className="whitespace-pre-wrap break-words">{texto}</p>
-          </details>
+          </details>}
           {borrador.advertencias.length > 0 && <ul className="space-y-1 rounded-xl bg-[#FCF2DE] p-3 text-sm text-[#916820]">
             {borrador.advertencias.map((mensaje, indice) => <li key={indice}>{mensaje}</li>)}
           </ul>}
@@ -228,11 +274,11 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
             {enviando === 'confirmar' ? 'Guardando…' : 'Confirmar todo'}
           </button>
           <button type="button" className={botonCaptura} disabled={ocupada} onClick={() => {
-            establecerBorrador(null); establecerItems([]); establecerError(null);
-          }}>Editar texto original</button>
+            establecerBorrador(null); establecerItems([]); establecerError(null); establecerArchivo(null); establecerLectura(null);
+          }}>{archivo ? 'Subir otro archivo o escribir' : 'Editar texto original'}</button>
         </section>
       )}
-      {ocupada && <p role="status" className="text-sm text-[#35695D]">{enviando === 'extraer' ? 'Preparando tu borrador…' : 'Guardando tus actividades…'}</p>}
+      {ocupada && <p role="status" className="text-sm text-[#35695D]">{enviando === 'extraer' ? 'Preparando tu borrador… (una foto o PDF tarda unos 10 segundos)' : 'Guardando tus actividades…'}</p>}
       {error && <p role="alert" className="whitespace-pre-wrap break-words rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-4 text-sm text-[#A34955]">{error}</p>}
     </div>
   );

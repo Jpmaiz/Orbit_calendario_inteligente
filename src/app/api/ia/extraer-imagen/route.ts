@@ -5,7 +5,7 @@ import { leerImagenes } from '@/lib/ia/imagen';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { diaEnZona } from '@/lib/periodos/periodos';
-import { cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
+import { avisosFechasPasadas, cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
 
 // Un horario se lee dos veces (lectura + revisión): puede tardar más que un texto
 export const maxDuration = 60;
@@ -103,6 +103,7 @@ export async function POST(req: NextRequest) {
 
     // 4) El sistema decide (igual que con texto)
     const borrador = await construirBorrador(user.id, r.items, ctx, { ahora, referencia, vigencia });
+    advertencias.push(...avisosFechasPasadas(borrador, ahora, ctx.zona));
 
     // Se guarda lo LEÍDO (sin la imagen ni el texto del PDF, que pueden tener datos personales)
     const registro = await prisma.interpretacionIA.create({

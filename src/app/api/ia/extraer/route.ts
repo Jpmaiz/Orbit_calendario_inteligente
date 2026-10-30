@@ -3,7 +3,7 @@ import { ia, modeloIA } from '@/lib/ia';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
-import { cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
+import { avisosFechasPasadas, cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
 
 /**
  * POST /api/ia/extraer   Body: { texto }
@@ -62,7 +62,9 @@ export async function POST(req: NextRequest) {
       interpretacionId: registro.id, // se reenvía a /api/ia/confirmar
       items: borrador,
       periodo: periodo ? { nombre: periodo.nombre, inicio: periodo.inicio, fin: periodo.fin } : null,
-      advertencias: items.length === 0 ? ['No encontré ninguna actividad en el texto.'] : [],
+      advertencias: items.length === 0
+        ? ['No encontré ninguna actividad en el texto.']
+        : avisosFechasPasadas(borrador, ahora, ctx.zona),
     });
   } catch (error) {
     console.error('Error en /api/ia/extraer:', error);

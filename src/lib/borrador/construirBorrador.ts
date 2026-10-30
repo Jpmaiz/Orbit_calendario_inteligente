@@ -143,6 +143,24 @@ export async function construirBorrador(
   return borrador;
 }
 
+/**
+ * Avisos de cosas que ya pasaron ("mañana 15:00" dicho ayer y leído hoy a las 23:00).
+ * No se bloquea el guardado: el usuario decide si igual lo quiere registrar.
+ */
+export function avisosFechasPasadas(
+  borrador: { clase: string; titulo: string; inicio: string | null; fin: string | null }[],
+  ahora: Date,
+  zona: string,
+): string[] {
+  const formato = new Intl.DateTimeFormat('es-BO', {
+    timeZone: zona, weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  });
+  return borrador
+    .filter((i) => i.clase !== 'evento_fijo' && i.inicio)
+    .filter((i) => new Date(i.fin ?? i.inicio!).getTime() < ahora.getTime())
+    .map((i) => `«${i.titulo}» ya pasó (${formato.format(new Date(i.inicio!))}). Omítelo si no quieres guardarlo.`);
+}
+
 /** Desde qué día se cuenta "mañana": el del mensaje (captura), el del documento, o hoy. */
 export function referenciaDe(item: ItemExtraido, opciones: OpcionesBorrador, zona: string): Date {
   const delMensaje = item.fechaReferencia ? diaEnZona(item.fechaReferencia, '12:00', zona) : null;
