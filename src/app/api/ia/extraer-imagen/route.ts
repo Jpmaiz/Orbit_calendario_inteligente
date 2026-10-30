@@ -5,6 +5,7 @@ import { leerImagenes } from '@/lib/ia/imagen';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { diaEnZona } from '@/lib/periodos/periodos';
+import { agruparPorMateria } from '@/lib/horario/resumen';
 import { avisosFechasPasadas, cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
 
 // Un horario se lee dos veces (lectura + revisión): puede tardar más que un texto
@@ -23,7 +24,8 @@ const DIA_MS = 86_400_000;
  *
  * Mismo resultado que /api/ia/extraer (borrador → revisar → confirmar), más "documento":
  * qué tipo de imagen era, desde qué fecha se calcularon las fechas relativas, el periodo
- * que trae el documento y el resultado de la segunda revisión (horarios).
+ * que trae el documento (al confirmar se crea solo si no existe), el resultado de la segunda
+ * lectura y, si es horario, las clases agrupadas por materia con un color cada una.
  *
  * La imagen NO se guarda: se procesa y se descarta.
  */
@@ -137,6 +139,8 @@ export async function POST(req: NextRequest) {
         fechaReferencia,
         periodoDetectado,
         revision: r.revision,
+        // Horario: clases agrupadas por materia, con color (para la vista de semana del borrador)
+        materias: lectura.tipoDocumento === 'horario' ? agruparPorMateria(borrador) : [],
       },
       advertencias,
     });
