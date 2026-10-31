@@ -85,14 +85,11 @@ export function distribuirHorario(bloques: BloqueSemana[], fecha: string) {
   });
   const inicioMasTemprano = posiciones.length
     ? Math.floor(Math.min(...posiciones.map(({ desde }) => desde)) / 60) : null;
-  const finMasTardio = posiciones.length
-    ? Math.ceil(Math.max(...posiciones.map(({ desde, hasta }) => hasta ?? desde)) / 60) : null;
-  // Margen de una hora dentro de 05:00-23:00; ampliar hasta 00:00-24:00
-  // cuando las actividades lo requieran, sin recortarlas ni inventar duraciones.
-  const primeraHora = inicioMasTemprano === null ? 7
-    : Math.max(0, Math.min(inicioMasTemprano, Math.max(5, inicioMasTemprano - 1)));
-  const ultimaHora = finMasTardio === null ? 20
-    : Math.min(24, Math.max(finMasTardio, Math.min(23, finMasTardio + 1)));
+  // Mantener el contexto del día completo; ampliar solo si empieza antes de las 07:00.
+  const primeraHora = inicioMasTemprano !== null && inicioMasTemprano < 7
+    ? Math.max(0, inicioMasTemprano - 1) : 7;
+  // Borde de cálculo del día: la vista lo etiqueta y posiciona como 23:59.
+  const ultimaHora = 24;
   const escala = 1.6;
   const carriles: number[] = [];
   const distribuidos = posiciones.map((posicion) => {
