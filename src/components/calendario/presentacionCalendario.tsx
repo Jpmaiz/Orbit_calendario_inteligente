@@ -26,21 +26,21 @@ const estados: Record<string, string> = {
   pendiente: 'Pendiente', en_proceso: 'En proceso', completada: 'Completada', no_realizada: 'No realizada',
 };
 
-export function TareaSinHora({ tarea }: { tarea: TareaAgenda }) {
+export function TareaSinHora({ tarea, mostrarTipo = true }: { tarea: TareaAgenda; mostrarTipo?: boolean }) {
   return <article className="rounded-2xl border border-[#DCE9DE] bg-[#F2F7F1] p-4 [overflow-wrap:anywhere]">
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#537663]">Tarea · Hora por definir</p>
+    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#537663]">{mostrarTipo ? 'Tarea · Hora por definir' : 'Hora por definir'}</p>
     <h4 className="mt-1 text-sm font-semibold">{tarea.titulo}</h4>
     {tarea.materia && <p className="mt-1 text-xs text-[#5C7466]">{tarea.materia.nombre}</p>}
     <p className="mt-2 text-xs text-[#657B70]">{estados[tarea.estado] ?? tarea.estado}</p>
   </article>;
 }
 
-export function TarjetaActividad({ bloque }: { bloque: BloqueSemana }) {
+export function TarjetaActividad({ bloque, mostrarTipo = true }: { bloque: BloqueSemana; mostrarTipo?: boolean }) {
   const estilo = tiposActividad.find(({ tipo }) => tipo === bloque.tipo)!;
   const datos = bloque.datos;
   return <article className="h-full min-w-0 overflow-auto rounded-2xl border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
     style={{ backgroundColor: estilo.fondo, borderLeftColor: datos.materia?.color ?? estilo.color }}>
-    <p className="text-[9px] font-semibold uppercase tracking-wider opacity-75">{bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}</p>
+    {mostrarTipo && <p className="text-[9px] font-semibold uppercase tracking-wider opacity-75">{bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}</p>}
     <h4 className="mt-0.5 text-sm font-semibold leading-snug">{datos.titulo}</h4>
     <p className="mt-1 text-xs leading-5">
       {bloque.tipo === 'clase' && <>{bloque.datos.horaInicio} – {bloque.datos.horaFin}</>}

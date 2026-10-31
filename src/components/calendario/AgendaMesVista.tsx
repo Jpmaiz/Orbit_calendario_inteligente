@@ -45,7 +45,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
     <SelectorCalendario vista="mes" />
     <section aria-labelledby="titulo-mes" className="rounded-[28px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="titulo-mes" aria-live="polite" className="text-xl font-semibold capitalize tracking-tight text-[#2D5749] sm:text-2xl">{formatoMes.format(inicioDiaBolivia(seleccion.mes)).replace(' de ', ' ')}</h2>
+        <h1 id="titulo-mes" aria-live="polite" className="text-2xl font-semibold capitalize tracking-tight text-[#2D5749] sm:text-3xl">{formatoMes.format(inicioDiaBolivia(seleccion.mes)).replace(' de ', ' ')}</h1>
         <nav aria-label="Cambiar mes" className="flex gap-2">
           <button type="button" className={botonCalendario} aria-label="Mes anterior" onClick={() => moverMes(-1)}>‹</button>
           <button type="button" className={botonCalendario} onClick={() => {
@@ -84,22 +84,24 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
     <EstadoAgenda {...carga} />
     {diaSeleccionado && <section aria-labelledby="fecha-seleccionada" className="space-y-5 rounded-[28px] border border-[#E2EAE3] bg-white p-4 sm:p-6">
       <header className="flex items-start justify-between gap-3">
-        <div><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#809184]">Tu agenda del día</p>
-          <h3 id="fecha-seleccionada" aria-live="polite" className="text-base font-semibold capitalize text-[#365D4D]">
+        <div>
+          <h2 id="fecha-seleccionada" aria-live="polite" className="text-base font-semibold capitalize text-[#365D4D]">
             <time dateTime={seleccion.dia}>{fechaCompleta.format(inicioDiaBolivia(seleccion.dia))}</time>
-          </h3>
+          </h2>
         </div>
         <span className="shrink-0 rounded-full bg-[#EDF4EE] px-3 py-1.5 text-xs text-[#426957]">{diaSeleccionado.bloques.length + diaSeleccionado.sinHora.length} actividades</span>
       </header>
+      {diaSeleccionado.bloques.length + diaSeleccionado.sinHora.length === 0 && <p className="text-sm text-[#6B8072]">No tienes actividades para este día.</p>}
       {tiposActividad.map(({ tipo, nombre }) => {
         const bloques = diaSeleccionado.bloques.filter((bloque) => bloque.tipo === tipo);
         const sinHora = tipo === 'tarea' ? diaSeleccionado.sinHora : [];
+        if (bloques.length + sinHora.length === 0) return null;
         return <section key={tipo} aria-label={nombre} className="space-y-2">
-          <h4 className="text-xs font-semibold text-[#6B8072]">{nombre}</h4>
-          {bloques.length + sinHora.length > 0 ? <ul className="grid gap-3 sm:grid-cols-2">
-            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} /></li>)}
-            {sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} /></li>)}
-          </ul> : <p className="text-xs text-[#8B998F]">Sin {nombre.toLowerCase()}.</p>}
+          <h3 className="text-xs font-semibold text-[#6B8072]">{nombre}</h3>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} mostrarTipo={false} /></li>)}
+            {sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarTipo={false} /></li>)}
+          </ul>
         </section>;
       })}
     </section>}
