@@ -132,7 +132,7 @@ export default function TarjetaTarea({ tarea }: Props) {
               <time
                 dateTime={tarea.horaDefinida ? tarea.fechaLimite : undefined}
                 title={tarea.horaDefinida
-                  ? fechaLimite.toLocaleString('es-BO', { timeZone: 'America/La_Paz' })
+                  ? fechaLimite.toLocaleString('es-BO', { timeZone: 'America/La_Paz', hourCycle: 'h23' })
                   : fechaFormateada}
                 className="inline-block first-letter:uppercase"
               >{fechaFormateada}</time>

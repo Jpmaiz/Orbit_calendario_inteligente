@@ -79,8 +79,8 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
         <div key={dia.fecha} className="overflow-x-auto px-1 pb-4 pt-4 md:max-h-[70dvh] md:overflow-y-auto md:overscroll-y-contain" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
           <div className="relative ml-12" style={{ height: horario.altura, minWidth: Math.max(180, horario.carriles * 158) }}>
             {Array.from({ length: horario.ultimaHora - horario.primeraHora + 1 }, (_, indice) => horario.primeraHora + indice).map((hora) =>
-              <div key={hora} aria-hidden="true" className="absolute inset-x-0 border-t border-[#EDF1EC]" style={{ top: (hora - horario.primeraHora) * 60 * horario.escala }}>
-                <span className="absolute -left-12 -top-2 w-10 text-[10px] tabular-nums text-[#86958A]">{String(hora).padStart(2, '0')}:00</span>
+              <div key={hora} aria-hidden="true" className="absolute inset-x-0 border-t border-[#EDF1EC]" style={{ top: ((hora === 24 ? 1439 : hora * 60) - horario.primeraHora * 60) * horario.escala }}>
+                <span className="absolute -left-12 -top-2 w-10 text-[10px] tabular-nums text-[#86958A]">{hora === 24 ? '23:59' : String(hora).padStart(2, '0') + ':00'}</span>
               </div>)}
             <ol aria-label="Actividades ordenadas por hora">
               {horario.bloques.map(({ bloque, top, height, carril, hasta }) => <li key={bloque.id}

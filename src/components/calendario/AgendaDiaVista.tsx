@@ -30,7 +30,7 @@ async function consultar<T>(url: string, leer: (valor: unknown) => T, signal: Ab
 
 const estiloTarjeta = 'relative min-w-0 overflow-hidden rounded-[20px] border border-[#EBEEE6] bg-white p-4 shadow-[0_3px_14px_rgba(38,61,52,0.035)] [overflow-wrap:anywhere] md:p-6';
 const formatoEvento = new Intl.DateTimeFormat('es-BO', {
-  timeZone: 'America/La_Paz', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  timeZone: 'America/La_Paz', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 });
 
 function DatosHorario({ materia, ubicacion }: {

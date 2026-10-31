@@ -181,12 +181,22 @@ export function actualizarRevision(items: ItemRevision[], indice: number, cambio
 function esHora(h: string): boolean { return /^([01]\d|2[0-3]):[0-5]\d$/.test(h); }
 const horaInterna: Record<string, string> = { examen: '08:00', exposicion: '08:00', entrega: '23:59', tarea: '23:59', proyecto: '23:59' };
 function inicioDe(i: ItemRevision): string | null {
+  // Conservar el instante exacto recibido si no se editaron su fecha ni su hora.
+  if (i.original.inicio && i.fecha === diaISO(i.original.inicio) &&
+      i.horaDefinida === i.original.horaDefinida &&
+      (!i.horaDefinida || i.hora === horaISO(i.original.inicio))) {
+    return i.original.inicio;
+  }
   // Sin hora: conservar el valor de almacenamiento del backend, nunca presentarlo como una hora confirmada.
   const interna = i.original.inicio ? horaISO(i.original.inicio)
     : i.original.opcionesFecha?.[0] ? horaISO(i.original.opcionesFecha[0].fecha) : horaInterna[i.tipo] ?? '23:59';
   return fechaElegidaISO(i.fecha + 'T' + (i.horaDefinida ? i.hora : interna));
 }
 function finDe(i: ItemRevision): string | null {
+  if (i.original.fin && (i.fechaFin || i.fecha) === diaISO(i.original.fin) &&
+      i.horaFin === horaISO(i.original.fin)) {
+    return i.original.fin;
+  }
   return i.horaFin ? fechaElegidaISO((i.fechaFin || i.fecha) + 'T' + i.horaFin) : null;
 }
 export function problemasItem(i: ItemRevision): string[] {
