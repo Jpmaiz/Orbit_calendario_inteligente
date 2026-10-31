@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useState } from 'react';
 import { diaEnBolivia } from './organizarTareasDia';
@@ -76,7 +76,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
       </section>}
       <section aria-label="Horario del día seleccionado" className="rounded-3xl border border-[#E2EAE3] bg-white p-3 sm:p-5">
         {dia.bloques.length === 0 && <p className="mb-4 rounded-2xl bg-[#F3F7F1] px-4 py-3 text-sm text-[#6A7F70]">Sin actividades con hora para este día.</p>}
-        <div className="overflow-x-auto pb-2" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
+        <div key={dia.fecha} className="overflow-x-auto px-1 pb-4 pt-4 md:max-h-[70dvh] md:overflow-y-auto md:overscroll-y-contain" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
           <div className="relative ml-12" style={{ height: horario.altura, minWidth: Math.max(180, horario.carriles * 158) }}>
             {Array.from({ length: horario.ultimaHora - horario.primeraHora + 1 }, (_, indice) => horario.primeraHora + indice).map((hora) =>
               <div key={hora} aria-hidden="true" className="absolute inset-x-0 border-t border-[#EDF1EC]" style={{ top: (hora - horario.primeraHora) * 60 * horario.escala }}>

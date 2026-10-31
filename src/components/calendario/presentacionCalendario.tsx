@@ -83,8 +83,16 @@ export function distribuirHorario(bloques: BloqueSemana[], fecha: string) {
         ? (Math.min(finDia, bloque.datos.fin.getTime()) - inicio) / 60000 : null;
     return { bloque, desde, hasta: fin === null ? null : Math.max(desde, fin) };
   });
-  const primeraHora = Math.min(7, ...posiciones.map(({ desde }) => Math.floor(desde / 60)));
-  const ultimaHora = Math.min(24, Math.max(20, ...posiciones.map(({ desde, hasta }) => Math.ceil((hasta ?? desde) / 60) + 1)));
+  const inicioMasTemprano = posiciones.length
+    ? Math.floor(Math.min(...posiciones.map(({ desde }) => desde)) / 60) : null;
+  const finMasTardio = posiciones.length
+    ? Math.ceil(Math.max(...posiciones.map(({ desde, hasta }) => hasta ?? desde)) / 60) : null;
+  // Margen de una hora dentro de 05:00-23:00; ampliar hasta 00:00-24:00
+  // cuando las actividades lo requieran, sin recortarlas ni inventar duraciones.
+  const primeraHora = inicioMasTemprano === null ? 7
+    : Math.max(0, Math.min(inicioMasTemprano, Math.max(5, inicioMasTemprano - 1)));
+  const ultimaHora = finMasTardio === null ? 20
+    : Math.min(24, Math.max(finMasTardio, Math.min(23, finMasTardio + 1)));
   const escala = 1.6;
   const carriles: number[] = [];
   const distribuidos = posiciones.map((posicion) => {
