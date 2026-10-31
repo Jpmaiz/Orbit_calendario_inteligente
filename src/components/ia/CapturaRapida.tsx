@@ -8,7 +8,7 @@ import { esPeriodoActual, type PeriodoAcademico } from '../periodos/periodosFron
 import TarjetaBorrador, { botonCaptura, campoCaptura } from './TarjetaBorrador';
 import {
   actualizarRevision, aplicarPeriodoARevision, construirConfirmacion, crearRevision, leerBorrador, leerMaterias, leerResultado,
-  mensajeBackend, problemasItem,
+  aplicarRevisionCalculada, construirSolicitudRevision, leerRevisionCalculada, mensajeBackend, problemasItem,
   type Borrador, type ItemRevision, type MateriaUsuario, type ResultadoConfirmacion,
 } from './borradorCaptura';
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
@@ -40,8 +40,9 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   const [borrador, establecerBorrador] = useState<Borrador | null>(null);
   const [items, establecerItems] = useState<ItemRevision[]>([]);
   const [corregida, establecerCorregida] = useState(false);
-  const [enviando, establecerEnviando] = useState<'extraer' | 'confirmar' | null>(null);
+  const [enviando, establecerEnviando] = useState<'extraer' | 'revisar' | 'confirmar' | null>(null);
   const [error, establecerError] = useState<string | null>(null);
+  const [estadoRevision, establecerEstadoRevision] = useState<string | null>(null);
   const [exito, establecerExito] = useState<Exito | null>(null);
   const [materias, establecerMaterias] = useState<MateriaUsuario[]>([]);
   const [errorMaterias, establecerErrorMaterias] = useState<string | null>(null);
@@ -92,6 +93,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       establecerLectura(null);
       establecerBorrador(nuevo);
       establecerItems(nuevo.items.map(crearRevision));
+      establecerEstadoRevision(null);
       establecerCorregida(false);
       establecerPeriodoAplicado(null);
     } catch (error) {
@@ -121,6 +123,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       establecerLectura(resumenDocumento(datos));
       establecerBorrador(nuevo);
       establecerItems(nuevo.items.map(crearRevision));
+      establecerEstadoRevision(null);
       establecerCorregida(false);
       establecerPeriodoAplicado(null);
     } catch (error) {
@@ -136,8 +139,38 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   function cambiarItem(indice: number, cambios: Partial<ItemRevision>) {
     if (enCurso.current || periodoEnCurso.current || guardandoPeriodo) return;
     establecerItems((actuales) => actualizarRevision(actuales, indice, cambios));
+    establecerEstadoRevision(null);
     establecerCorregida(true);
     establecerError(null);
+  }
+
+  async function revisarCambios() {
+    if (enCurso.current || periodoEnCurso.current || guardandoPeriodo || !borrador) return;
+    enCurso.current = true;
+    establecerEnviando('revisar');
+    onOcupadoChange(true);
+    establecerError(null);
+    establecerEstadoRevision(null);
+    try {
+      const { indices, body } = construirSolicitudRevision(items);
+      const datos = await consultar('/api/ia/revisar', body);
+      const resultados = leerRevisionCalculada(datos, indices.length);
+      establecerItems((actuales) => aplicarRevisionCalculada(actuales, indices, resultados));
+      const errores = resultados.flatMap((resultado) => 'error' in resultado
+        ? ['Actividad ' + (indices[resultado.indice] + 1) + ': ' + resultado.error] : []);
+      establecerEstadoRevision(errores.length === resultados.length
+        ? 'No se pudieron revisar las actividades. Completa los datos indicados y vuelve a intentar.'
+        : errores.length
+        ? 'Se actualizaron los avisos de las actividades que se pudieron revisar. No se guardaron cambios.'
+        : 'Duplicados y choques actualizados. No se guardaron cambios.');
+      if (errores.length) establecerError(errores.join('\n'));
+    } catch (error) {
+      establecerError(error instanceof Error ? error.message : 'No se pudo revisar el borrador. Tus cambios se conservaron.');
+    } finally {
+      enCurso.current = false;
+      establecerEnviando(null);
+      onOcupadoChange(false);
+    }
   }
 
   async function confirmar() {
@@ -181,6 +214,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   function aplicarPeriodo(periodo: PeriodoAcademico) {
     if (!esPeriodoActual(periodo)) return;
     establecerItems((actuales) => aplicarPeriodoARevision(actuales, periodo));
+    establecerEstadoRevision(null);
     establecerBorrador((actual) => actual ? {
       ...actual, periodo: { nombre: periodo.nombre, inicio: periodo.inicio, fin: periodo.fin },
     } : null);
@@ -271,6 +305,10 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
           </fieldset>
           {incluidos.length === 0 && <p className="text-sm text-[#657360]">{items.length ? 'Todas las actividades están omitidas. No se enviará ninguna a guardar.' : 'No hay actividades para confirmar. Puedes editar el texto e intentar de nuevo.'}</p>}
           {pendientes && <p className="text-xs font-medium text-[#A34955]">Completa los datos pendientes señalados en las tarjetas o marca Omitir.</p>}
+          <button type="button" className={botonCaptura} disabled={ocupada || incluidos.length === 0 || incluidos.length > 20} onClick={() => void revisarCambios()}>
+            {enviando === 'revisar' ? 'Revisando cambios.' : 'Revisar cambios'}
+          </button>
+          {estadoRevision && <p role="status" className="text-xs text-[#526A5A]">{estadoRevision}</p>}
           <button type="button" className={principal} disabled={ocupada || pendientes || incluidos.length === 0 || incluidos.length > 20} onClick={() => void confirmar()}>
             {enviando === 'confirmar' ? 'Guardando…' : 'Confirmar todo'}
           </button>
@@ -279,7 +317,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
           }}>{archivo ? 'Subir otro archivo o escribir' : 'Editar texto original'}</button>
         </section>
       )}
-      {ocupada && <p role="status" className="text-sm text-[#35695D]">{enviando === 'extraer' ? 'Preparando tu borrador… (una foto o PDF tarda unos 10 segundos)' : 'Guardando tus actividades…'}</p>}
+      {ocupada && <p role="status" className="text-sm text-[#35695D]">{enviando === 'extraer' ? 'Preparando tu borrador… (una foto o PDF tarda unos 10 segundos)' : enviando === 'revisar' ? 'Revisando duplicados y choques.' : 'Guardando tus actividades…'}</p>}
       {error && <p role="alert" className="whitespace-pre-wrap break-words rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-4 text-sm text-[#A34955]">{error}</p>}
     </div>
   );

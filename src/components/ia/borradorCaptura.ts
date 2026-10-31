@@ -25,7 +25,8 @@ export type ItemExtraido = {
   horaPropuesta: { inicio: string; fin: string; motivo: string } | null;
   vigencia: { desde: string; hasta: string; periodo: string } | null;
   duplicado: { tipoDuplicado: string; pregunta: string; sugerenciasDiferencia?: string[];
-    diasExistentes?: number[]; tarea?: { id: string; titulo: string }; similitud?: number } | null;
+    diasExistentes?: number[]; tarea?: { id: string; titulo: string }; similitud?: number;
+    evento?: { id: string; titulo: string; inicio: string } } | null;
   choques: { titulo: string; cuando: string }[];
 };
 export type Borrador = {
@@ -229,6 +230,30 @@ export function problemasItem(i: ItemRevision): string[] {
   }
   return problemas;
 }
+function itemParaEnvio(i: ItemRevision) {
+  const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia };
+  if (i.clase === 'tarea') return {
+    ...comunes, clase: 'tarea' as const, tipo: i.tipo, inicio: inicioDe(i)!,
+    horaDefinida: i.horaDefinida, descripcion: i.descripcion || null,
+    confirmarNueva: i.decisionDuplicado === 'nueva',
+  };
+  if (i.clase === 'evento') return {
+    ...comunes, clase: 'evento' as const, inicio: inicioDe(i)!, fin: finDe(i),
+    ubicacion: i.ubicacion || null, descripcion: i.descripcion || null,
+  };
+  // Conservar los instantes exactos de la vigencia propuesta cuando no se editaron.
+  const original = i.original.vigencia;
+  const intacta = original && i.vigenciaDesde === diaISO(original.desde) && i.vigenciaHasta === diaISO(original.hasta);
+  return {
+    ...comunes, clase: 'evento_fijo' as const, diasSemana: i.diasSemana, hora: i.hora, horaFin: i.horaFin,
+    ubicacion: i.ubicacion || null,
+    vigencia: intacta ? { desde: original.desde, hasta: original.hasta }
+      : i.vigenciaDesde && i.vigenciaHasta ? {
+        desde: fechaElegidaISO(i.vigenciaDesde + 'T00:00')!, hasta: fechaElegidaISO(i.vigenciaHasta + 'T23:59')!,
+      } : null,
+  };
+}
+
 export function construirConfirmacion(interpretacionId: string, items: ItemRevision[], fueCorregida: boolean) {
   const incluidos = items.filter((i) => !i.excluido);
   if (!incluidos.length || incluidos.length > 20) throw new Error('Incluye entre 1 y 20 actividades para confirmar.');
@@ -236,30 +261,70 @@ export function construirConfirmacion(interpretacionId: string, items: ItemRevis
   if (errores.length) throw new Error(errores.join('\n'));
   return {
     interpretacionId, fueCorregida,
-    items: incluidos.map((i) => {
-      const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia };
-      if (i.clase === 'tarea') return {
-        ...comunes, clase: 'tarea' as const, tipo: i.tipo, inicio: inicioDe(i)!,
-        horaDefinida: i.horaDefinida, descripcion: i.descripcion || null,
-        confirmarNueva: i.decisionDuplicado === 'nueva',
-      };
-      if (i.clase === 'evento') return {
-        ...comunes, clase: 'evento' as const, inicio: inicioDe(i)!, fin: finDe(i),
-        ubicacion: i.ubicacion || null, descripcion: i.descripcion || null,
-      };
-      // Conservar los instantes exactos de la vigencia propuesta cuando no se editaron.
-      const original = i.original.vigencia;
-      const intacta = original && i.vigenciaDesde === diaISO(original.desde) && i.vigenciaHasta === diaISO(original.hasta);
-      return {
-        ...comunes, clase: 'evento_fijo' as const, diasSemana: i.diasSemana, hora: i.hora, horaFin: i.horaFin,
-        ubicacion: i.ubicacion || null,
-        vigencia: intacta ? { desde: original.desde, hasta: original.hasta }
-          : i.vigenciaDesde && i.vigenciaHasta ? {
-            desde: fechaElegidaISO(i.vigenciaDesde + 'T00:00')!, hasta: fechaElegidaISO(i.vigenciaHasta + 'T23:59')!,
-          } : null,
-      };
-    }),
+    items: incluidos.map(itemParaEnvio),
   };
+}
+
+export type ResultadoRevision = { indice: number } & (
+  | { duplicado: ItemExtraido['duplicado']; choques: ItemExtraido['choques'] }
+  | { error: string }
+);
+
+export function construirSolicitudRevision(items: ItemRevision[]) {
+  const indices = items.flatMap((item, indice) => item.excluido ? [] : [indice]);
+  if (!indices.length || indices.length > 20) throw new Error('Incluye entre 1 y 20 actividades para revisar.');
+  // El backend devuelve un error por ítem incompleto sin impedir revisar los demás.
+  return { indices, body: { items: indices.map((indice) => itemParaEnvio(items[indice])) } };
+}
+
+export function leerRevisionCalculada(valor: unknown, cantidad: number): ResultadoRevision[] {
+  const resultados = lista(objeto(valor).items);
+  if (resultados.length !== cantidad) throw new Error('La revisión no incluye todas las actividades enviadas.');
+  const vistos = new Set<number>();
+  return resultados.map((valor) => {
+    const resultado = objeto(valor);
+    const indice = numero(resultado.indice);
+    if (!Number.isInteger(indice) || indice < 0 || indice >= cantidad || vistos.has(indice)) {
+      throw new Error('La revisión contiene una actividad no válida o repetida.');
+    }
+    vistos.add(indice);
+    if ('error' in resultado) return { indice, error: texto(resultado.error) };
+    const d = resultado.duplicado === null ? null : objeto(resultado.duplicado);
+    const duplicado: ItemExtraido['duplicado'] = d ? {
+      tipoDuplicado: texto(d.tipoDuplicado), pregunta: texto(d.pregunta),
+      sugerenciasDiferencia: d.sugerenciasDiferencia === undefined ? undefined : textos(d.sugerenciasDiferencia),
+      diasExistentes: d.diasExistentes === undefined ? undefined : lista(d.diasExistentes).map(numero),
+      tarea: d.tarea ? { id: texto(objeto(d.tarea).id), titulo: texto(objeto(d.tarea).titulo) } : undefined,
+      evento: d.evento ? {
+        id: texto(objeto(d.evento).id), titulo: texto(objeto(d.evento).titulo), inicio: fecha(objeto(d.evento).inicio),
+      } : undefined,
+      similitud: d.similitud === undefined ? undefined : numero(d.similitud),
+    } : null;
+    const choques = lista(resultado.choques).map((valor) => {
+      const choque = objeto(valor);
+      return { titulo: texto(choque.titulo), cuando: texto(choque.cuando) };
+    });
+    return { indice, duplicado, choques };
+  });
+}
+
+export function aplicarRevisionCalculada(
+  items: ItemRevision[], indices: number[], resultados: ResultadoRevision[],
+): ItemRevision[] {
+  const porIndice = new Map(resultados.map((resultado) => [indices[resultado.indice], resultado]));
+  return items.map((item, indice) => {
+    const resultado = porIndice.get(indice);
+    if (item.excluido || !resultado || 'error' in resultado) return item;
+    const { duplicado, choques } = resultado;
+    const mismaTarea = duplicado?.tarea?.id && duplicado.tarea.id === item.original.duplicado?.tarea?.id;
+    return {
+      ...item,
+      original: { ...item.original, duplicado, choques },
+      // Una decisión sobre otra tarea duplicada necesita una nueva confirmación del usuario.
+      decisionDuplicado: item.clase !== 'tarea' ? item.decisionDuplicado
+        : !duplicado ? 'existente' : mismaTarea ? item.decisionDuplicado : 'pendiente',
+    };
+  });
 }
 
 export function aplicarPeriodoARevision(

@@ -197,7 +197,7 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
           <h4 className="text-xs font-semibold text-[#916820]">Choques de horario detectados</h4>
           <ul className="mt-2 space-y-1 text-xs text-[#806020]">{original.choques.map((choque, posicion) =>
             <li key={posicion}>{choque.titulo} · {choque.cuando}</li>)}</ul>
-          <p className="mt-2 text-xs text-[#806020]">Puedes guardar aunque haya un choque. Estos avisos corresponden a la extracción original.</p>
+          <p className="mt-2 text-xs text-[#806020]">Puedes guardar aunque haya un choque. Usa «Revisar cambios» para actualizar los avisos después de editar.</p>
         </section>}
         {original.supuestos.length > 0 && <p className="text-xs text-[#657360]">Supuestos de la extracción: {original.supuestos.map((s) =>
           s === 'hora' ? 'hora interna supuesta' : s === 'anio_siguiente' ? 'año siguiente' : s).join(', ')}.</p>}
