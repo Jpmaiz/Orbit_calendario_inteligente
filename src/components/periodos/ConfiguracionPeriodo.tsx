@@ -42,14 +42,14 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
   }
 
   if (guardado && !resumenCerrado) return <aside className="mb-5 rounded-xl border border-[#C6E6D3] bg-[#E7F8EF] p-3 text-sm text-[#1F5D50]">
-    <p role="status">Período {guardado.nombre} guardado.{!esPeriodoActual(guardado) && ' Sus fechas no incluyen hoy; aún no hay un período actual nuevo.'}</p>
+    <p role="status">Semestre {guardado.nombre} guardado.{!esPeriodoActual(guardado) && ' Sus fechas no incluyen hoy; aún no hay un semestre actual nuevo.'}</p>
     <button type="button" className={boton + ' mt-2'} onClick={() => establecerResumenCerrado(true)}>Cerrar</button>
   </aside>;
 
   if (estado.datos?.actual) return null;
   if (!abierto && estado.pospuesto) {
     return origen === 'ia' ? <button type="button" className={boton} disabled={estado.guardando}
-      onClick={() => estado.abrir(origen)}>Configurar semestre (opcional)</button> : null;
+      onClick={() => estado.abrir(origen)}>Configurar semestre</button> : null;
   }
   if (estado.cargando && !estado.datos) return null;
   if (!estado.datos) return estado.errorConsulta ? <aside className="mb-5 rounded-xl border border-[#E3E8DE] bg-[#FAFBF7] p-3 text-xs text-[#657360]">
@@ -63,15 +63,15 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
   return <aside aria-labelledby={id + '-titulo'} className="mb-5 min-w-0 rounded-[20px] border border-[#DCE5D5] bg-[#EDF4E8] p-4 [overflow-wrap:anywhere]">
     <div className="flex flex-wrap items-start justify-between gap-2">
       <h2 id={id + '-titulo'} className="text-sm font-semibold text-[#2C4236]">¿Cuándo termina tu semestre?</h2>
-      <button type="button" className={boton} disabled={estado.guardando} onClick={estado.posponer}>No sé todavía</button>
+      <button type="button" className={boton} disabled={estado.guardando} onClick={estado.posponer}>Ahora no</button>
     </div>
-    <p className="mt-2 text-xs leading-5 text-[#657360]">Configura las fechas para dar vigencia a tus clases. Puedes hacerlo después.</p>
+    <p className="mt-2 text-xs leading-5 text-[#657360]">Estas fechas determinan la vigencia de tus clases.</p>
     {!abierto ? <button type="button" className={boton + ' mt-3'} disabled={estado.guardando} onClick={() => estado.abrir(origen)}>Configurar semestre</button> : (
       <form noValidate className="mt-4 space-y-3" aria-busy={estado.guardando} onSubmit={(e) => { e.preventDefault(); void guardar(); }}>
         <fieldset disabled={estado.guardando} className="min-w-0 space-y-3">
-          <legend className="sr-only">Configurar período académico</legend>
+          <legend className="sr-only">Configurar semestre</legend>
           <div>
-            <label htmlFor={id + '-nombre'} className="text-xs font-semibold">Nombre del período</label>
+            <label htmlFor={id + '-nombre'} className="text-xs font-semibold">Nombre del semestre</label>
             <input id={id + '-nombre'} value={nombre} onChange={(e) => establecerNombre(e.target.value)} maxLength={50} placeholder="Ej. II/2026" required className={campo} />
           </div>
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -84,9 +84,8 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
               <input id={id + '-fin'} type="date" value={fin} onChange={(e) => establecerFin(e.target.value)} required className={campo} />
             </div>
           </div>
-          <p className="text-xs leading-5 text-[#657360]">Necesitamos ambas fechas. Si aún no las conoces, puedes posponer la configuración.</p>
           <button type="submit" className="min-h-11 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">
-            {estado.guardando ? 'Guardando…' : 'Guardar período'}
+            {estado.guardando ? 'Guardando…' : 'Guardar semestre'}
           </button>
         </fieldset>
         {estado.guardando && <p role="status" className="text-xs text-[#35695D]">Guardando tu período…</p>}

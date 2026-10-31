@@ -32,7 +32,7 @@ export default function ControlesDashboard({
 
   const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4';
   const estiloNavegacion = (activo: boolean) =>
-    'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium transition-colors ' +
+    'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium transition-colors ' +
     (activo ? 'bg-[#EAF0E5] text-[#245B4C] ' : 'text-[#78827B] hover:text-[#245B4C] ') + foco;
 
   return (
@@ -58,7 +58,7 @@ export default function ControlesDashboard({
               </Link>
               <button type="button" onClick={() => abrirPanel('Orbit')} aria-expanded={panelAbierto && panel === 'Orbit'} className={estiloNavegacion(panelAbierto && panel === 'Orbit')}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
-                Capturar
+                Orbit
               </button>
               <button type="button" onClick={() => abrirPanel('Perfil')} aria-expanded={panelAbierto && panel === 'Perfil'} className={estiloNavegacion(panelAbierto && panel === 'Perfil')}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="perfil" /></span>
@@ -80,7 +80,7 @@ export default function ControlesDashboard({
           <CapturaRapida onOcupadoChange={establecerOrbitOcupado} onCerrar={() => dialogo.current?.close()} />
         ) : panel === 'Perfil' ? (
           <div className="mt-4 space-y-5">
-            <p className="text-sm leading-6 text-[#647168]">La edición de tu perfil estará disponible próximamente.</p>
+            <p className="text-xs leading-5 text-[#647168]">Edición de perfil próximamente.</p>
             {cerrarSesionAction && (
               <form action={cerrarSesionAction}>
                 <button type="submit" className={'min-h-11 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] ' + foco}>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
+import { materiaAportaContexto } from './presentacionCalendario';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia } from './organizarTareasDia';
 import {
@@ -33,12 +34,13 @@ const formatoEvento = new Intl.DateTimeFormat('es-BO', {
   timeZone: 'America/La_Paz', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 });
 
-function DatosHorario({ materia, ubicacion }: {
+function DatosHorario({ titulo, materia, ubicacion }: {
+  titulo: string;
   materia: { nombre: string; color: string } | null; ubicacion: string | null;
 }) {
   return (
     <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-[#75816F]">
-      {materia && <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: materia.color }} />{materia.nombre}</span>}
+      {materia && materiaAportaContexto(titulo, materia.nombre) && <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: materia.color }} />{materia.nombre}</span>}
       {ubicacion && <span>Ubicación: {ubicacion}</span>}
     </div>
   );
@@ -122,9 +124,9 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
       </section>
       {horario && (
         <>
-          <section aria-labelledby="titulo-clases" className="min-w-0 space-y-4">
+          {horario.clases.length === 0 && horario.eventos.length === 0 && <p className="text-sm text-[#657360]">No tienes clases ni eventos hoy.</p>}
+          {horario.clases.length > 0 && <section aria-labelledby="titulo-clases" className="min-w-0 space-y-4">
             <h2 id="titulo-clases" className="text-lg font-semibold tracking-[-0.02em]">Clases de hoy</h2>
-            {horario.clases.length === 0 && <p className="text-xs leading-5 text-[#657360]">No tienes clases vigentes para hoy.</p>}
             <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
               {horario.clases.map((clase) => (
                 <li key={clase.id}>
@@ -132,15 +134,14 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
                     <p className="mb-2 text-xs font-semibold text-[#346D8B]">Clase</p>
                     <h3 className="text-[15px] font-semibold leading-6 text-[#2C4236]">{clase.titulo}</h3>
                     <p className="mt-1 text-sm text-[#526A5A]">{clase.horaInicio} – {clase.horaFin}</p>
-                    <DatosHorario materia={clase.materia} ubicacion={clase.ubicacion} />
+                    <DatosHorario titulo={clase.titulo} materia={clase.materia} ubicacion={clase.ubicacion} />
                   </article>
                 </li>
               ))}
             </ul>
-          </section>
-          <section aria-labelledby="titulo-eventos" className="min-w-0 space-y-4">
+          </section>}
+          {horario.eventos.length > 0 && <section aria-labelledby="titulo-eventos" className="min-w-0 space-y-4">
             <h2 id="titulo-eventos" className="text-lg font-semibold tracking-[-0.02em]">Eventos de hoy</h2>
-            {horario.eventos.length === 0 && <p className="text-xs leading-5 text-[#657360]">No tienes eventos para hoy.</p>}
             <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
               {horario.eventos.map((evento) => (
                 <li key={evento.id}>
@@ -151,13 +152,13 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
                       <time dateTime={evento.inicio.toISOString()}>{formatoEvento.format(evento.inicio)}</time>
                       {evento.fin && <> – <time dateTime={evento.fin.toISOString()}>{formatoEvento.format(evento.fin)}</time></>}
                     </p>
-                    <DatosHorario materia={evento.materia} ubicacion={evento.ubicacion} />
+                    <DatosHorario titulo={evento.titulo} materia={evento.materia} ubicacion={evento.ubicacion} />
                     {evento.descripcion && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#657360]">{evento.descripcion}</p>}
                   </article>
                 </li>
               ))}
             </ul>
-          </section>
+          </section>}
         </>
       )}
     </div>

@@ -277,10 +277,10 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
           <p className="text-xs text-[#647168]">Corrige lo necesario. Revisar cambios actualiza los avisos; Confirmar todo guarda las actividades.</p>
           {periodoAplicado && <p role="status" className="rounded-xl bg-[#E7F8EF] p-3 text-xs text-[#1F5D50]">Semestre {periodoAplicado} aplicado a las clases pendientes. Se conservaron las fechas que editaste.</p>}
           {faltaPeriodo && <fieldset disabled={enviando !== null} className="min-w-0">
-            <legend className="sr-only">Período de las clases</legend>
+            <legend className="sr-only">Semestre de las clases</legend>
             {datosPeriodos?.actual ? <div className="space-y-2 rounded-xl bg-[#EDF4E8] p-3 text-xs text-[#526A5A]">
-              <p>Tu período actual es {datosPeriodos.actual.nombre}. Puedes usarlo para las clases de este borrador.</p>
-              <button type="button" className={botonCaptura} disabled={ocupada} onClick={() => aplicarPeriodo(datosPeriodos.actual!)}>Usar este período</button>
+              <p>Tu semestre actual es {datosPeriodos.actual.nombre}. Puedes aplicarlo a estas clases.</p>
+              <button type="button" className={botonCaptura} disabled={ocupada} onClick={() => aplicarPeriodo(datosPeriodos.actual!)}>Usar este semestre</button>
             </div> : <ConfiguracionPeriodo origen="ia" onCreado={aplicarPeriodo} onOcupadoChange={(ocupado) => {
               periodoEnCurso.current = ocupado;
               onOcupadoChange(ocupado);

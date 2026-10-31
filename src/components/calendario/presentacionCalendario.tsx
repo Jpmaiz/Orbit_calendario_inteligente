@@ -3,7 +3,7 @@ import { formatoHoraBolivia, inicioDiaBolivia, sumarDias } from './agendaSemana'
 import type { TareaAgenda } from './agendaDia';
 import { diaEnBolivia } from './organizarTareasDia';
 
-export const botonCalendario = 'min-h-11 rounded-full border border-[#DEE8E1] bg-white px-4 text-sm font-medium text-[#35695D] transition-colors hover:bg-[#EDF3EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
+export const botonCalendario = 'min-h-11 rounded-xl border border-[#DEE8E1] bg-white px-4 text-sm font-medium text-[#35695D] transition-colors hover:bg-[#EDF3EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
 export const fechaCompleta = new Intl.DateTimeFormat('es-BO', {
   timeZone: 'America/La_Paz', weekday: 'long', day: 'numeric', month: 'short', year: 'numeric',
 });
@@ -13,6 +13,11 @@ export const tiposActividad = [
   { tipo: 'evento', nombre: 'Eventos', color: '#C5A355', fondo: '#FBF0D9' },
   { tipo: 'tarea', nombre: 'Tareas', color: '#82AB95', fondo: '#E7F2E9' },
 ] as const;
+
+export function materiaAportaContexto(titulo: string, materia: string): boolean {
+  const normalizar = (texto: string) => texto.trim().toLocaleLowerCase('es').replace(/\s+/g, ' ');
+  return normalizar(titulo) !== normalizar(materia);
+}
 
 export function LeyendaCalendario() {
   return <ul aria-label="Tipos de actividad" className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#697D72]">
@@ -26,9 +31,9 @@ const estados: Record<string, string> = {
   pendiente: 'Pendiente', en_proceso: 'En proceso', completada: 'Completada', no_realizada: 'No realizada',
 };
 
-export function TareaSinHora({ tarea, mostrarTipo = true }: { tarea: TareaAgenda; mostrarTipo?: boolean }) {
-  return <article className="rounded-2xl border border-[#DCE9DE] bg-[#F2F7F1] p-4 [overflow-wrap:anywhere]">
-    <p className="text-[10px] font-semibold uppercase tracking-wider text-[#537663]">{mostrarTipo ? 'Tarea · Hora por definir' : 'Hora por definir'}</p>
+export function TareaSinHora({ tarea, mostrarTipo = true, mostrarHora = true }: { tarea: TareaAgenda; mostrarTipo?: boolean; mostrarHora?: boolean }) {
+  return <article className="rounded-[20px] border border-[#DCE9DE] bg-[#F2F7F1] p-4 [overflow-wrap:anywhere]">
+    <p className="text-xs font-semibold uppercase tracking-wider text-[#537663]">{mostrarTipo ? (mostrarHora ? 'Tarea · Hora por definir' : 'Tarea') : (mostrarHora ? 'Hora por definir' : '')}</p>
     <h4 className="mt-1 text-sm font-semibold">{tarea.titulo}</h4>
     {tarea.materia && <p className="mt-1 text-xs text-[#5C7466]">{tarea.materia.nombre}</p>}
     <p className="mt-2 text-xs text-[#657B70]">{estados[tarea.estado] ?? tarea.estado}</p>
@@ -38,9 +43,9 @@ export function TareaSinHora({ tarea, mostrarTipo = true }: { tarea: TareaAgenda
 export function TarjetaActividad({ bloque, mostrarTipo = true }: { bloque: BloqueSemana; mostrarTipo?: boolean }) {
   const estilo = tiposActividad.find(({ tipo }) => tipo === bloque.tipo)!;
   const datos = bloque.datos;
-  return <article className="h-full min-w-0 overflow-auto rounded-2xl border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
+  return <article className="h-full min-w-0 overflow-auto rounded-[20px] border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
     style={{ backgroundColor: estilo.fondo, borderLeftColor: datos.materia?.color ?? estilo.color }}>
-    {mostrarTipo && <p className="text-[9px] font-semibold uppercase tracking-wider opacity-75">{bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}</p>}
+    {mostrarTipo && <p className="text-xs font-semibold uppercase tracking-wider opacity-75">{bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}</p>}
     <h4 className="mt-0.5 text-sm font-semibold leading-snug">{datos.titulo}</h4>
     <p className="mt-1 text-xs leading-5">
       {bloque.tipo === 'clase' && <>{bloque.datos.horaInicio} – {bloque.datos.horaFin}</>}
@@ -51,7 +56,7 @@ export function TarjetaActividad({ bloque, mostrarTipo = true }: { bloque: Bloqu
           {diaEnBolivia(bloque.datos.fin) !== diaEnBolivia(bloque.datos.inicio) && <span> (continúa varios días)</span>}</>}
       </>}
     </p>
-    {datos.materia && <p className="mt-1 text-xs opacity-80">{datos.materia.nombre}</p>}
+    {datos.materia && (bloque.tipo === 'tarea' || materiaAportaContexto(datos.titulo, datos.materia.nombre)) && <p className="mt-1 text-xs opacity-80">{datos.materia.nombre}</p>}
     {'ubicacion' in datos && datos.ubicacion && <p className="mt-1 text-xs opacity-75">{datos.ubicacion}</p>}
     {bloque.tipo === 'tarea' && <p className="mt-1 text-xs opacity-75">{estados[bloque.datos.estado] ?? bloque.datos.estado}</p>}
   </article>;

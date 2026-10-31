@@ -38,9 +38,9 @@ export default async function PaginaDia() {
     <div className="min-w-0 space-y-6 md:space-y-8 lg:space-y-9">
       <header className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#708070]">Tu día, en órbita</p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#708070]">Tu día, en órbita</p>
           <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.04em] text-[#233E33] md:text-4xl">
-            Buenos días, <span className="break-words">{primerNombre}</span>
+            Hola, <span className="break-words">{primerNombre}</span>
           </h1>
           <time dateTime={fechaActual.toISOString()} className="mt-2 block text-sm text-[#768075] first-letter:uppercase">
             {fechaFormateada}

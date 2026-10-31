@@ -43,7 +43,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
 
   return <section aria-label="Agenda mensual" className="min-w-0 space-y-5">
     <SelectorCalendario vista="mes" />
-    <section aria-labelledby="titulo-mes" className="rounded-[28px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
+    <section aria-labelledby="titulo-mes" className="rounded-[20px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 id="titulo-mes" aria-live="polite" className="text-2xl font-semibold capitalize tracking-tight text-[#2D5749] sm:text-3xl">{formatoMes.format(inicioDiaBolivia(seleccion.mes)).replace(' de ', ' ')}</h1>
         <nav aria-label="Cambiar mes" className="flex gap-2">
@@ -82,7 +82,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
       <div className="mt-5 border-t border-[#EDF1EC] pt-4"><LeyendaCalendario /></div>
     </section>
     <EstadoAgenda {...carga} />
-    {diaSeleccionado && <section aria-labelledby="fecha-seleccionada" className="space-y-5 rounded-[28px] border border-[#E2EAE3] bg-white p-4 sm:p-6">
+    {diaSeleccionado && <section aria-labelledby="fecha-seleccionada" className="space-y-5 rounded-[20px] border border-[#E2EAE3] bg-white p-4 sm:p-6">
       <header className="flex items-start justify-between gap-3">
         <div>
           <h2 id="fecha-seleccionada" aria-live="polite" className="text-base font-semibold capitalize text-[#365D4D]">

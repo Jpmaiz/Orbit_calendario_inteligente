@@ -7,7 +7,7 @@ import { useAgendaRango } from './useAgendaRango';
 import SelectorCalendario from './SelectorCalendario';
 import {
   botonCalendario, diasCortos, distribuirHorario, EstadoAgenda, fechaCompleta,
-  LeyendaCalendario, TarjetaActividad, TareaSinHora,
+  TarjetaActividad, TareaSinHora,
 } from './presentacionCalendario';
 
 const formatoFecha = new Intl.DateTimeFormat('es-BO', {
@@ -43,7 +43,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
 
   return <section aria-label="Agenda semanal" className="min-w-0 space-y-5">
     <SelectorCalendario vista="semana" />
-    <div className="rounded-[28px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
+    <div className="rounded-[20px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 aria-live="polite" className="text-sm font-semibold text-[#3F6658] sm:text-base">
           <time dateTime={seleccion.lunes}>{formatoFecha.format(inicioDiaBolivia(seleccion.lunes))}</time>
@@ -77,20 +77,19 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
     <h3 aria-live="polite" className="px-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#557565]">
       <time dateTime={seleccion.dia}>{fechaCompleta.format(inicioDiaBolivia(seleccion.dia))}</time>
     </h3>
-    <LeyendaCalendario />
     <EstadoAgenda {...carga} />
     {dia && horario && <>
-      {dia.sinHora.length > 0 && <section aria-labelledby="sin-hora" className="space-y-3 rounded-3xl border border-[#E2EAE3] bg-white p-4 sm:p-5">
+      {dia.sinHora.length > 0 && <section aria-labelledby="sin-hora" className="space-y-3 rounded-[20px] border border-[#E2EAE3] bg-white p-4 sm:p-5">
         <h3 id="sin-hora" className="text-sm font-semibold text-[#426757]">Sin hora <span className="ml-1 text-xs font-normal text-[#7B8D81]">{dia.sinHora.length}</span></h3>
-        <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} /></li>)}</ul>
+        <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarHora={false} /></li>)}</ul>
       </section>}
-      <section aria-label="Horario del día seleccionado" className="rounded-3xl border border-[#E2EAE3] bg-white p-3 sm:p-5">
+      <section aria-label="Horario del día seleccionado" className="rounded-[20px] border border-[#E2EAE3] bg-white p-3 sm:p-5">
         <p aria-live="polite" className="mb-3 rounded-2xl bg-[#F3F7F1] px-4 py-2.5 text-xs leading-5 text-[#5E7767]">{avisoHorario}</p>
         <div key={dia.fecha} className="overflow-x-auto px-1 pb-4 pt-4 md:max-h-[70dvh] md:overflow-y-auto md:overscroll-y-contain" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
           <div className="relative ml-12" style={{ height: horario.altura, minWidth: Math.max(180, horario.carriles * 158) }}>
             {Array.from({ length: horario.ultimaHora - horario.primeraHora + 1 }, (_, indice) => horario.primeraHora + indice).map((hora) =>
               <div key={hora} aria-hidden="true" className="absolute inset-x-0 border-t border-[#EDF1EC]" style={{ top: ((hora === 24 ? 1439 : hora * 60) - horario.primeraHora * 60) * horario.escala }}>
-                <span className="absolute -left-12 -top-2 w-10 text-[10px] tabular-nums text-[#86958A]">{hora === 24 ? '23:59' : String(hora).padStart(2, '0') + ':00'}</span>
+                <span className="absolute -left-12 -top-2 w-10 text-xs tabular-nums text-[#86958A]">{hora === 24 ? '23:59' : String(hora).padStart(2, '0') + ':00'}</span>
               </div>)}
             <ol aria-label="Actividades ordenadas por hora">
               {horario.bloques.map(({ bloque, top, height, carril, hasta }) => <li key={bloque.id}

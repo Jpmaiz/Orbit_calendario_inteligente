@@ -185,7 +185,7 @@ export default function FormularioTarea(props: Props = {}) {
     if (duracionInvalida || (duracionEstMin !== null && (!Number.isInteger(duracionEstMin) || duracionEstMin <= 0 || duracionEstMin > 6000))) {
       nuevosErrores.duracionEstMin = 'Ingresa una duración de 1 a 6000 minutos, sin decimales, o deja el campo vacío.';
     }
-    if (!esDificultad(dificultad)) nuevosErrores.dificultad = 'Selecciona una dificultad de 1 a 5 o Sin definir.';
+    if (!esDificultad(dificultad)) nuevosErrores.dificultad = 'Selecciona una dificultad de 1 a 5 o Sin especificar.';
     if (!prioridades.some(([valor]) => valor === prioridad)) nuevosErrores.prioridad = 'Selecciona una prioridad.';
     establecerErrores(nuevosErrores);
     establecerError(null);
@@ -281,8 +281,8 @@ export default function FormularioTarea(props: Props = {}) {
   }
 
   return (
-    <form onSubmit={enviar} noValidate aria-busy={enviando} className="min-w-0 rounded-[28px] border border-[#E4E8DF] bg-white p-5 shadow-[0_3px_14px_rgba(38,61,52,0.035)] md:p-8">
-      <p className="mb-6 text-sm leading-6 text-[#647168]">Los campos con * son obligatorios.</p>
+    <form onSubmit={enviar} noValidate aria-busy={enviando} className="min-w-0 rounded-[20px] border border-[#E4E8DF] bg-white p-5 shadow-[0_3px_14px_rgba(38,61,52,0.035)] md:p-8">
+      <p className="mb-6 text-sm leading-6 text-[#647168]">Los campos con * son obligatorios; los demás son opcionales.</p>
       <fieldset disabled={enviando || duplicado !== null} className="min-w-0 space-y-5">
         <legend className="sr-only">{editando ? 'Datos de la tarea' : 'Datos de la nueva tarea'}</legend>
         <div>
@@ -324,7 +324,7 @@ export default function FormularioTarea(props: Props = {}) {
               </div>
             )}
             <p className="mt-2 text-xs leading-5 text-[#647168]">
-              {sinHora ? 'Elige la fecha. Puedes definir la hora más adelante.' : 'Fecha y hora de Bolivia (America/La_Paz).'}
+              {sinHora ? 'Elige la fecha. Puedes definir la hora más adelante.' : 'Hora de Bolivia.'}
             </p>
           </div>
           <div>
@@ -335,14 +335,14 @@ export default function FormularioTarea(props: Props = {}) {
             {errorCampo('prioridad')}
           </div>
           <div>
-            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Duración estimada (minutos) <span className="font-normal text-[#647168]">(opcional)</span></label>
-            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" min={1} max={6000} step={1} placeholder="Sin estimar" defaultValue={iniciales?.duracionEstMin ?? ''} className={estiloCampo} />
+            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Duración estimada (minutos)</label>
+            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" min={1} max={6000} step={1} placeholder="Sin especificar" defaultValue={iniciales?.duracionEstMin ?? ''} className={estiloCampo} />
             {errorCampo('duracionEstMin')}
           </div>
           <div>
-            <label htmlFor={prefijo + '-dificultad'} className="text-sm font-semibold">Dificultad <span className="font-normal text-[#647168]">(opcional)</span></label>
+            <label htmlFor={prefijo + '-dificultad'} className="text-sm font-semibold">Dificultad</label>
             <select {...accesibilidad('dificultad')} name="dificultad" defaultValue={iniciales?.dificultad ?? ''} className={estiloCampo}>
-              <option value="">Sin definir</option>
+              <option value="">Sin especificar</option>
               <option value="1">1 Muy fácil</option>
               <option value="2">2 Fácil</option>
               <option value="3">3 Media</option>
@@ -353,11 +353,11 @@ export default function FormularioTarea(props: Props = {}) {
           </div>
         </div>
         <div>
-          <label htmlFor={prefijo + '-descripcion'} className="text-sm font-semibold">Descripción <span className="font-normal text-[#647168]">(opcional)</span></label>
+          <label htmlFor={prefijo + '-descripcion'} className="text-sm font-semibold">Descripción</label>
           <textarea id={prefijo + '-descripcion'} name="descripcion" defaultValue={iniciales?.descripcion ?? ''} rows={4} maxLength={2000} className={estiloCampo + ' resize-y'} />
         </div>
         <div>
-          <label htmlFor={prefijo + '-materiaId'} className="text-sm font-semibold">Materia <span className="font-normal text-[#647168]">(opcional)</span></label>
+          <label htmlFor={prefijo + '-materiaId'} className="text-sm font-semibold">Materia</label>
           <select id={prefijo + '-materiaId'} name="materiaId" value={materiaSeleccionada} onChange={(evento) => establecerMateriaSeleccionada(evento.target.value)} disabled={cargandoMaterias || !!errorMaterias} aria-describedby={prefijo + '-materias-estado'} className={estiloCampo}>
             <option value="">Sin materia</option>
             {iniciales?.materiaId && !materias.some((materia) => materia.id === iniciales.materiaId) && (
@@ -377,7 +377,6 @@ export default function FormularioTarea(props: Props = {}) {
           <fieldset disabled={enviando} className="mt-4 min-w-0 space-y-4">
             <legend className="sr-only">Resolver posible duplicado</legend>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => { establecerDuplicado(null); establecerError(null); }} className={'min-h-11 rounded-xl border border-[#D8C99E] bg-white px-3 py-2 text-sm text-[#675223] disabled:opacity-60 ' + foco}>Es la misma</button>
               {duplicado.sugerenciasDiferencia.map((opcion, indice) => (
                 <button key={indice} type="button" onClick={() => confirmarDuplicado(duplicado.datos.titulo + ' (' + opcion + ')')} className={'min-h-11 max-w-full break-words rounded-xl border border-[#D8C99E] bg-white px-3 py-2 text-sm text-[#675223] disabled:opacity-60 ' + foco}>{opcion}</button>
               ))}

@@ -83,14 +83,12 @@ export default function PaginaEditarTarea() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-2xl space-y-6 md:space-y-8">
       <header>
-        <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#708070]">Organiza tu día</p>
         <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.04em] text-[#233E33] md:text-4xl">Editar tarea</h1>
-        <p className="mt-2 text-sm leading-6 text-[#647168]">Actualiza los datos de tu tarea.</p>
       </header>
       {estadoActual.estado === 'lista' ? (
         <FormularioTarea key={id} modo="editar" tareaId={id} valoresIniciales={estadoActual.tarea} />
       ) : (
-        <section aria-busy={estadoActual.estado === 'cargando'} className="min-w-0 rounded-[28px] border border-[#E4E8DF] bg-white p-5 md:p-8">
+        <section aria-busy={estadoActual.estado === 'cargando'} className="min-w-0 rounded-[20px] border border-[#E4E8DF] bg-white p-5 md:p-8">
           {estadoActual.estado === 'cargando' ? (
             <p role="status" className="text-sm text-[#35695D]">Cargando tarea…</p>
           ) : (
@@ -100,7 +98,7 @@ export default function PaginaEditarTarea() {
                   ? 'No se encontró esta tarea. Puede haber sido eliminada o no estar disponible para tu cuenta.'
                   : estadoActual.mensaje}
               </p>
-              <Link href="/dia" className="mt-5 inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-[#35695D] hover:bg-[#E7EDE6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4">Volver a Día</Link>
+              <Link href="/dia" className="mt-5 inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-[#35695D] hover:bg-[#E7EDE6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4">Volver a Home</Link>
             </>
           )}
         </section>

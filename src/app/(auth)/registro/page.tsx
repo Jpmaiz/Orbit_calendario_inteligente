@@ -40,9 +40,6 @@ export default async function PaginaRegistro({
         <section aria-labelledby="titulo-registro" className="space-y-6 rounded-3xl border border-[#DCEDE3] bg-white px-5 py-7 shadow-[0_16px_48px_-16px_rgba(31,93,80,0.2)] sm:px-9 sm:py-9">
           <div className="space-y-2 text-center">
             <h2 id="titulo-registro" className="text-2xl font-semibold tracking-tight">Crea tu cuenta</h2>
-            <p className="text-sm leading-6 text-[#566D63]">
-              Empieza a organizar tus tareas y tu tiempo con ORBIT.
-            </p>
           </div>
 
           {error && (

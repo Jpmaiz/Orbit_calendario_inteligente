@@ -138,7 +138,7 @@ export default function TarjetaTarea({ tarea, contexto }: Props) {
               {!tarea.horaDefinida && <span className="ml-2 text-xs text-[#657360]">Hora por definir</span>}
             </p>}
           </div>
-          <span className={'mt-0.5 max-w-full rounded-md px-2 py-1 text-xs font-medium ' + (coloresTipo[tarea.tipo] ?? coloresTipo.lectura).etiqueta}>
+          <span className={'mt-0.5 max-w-full rounded-full px-2 py-1 text-xs font-medium ' + (coloresTipo[tarea.tipo] ?? coloresTipo.lectura).etiqueta}>
             {nombresTipo[tarea.tipo] ?? tarea.tipo}
           </span>
         </div>
@@ -147,7 +147,7 @@ export default function TarjetaTarea({ tarea, contexto }: Props) {
           {tarea.materia.nombre}
         </p>}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          {estiloNivel ? <span className={'rounded-md px-2 py-1 font-medium ' + estiloNivel.etiqueta}>
+          {estiloNivel ? <span className={'rounded-full px-2 py-1 font-medium ' + estiloNivel.etiqueta}>
             Prioridad calculada: {estiloNivel.nombre}
           </span> : <span className="text-[#75816F]">Prioridad calculada no disponible</span>}
           {tarea.estado !== 'pendiente' && !completada && <span className="text-[#647168]">{nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</span>}

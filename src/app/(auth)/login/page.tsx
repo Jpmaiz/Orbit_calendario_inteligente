@@ -39,9 +39,6 @@ export default async function PaginaLogin({
         <section aria-labelledby="titulo-login" className="space-y-6 rounded-3xl border border-[#DCEDE3] bg-white px-5 py-7 shadow-[0_16px_48px_-16px_rgba(31,93,80,0.2)] sm:px-9 sm:py-9">
           <div className="space-y-2 text-center">
             <h2 id="titulo-login" className="text-2xl font-semibold tracking-tight">Inicia sesión</h2>
-            <p className="text-sm leading-6 text-[#566D63]">
-              Organiza tu tiempo y mantén tus tareas en órbita.
-            </p>
           </div>
 
           {error && (
