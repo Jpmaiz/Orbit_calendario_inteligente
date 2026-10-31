@@ -158,8 +158,8 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       const datos: unknown = await respuesta.json().catch(() => null);
-      if (respuesta.status !== 201) throw new Error(mensajeBackend(datos, 'No se pudo guardar el borrador. Intenta de nuevo.'));
-      // Un 201 ya aplicó el borrador: no ofrecer reenviarlo si el resumen fuese ilegible.
+      if (respuesta.status !== 200 && respuesta.status !== 201) throw new Error(mensajeBackend(datos, 'No se pudo guardar el borrador. Intenta de nuevo.'));
+      // Un 200 o 201 confirma que el borrador ya se aplicó: no ofrecer reenviarlo si el resumen fuese ilegible.
       let resultado: ResultadoConfirmacion | null = null;
       try { resultado = leerResultado(datos); } catch { /* El guardado ya fue confirmado por el servidor. */ }
       establecerExito({ resultado, excluidos: items.filter((i) => i.excluido).map((i) => i.titulo) });

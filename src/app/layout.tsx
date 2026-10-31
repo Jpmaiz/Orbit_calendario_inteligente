@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description: "Organizador académico inteligente",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
       lang="es"
