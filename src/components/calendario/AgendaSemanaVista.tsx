@@ -1,167 +1,97 @@
-'use client';
+﻿'use client';
 
-import { useEffect, useState } from 'react';
-import { leerAgenda, type AgendaDia, type TareaAgenda } from './agendaDia';
+import { useState } from 'react';
 import { diaEnBolivia } from './organizarTareasDia';
-import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
+import { inicioDiaBolivia, lunesDeSemana, organizarSemana, sumarDias } from './agendaSemana';
+import { useAgendaRango } from './useAgendaRango';
+import SelectorCalendario from './SelectorCalendario';
 import {
-  formatoHoraBolivia, inicioDiaBolivia, lunesDeSemana, organizarSemana, sumarDias,
-  type BloqueSemana,
-} from './agendaSemana';
+  botonCalendario, diasCortos, distribuirHorario, EstadoAgenda, fechaCompleta,
+  LeyendaCalendario, TarjetaActividad, TareaSinHora,
+} from './presentacionCalendario';
 
 const formatoFecha = new Intl.DateTimeFormat('es-BO', {
   timeZone: 'America/La_Paz', day: 'numeric', month: 'short', year: 'numeric',
 });
-const formatoDia = new Intl.DateTimeFormat('es-BO', {
-  timeZone: 'America/La_Paz', weekday: 'long', day: 'numeric', month: 'short',
-});
-const formatoEvento = new Intl.DateTimeFormat('es-BO', {
-  timeZone: 'America/La_Paz', day: 'numeric', month: 'short', hour: '2-digit',
-  minute: '2-digit', hourCycle: 'h23',
-});
-const boton = 'min-h-11 rounded-xl border border-[#DEE6DA] bg-white px-3 text-sm font-medium text-[#35695D] hover:bg-[#E9EEE5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] disabled:opacity-50';
-const estados: Record<string, string> = {
-  pendiente: 'Pendiente', en_proceso: 'En proceso', completada: 'Completada', no_realizada: 'No realizada',
-};
-
-function DatosTarea({ tarea }: { tarea: TareaAgenda }) {
-  return (
-    <p className="mt-2 text-xs text-[#75816F]">
-      {estados[tarea.estado] ?? tarea.estado}
-    </p>
-  );
-}
-
-function Bloque({ bloque }: { bloque: BloqueSemana }) {
-  const datos = bloque.datos;
-  const color = bloque.tipo === 'clase' ? '#7AB8D6' : bloque.tipo === 'evento' ? '#E6B15B' : '#91B88B';
-  return (
-    <article className="min-w-0 rounded-xl border border-[#EBEEE6] border-l-4 bg-white p-3 [overflow-wrap:anywhere]" style={{ borderLeftColor: color }}>
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-[#657360]">
-        {bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}
-      </p>
-      <h4 className="mt-1 text-sm font-semibold leading-5">{datos.titulo}</h4>
-      <p className="mt-1 text-xs leading-5 text-[#526A5A]">
-        {bloque.tipo === 'clase' && <>{bloque.datos.horaInicio} – {bloque.datos.horaFin}</>}
-        {bloque.tipo === 'tarea' && <time dateTime={bloque.datos.fechaLimite.toISOString()}>{formatoHoraBolivia.format(bloque.datos.fechaLimite)}</time>}
-        {bloque.tipo === 'evento' && <>
-          <time dateTime={bloque.datos.inicio.toISOString()}>{formatoEvento.format(bloque.datos.inicio)}</time>
-          {bloque.datos.fin && <> – <time dateTime={bloque.datos.fin.toISOString()}>{formatoEvento.format(bloque.datos.fin)}</time></>}
-        </>}
-      </p>
-      {datos.materia && <p className="mt-2 flex items-center gap-1.5 text-xs text-[#75816F]">
-        <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: datos.materia.color }} />
-        {datos.materia.nombre}
-      </p>}
-      {'ubicacion' in datos && datos.ubicacion && <p className="mt-1 text-xs text-[#75816F]">{datos.ubicacion}</p>}
-      {bloque.tipo === 'tarea' && <DatosTarea tarea={bloque.datos} />}
-    </article>
-  );
-}
-
-type Carga = { clave: string; agenda: AgendaDia | null; error: string | null };
 
 export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string }) {
   const [seleccion, establecerSeleccion] = useState(() => ({
     lunes: lunesDeSemana(new Date(fechaActual)), hoy: diaEnBolivia(new Date(fechaActual)),
+    dia: diaEnBolivia(new Date(fechaActual)),
   }));
-  const [carga, establecerCarga] = useState<Carga | null>(null);
-  const [intento, establecerIntento] = useState(0);
-  useEffect(() => {
-    const actualizar = () => establecerIntento((valor) => valor + 1);
-    window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
-    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
-  }, []);
+  const domingo = sumarDias(seleccion.lunes, 6);
+  const carga = useAgendaRango(seleccion.lunes, domingo);
+  const dias = carga.agenda ? organizarSemana(carga.agenda, seleccion.lunes) : null;
+  const dia = dias?.find(({ fecha }) => fecha === seleccion.dia);
+  const horario = dia ? distribuirHorario(dia.bloques, dia.fecha) : null;
 
-  const lunes = seleccion.lunes;
-  const domingo = lunes ? sumarDias(lunes, 6) : '';
-  const clave = lunes + ':' + intento;
-
-  useEffect(() => {
-    if (!lunes) return;
-    const controlador = new AbortController();
-    async function cargar() {
-      try {
-        const respuesta = await fetch('/api/agenda?desde=' + lunes + '&hasta=' + domingo, {
-          signal: controlador.signal, cache: 'no-store',
-        });
-        const datos: unknown = await respuesta.json();
-        if (!respuesta.ok) {
-          const mensaje = typeof datos === 'object' && datos !== null && 'error' in datos &&
-            typeof datos.error === 'string' ? datos.error : 'No se pudo cargar la semana.';
-          throw new Error(mensaje);
-        }
-        const agenda = leerAgenda(datos);
-        if (!controlador.signal.aborted) establecerCarga({ clave, agenda, error: null });
-      } catch (error) {
-        if (!controlador.signal.aborted) establecerCarga({
-          clave, agenda: null,
-          error: error instanceof Error ? error.message : 'No se pudo conectar con el servidor.',
-        });
-      }
-    }
-    void cargar();
-    return () => controlador.abort();
-  }, [lunes, domingo, clave]);
-
-  const lista = carga?.clave === clave;
-  const dias = lista && carga.agenda ? organizarSemana(carga.agenda, seleccion.lunes) : null;
-
-  function moverSemana(dias: number) {
-    establecerSeleccion((actual) => ({ ...actual, lunes: sumarDias(actual.lunes, dias) }));
+  function moverSemana(cantidad: number) {
+    establecerSeleccion((actual) => ({ ...actual,
+      lunes: sumarDias(actual.lunes, cantidad), dia: sumarDias(actual.dia, cantidad),
+    }));
   }
 
-  return (
-    <section aria-labelledby="rango-semana" className="min-w-0 space-y-5">
+  return <section aria-label="Agenda semanal" className="min-w-0 space-y-5">
+    <SelectorCalendario vista="semana" />
+    <div className="rounded-[28px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="rango-semana" aria-live="polite" className="text-lg font-semibold tracking-[-0.02em]">
+        <h2 aria-live="polite" className="text-sm font-semibold text-[#3F6658] sm:text-base">
           <time dateTime={seleccion.lunes}>{formatoFecha.format(inicioDiaBolivia(seleccion.lunes))}</time>
-          {' – '}
-          <time dateTime={domingo}>{formatoFecha.format(inicioDiaBolivia(domingo))}</time>
+          {' – '}<time dateTime={domingo}>{formatoFecha.format(inicioDiaBolivia(domingo))}</time>
         </h2>
-        <nav aria-label="Cambiar semana" className="flex flex-wrap gap-2">
-          <button type="button" className={boton} onClick={() => moverSemana(-7)} aria-label="Semana anterior">← Anterior</button>
-          <button type="button" className={boton} onClick={() => {
+        <nav aria-label="Cambiar semana" className="flex gap-2">
+          <button type="button" className={botonCalendario} onClick={() => moverSemana(-7)} aria-label="Semana anterior">‹</button>
+          <button type="button" className={botonCalendario} onClick={() => {
             const ahora = new Date();
-            establecerSeleccion({ lunes: lunesDeSemana(ahora), hoy: diaEnBolivia(ahora) });
+            const hoy = diaEnBolivia(ahora);
+            establecerSeleccion({ lunes: lunesDeSemana(ahora), hoy, dia: hoy });
           }}>Semana actual</button>
-          <button type="button" className={boton} onClick={() => moverSemana(7)} aria-label="Semana siguiente">Siguiente →</button>
+          <button type="button" className={botonCalendario} onClick={() => moverSemana(7)} aria-label="Semana siguiente">›</button>
         </nav>
       </div>
-      {!lista && <p role="status" className="text-sm text-[#35695D]">Cargando tu semana…</p>}
-      {lista && carga.error && <div role="alert" className="rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-4 text-sm text-[#A34955]">
-        <p>{carga.error}</p>
-        <button type="button" className={boton + ' mt-3'} onClick={() => establecerIntento((valor) => valor + 1)}>Volver a cargar</button>
-      </div>}
-      {dias && <div className="grid min-w-0 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {dias.map((dia) => (
-          <section key={dia.fecha} aria-labelledby={'dia-' + dia.fecha} className="min-w-0 space-y-3 rounded-[20px] border border-[#E3E8DE] bg-[#FAFBF7] p-4">
-            <header className="flex flex-wrap items-center justify-between gap-2">
-              <h3 id={'dia-' + dia.fecha} className="text-sm font-semibold capitalize">
-                <time dateTime={dia.fecha}>{formatoDia.format(inicioDiaBolivia(dia.fecha))}</time>
-              </h3>
-              {dia.fecha === seleccion.hoy && <span className="rounded-full bg-[#DCE8D5] px-2 py-1 text-xs font-semibold text-[#35695D]">Hoy</span>}
-            </header>
-            {dia.bloques.length > 0 && <ul className="space-y-3">
-              {dia.bloques.map((bloque) => <li key={bloque.id}><Bloque bloque={bloque} /></li>)}
-            </ul>}
-            {dia.sinHora.length > 0 && <section aria-labelledby={'sin-hora-' + dia.fecha} className="space-y-2 border-t border-[#E3E8DE] pt-3">
-              <h4 id={'sin-hora-' + dia.fecha} className="text-xs font-semibold text-[#657360]">Sin hora</h4>
-              <ul className="space-y-2">
-                {dia.sinHora.map((tarea) => <li key={tarea.id}>
-                  <article className="min-w-0 rounded-xl border border-dashed border-[#D8E2D1] bg-white p-3 [overflow-wrap:anywhere]">
-                    <p className="text-[10px] font-semibold uppercase text-[#657360]">Tarea</p>
-                    <h5 className="mt-1 text-sm font-semibold">{tarea.titulo}</h5>
-                    {tarea.materia && <p className="mt-1 text-xs text-[#75816F]">{tarea.materia.nombre}</p>}
-                    <DatosTarea tarea={tarea} />
-                  </article>
-                </li>)}
-              </ul>
-            </section>}
-            {dia.bloques.length === 0 && dia.sinHora.length === 0 && <p className="py-3 text-xs text-[#788174]">Sin actividades.</p>}
-          </section>
-        ))}
-      </div>}
-    </section>
-  );
+      <div role="group" aria-label="Seleccionar día de la semana" className="mt-6 grid grid-cols-7 gap-1">
+        {diasCortos.map((nombre, indice) => {
+          const fecha = sumarDias(seleccion.lunes, indice);
+          const activo = seleccion.dia === fecha;
+          const hoy = seleccion.hoy === fecha;
+          return <button key={fecha} type="button" aria-pressed={activo} aria-current={hoy ? 'date' : undefined}
+            aria-label={fechaCompleta.format(inicioDiaBolivia(fecha))} onClick={() => establecerSeleccion((actual) => ({ ...actual, dia: fecha }))}
+            className={'flex min-h-20 min-w-0 flex-col items-center gap-2 rounded-2xl py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] ' + (activo ? 'bg-[#EFF5EF]' : 'hover:bg-[#F6F8F4]')}>
+            <span className="text-xs font-medium text-[#7B8D81]">{nombre}</span>
+            <span className={'flex h-9 w-9 items-center justify-center rounded-full text-sm font-semibold ' +
+              (hoy ? 'bg-[#245C52] text-white' : activo ? 'bg-[#DCEBE2] text-[#245C52]' : 'text-[#436253]')}>{Number(fecha.slice(-2))}</span>
+          </button>;
+        })}
+      </div>
+    </div>
+    <h3 aria-live="polite" className="px-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#557565]">
+      <time dateTime={seleccion.dia}>{fechaCompleta.format(inicioDiaBolivia(seleccion.dia))}</time>
+    </h3>
+    <LeyendaCalendario />
+    <EstadoAgenda {...carga} />
+    {dia && horario && <>
+      {dia.sinHora.length > 0 && <section aria-labelledby="sin-hora" className="space-y-3 rounded-3xl border border-[#E2EAE3] bg-white p-4 sm:p-5">
+        <h3 id="sin-hora" className="text-sm font-semibold text-[#426757]">Sin hora <span className="ml-1 text-xs font-normal text-[#7B8D81]">{dia.sinHora.length}</span></h3>
+        <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} /></li>)}</ul>
+      </section>}
+      <section aria-label="Horario del día seleccionado" className="rounded-3xl border border-[#E2EAE3] bg-white p-3 sm:p-5">
+        {dia.bloques.length === 0 && <p className="mb-4 rounded-2xl bg-[#F3F7F1] px-4 py-3 text-sm text-[#6A7F70]">Sin actividades con hora para este día.</p>}
+        <div className="overflow-x-auto pb-2" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
+          <div className="relative ml-12" style={{ height: horario.altura, minWidth: Math.max(180, horario.carriles * 158) }}>
+            {Array.from({ length: horario.ultimaHora - horario.primeraHora + 1 }, (_, indice) => horario.primeraHora + indice).map((hora) =>
+              <div key={hora} aria-hidden="true" className="absolute inset-x-0 border-t border-[#EDF1EC]" style={{ top: (hora - horario.primeraHora) * 60 * horario.escala }}>
+                <span className="absolute -left-12 -top-2 w-10 text-[10px] tabular-nums text-[#86958A]">{String(hora).padStart(2, '0')}:00</span>
+              </div>)}
+            <ol aria-label="Actividades ordenadas por hora">
+              {horario.bloques.map(({ bloque, top, height, carril, hasta }) => <li key={bloque.id}
+                className={'absolute pr-2 ' + (hasta === null ? 'border-t-2 border-dotted border-[#84A897]' : '')}
+                style={{ top, height, left: `${carril / horario.carriles * 100}%`, width: `${100 / horario.carriles}%` }}>
+                <TarjetaActividad bloque={bloque} />
+              </li>)}
+            </ol>
+          </div>
+        </div>
+      </section>
+    </>}
+  </section>;
 }

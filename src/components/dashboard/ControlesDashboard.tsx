@@ -15,7 +15,9 @@ export default function ControlesDashboard({
   ubicacion: 'selector' | 'navegacion';
   cerrarSesionAction?: () => Promise<void>;
 }) {
-  const esSemana = usePathname() === '/semana';
+  const ruta = usePathname();
+  const esSemana = ruta === '/semana';
+  const esCalendario = esSemana || ruta === '/mes';
   const dialogo = useRef<HTMLDialogElement>(null);
   const tituloId = useId();
   const [panel, establecerPanel] = useState<Panel>('Orbit');
@@ -56,11 +58,11 @@ export default function ControlesDashboard({
           </div>
           <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
             <div className="mx-auto grid w-full grid-cols-4 px-4 py-2 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8">
-              <Link href="/dia" aria-current={!esSemana ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-semibold ' + (!esSemana ? 'text-[#245B4C] ' : 'text-[#78827B] ') + foco}>
-                <span className={'flex h-8 w-14 items-center justify-center rounded-full ' + (!esSemana ? 'bg-[#EAF0E5]' : '')}><IconoDashboard nombre="home" /></span>
+              <Link href="/dia" aria-current={!esCalendario ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-semibold ' + (!esCalendario ? 'text-[#245B4C] ' : 'text-[#78827B] ') + foco}>
+                <span className={'flex h-8 w-14 items-center justify-center rounded-full ' + (!esCalendario ? 'bg-[#EAF0E5]' : '')}><IconoDashboard nombre="home" /></span>
                 Home
               </Link>
-              <Link href="/semana" aria-current={esSemana ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium transition-colors ' + (esSemana ? 'text-[#245B4C] bg-[#EAF0E5] ' : 'text-[#78827B] hover:text-[#245B4C] ') + foco}>
+              <Link href="/semana" aria-current={esCalendario ? 'page' : undefined} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium transition-colors ' + (esCalendario ? 'text-[#245B4C] bg-[#EAF0E5] ' : 'text-[#78827B] hover:text-[#245B4C] ') + foco}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="calendario" /></span>
                 Calendario
               </Link>
