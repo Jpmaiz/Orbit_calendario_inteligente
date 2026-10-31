@@ -16,7 +16,7 @@ type TareaTarjeta = TareaConHoraDefinida & {
   materia: { nombre: string; color: string } | null;
 };
 
-type Props = { tarea: TareaTarjeta };
+type Props = { tarea: TareaTarjeta; contexto?: 'hoy' | 'sin-hora' };
 type EstadoEditable = 'completada' | 'pendiente';
 
 const nombresTipo: Record<string, string> = {
@@ -50,7 +50,7 @@ const estilosNivel: Record<PrioridadCalculada['nivel'], { linea: string; etiquet
 };
 const nombresPrioridad: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
-export default function TarjetaTarea({ tarea }: Props) {
+export default function TarjetaTarea({ tarea, contexto }: Props) {
   const router = useRouter();
   const [accion, establecerAccion] = useState<'estado' | 'eliminar' | null>(null);
   const [error, establecerError] = useState<string | null>(null);
@@ -128,47 +128,43 @@ export default function TarjetaTarea({ tarea }: Props) {
             <h3 className={'break-words text-[15px] md:text-base font-semibold leading-6 tracking-[-0.015em] ' + (completada ? 'text-[#829080] line-through' : 'text-[#2C4236]')}>
               {tarea.titulo}
             </h3>
-            <p className="mt-1 text-xs leading-5 text-[#7B847A]">
-              <time
-                dateTime={tarea.horaDefinida ? tarea.fechaLimite : undefined}
-                title={tarea.horaDefinida
-                  ? fechaLimite.toLocaleString('es-BO', { timeZone: 'America/La_Paz', hourCycle: 'h23' })
+            {contexto !== 'sin-hora' && <p className="mt-1 text-sm leading-5 text-[#647168]">
+              <time dateTime={tarea.horaDefinida ? tarea.fechaLimite : undefined}
+                title={fechaFormateada} className="inline-block first-letter:uppercase">
+                {contexto === 'hoy' && tarea.horaDefinida
+                  ? fechaLimite.toLocaleTimeString('es-BO', { timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
                   : fechaFormateada}
-                className="inline-block first-letter:uppercase"
-              >{fechaFormateada}</time>
-              {tarea.horaDefinida === false && (
-                <span className="mt-1 flex items-center gap-1.5 font-medium text-[#657360]">
-                  <span aria-hidden="true">⏱</span>
-                  Hora por definir
-                </span>
-              )}
-            </p>
+              </time>
+              {!tarea.horaDefinida && <span className="ml-2 text-xs text-[#657360]">Hora por definir</span>}
+            </p>}
           </div>
-          <span className={'mt-0.5 max-w-full rounded-md px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.06em] ' + (coloresTipo[tarea.tipo] ?? coloresTipo.lectura).etiqueta}>
+          <span className={'mt-0.5 max-w-full rounded-md px-2 py-1 text-xs font-medium ' + (coloresTipo[tarea.tipo] ?? coloresTipo.lectura).etiqueta}>
             {nombresTipo[tarea.tipo] ?? tarea.tipo}
           </span>
         </div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px]">
-          <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 text-[#75816F]">
-            {tarea.materia && <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: tarea.materia.color }} />}
-            <span className="break-words">{tarea.materia?.nombre ?? 'Sin materia'}</span>
-          </span>
-          {estiloNivel ? <span className={'rounded px-2 py-1 font-semibold ' + estiloNivel.etiqueta}>
+        {tarea.materia && <p className="mt-2 flex items-center gap-1.5 text-sm text-[#647168]">
+          <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: tarea.materia.color }} />
+          {tarea.materia.nombre}
+        </p>}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          {estiloNivel ? <span className={'rounded-md px-2 py-1 font-medium ' + estiloNivel.etiqueta}>
             Prioridad calculada: {estiloNivel.nombre}
           </span> : <span className="text-[#75816F]">Prioridad calculada no disponible</span>}
-          <span className="text-[#75816F]">Elegida: {nombresPrioridad[tarea.prioridad] ?? tarea.prioridad}</span>
-          <span className="text-[#75816F]">{nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</span>
+          {tarea.estado !== 'pendiente' && !completada && <span className="text-[#647168]">{nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</span>}
         </div>
-        {calculada && <>
-        <p className="mt-3 whitespace-pre-wrap text-xs leading-6 text-[#526A5A]">{calculada.mensaje}</p>
-        {calculada.sobrecargaHoras > 0 && (
+        {calculada && calculada.sobrecargaHoras > 0 && (
           <p className="mt-2 inline-block rounded-lg bg-[#FAF0DB] px-2.5 py-1.5 text-xs font-medium text-[#806020]">
             Sobrecarga: {calculada.sobrecargaHoras} h
           </p>
         )}
-        <details className="mt-2 rounded-xl bg-[#F5F8F2] text-xs text-[#526A5A]">
-          <summary className="min-h-11 cursor-pointer rounded-xl px-3 py-3 font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35695D]">¿Por qué?</summary>
-          <div className="px-3 pb-4">
+        <details className="mt-2 border-t border-[#F0F2EC] text-sm text-[#526A5A]">
+          <summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35695D]">{calculada ? '¿Por qué?' : 'Detalles'}</summary>
+          <div className="space-y-3 pb-3 text-xs leading-5">
+            <p>Vencimiento: {fechaFormateada}{!tarea.horaDefinida && ' · Hora por definir'}</p>
+            <p>Prioridad elegida: {nombresPrioridad[tarea.prioridad] ?? tarea.prioridad}</p>
+            {!completada && <p>Estado: {nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</p>}
+            {calculada && <>
+            <p className="whitespace-pre-wrap">{calculada.mensaje}</p>
             {calculada.desglose.origenHoras === 'por_tipo' && (
               <p className="mb-3 leading-5">Horas estimadas por tipo de tarea</p>
             )}
@@ -188,9 +184,9 @@ export default function TarjetaTarea({ tarea }: Props) {
                 </div>
               ))}
             </dl>
+            </>}
           </div>
         </details>
-        </>}
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 border-t border-[#F0F2EC]">
           <label className={'inline-flex min-h-11 items-center gap-2 text-xs font-medium text-[#64805F] ' + (ocupada ? 'cursor-wait opacity-60' : 'cursor-pointer')}>
             <input

@@ -161,8 +161,8 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       establecerEstadoRevision(errores.length === resultados.length
         ? 'No se pudieron revisar las actividades. Completa los datos indicados y vuelve a intentar.'
         : errores.length
-        ? 'Se actualizaron los avisos de las actividades que se pudieron revisar. No se guardaron cambios.'
-        : 'Duplicados y choques actualizados. No se guardaron cambios.');
+        ? 'Se actualizaron los avisos de las actividades que se pudieron revisar.'
+        : 'Duplicados y choques actualizados.');
       if (errores.length) establecerError(errores.join('\n'));
     } catch (error) {
       establecerError(error instanceof Error ? error.message : 'No se pudo revisar el borrador. Tus cambios se conservaron.');
@@ -255,25 +255,26 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
               <label htmlFor={id + '-texto'} className="text-sm font-semibold">¿Qué necesitas agregar?</label>
               <textarea id={id + '-texto'} rows={4} value={texto} maxLength={2000}
                 onChange={(e) => establecerTexto(e.target.value)}
-                placeholder="Ej. examen de redes el miércoles y reunión del grupo mañana a las 16:00"
+                placeholder="Ej. Examen de Redes el viernes a las 09:00"
                 aria-describedby={id + '-ayuda'} className={campoCaptura + ' resize-y'} />
-              <p id={id + '-ayuda'} className="mt-2 text-xs leading-5 text-[#647168]">Escribe uno o varios pendientes. Primero revisarás el borrador; las actividades se guardan al confirmar.</p>
+              <p id={id + '-ayuda'} className="mt-2 text-xs leading-5 text-[#647168]">Escribe tus actividades y revisa el borrador antes de guardar.</p>
             </div>
-            <button type="submit" className={principal}>{enviando === 'extraer' ? 'Extrayendo…' : 'Revisar con Orbit'}</button>
+            <button type="submit" className={principal}>{enviando === 'extraer' ? 'Extrayendo…' : 'Generar borrador'}</button>
             <div>
               <input ref={entradaArchivo} id={id + '-archivo'} type="file" accept="image/*,application/pdf" className="sr-only"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void extraerArchivo(f); }} />
               <label htmlFor={id + '-archivo'} className={botonCaptura + ' flex w-full cursor-pointer items-center justify-center text-center'}>
-                Subir foto o PDF (horario, afiche o captura)
+                Subir foto o PDF
               </label>
+              <p className="mt-2 text-xs leading-5 text-[#647168]">Horarios, afiches o capturas.</p>
             </div>
-            <button type="button" className={botonCaptura} onClick={() => { onCerrar(); router.push('/dia/nueva'); }}>Crear tarea manualmente</button>
+            <button type="button" className="min-h-11 rounded-lg px-1 text-sm font-medium text-[#35695D] underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]" onClick={() => { onCerrar(); router.push('/dia/nueva'); }}>Crear tarea manualmente</button>
           </fieldset>
         </form>
       ) : (
         <section className="min-w-0 space-y-4">
           <h3 ref={tituloRevision} tabIndex={-1} className="rounded-sm text-base font-semibold focus:outline-none">Revisa tu borrador</h3>
-          <p className="text-xs text-[#647168]">Aún no se guardaron actividades. Corrige lo necesario y omite las que no quieras agregar.</p>
+          <p className="text-xs text-[#647168]">Corrige lo necesario. Revisar cambios actualiza los avisos; Confirmar todo guarda las actividades.</p>
           {periodoAplicado && <p role="status" className="rounded-xl bg-[#E7F8EF] p-3 text-xs text-[#1F5D50]">Semestre {periodoAplicado} aplicado a las clases pendientes. Se conservaron las fechas que editaste.</p>}
           {faltaPeriodo && <fieldset disabled={enviando !== null} className="min-w-0">
             <legend className="sr-only">Período de las clases</legend>
@@ -304,7 +305,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
             {items.map((item, indice) => <TarjetaBorrador key={indice} item={item} indice={indice} materias={materias} cambiar={(cambios) => cambiarItem(indice, cambios)} />)}
           </fieldset>
           {incluidos.length === 0 && <p className="text-sm text-[#657360]">{items.length ? 'Todas las actividades están omitidas. No se enviará ninguna a guardar.' : 'No hay actividades para confirmar. Puedes editar el texto e intentar de nuevo.'}</p>}
-          {pendientes && <p className="text-xs font-medium text-[#A34955]">Completa los datos pendientes señalados en las tarjetas o marca Omitir.</p>}
+          {pendientes && <p className="text-xs font-medium text-[#A34955]">Completa los datos marcados o usa Omitir.</p>}
           <button type="button" className={botonCaptura} disabled={ocupada || incluidos.length === 0 || incluidos.length > 20} onClick={() => void revisarCambios()}>
             {enviando === 'revisar' ? 'Revisando cambios.' : 'Revisar cambios'}
           </button>

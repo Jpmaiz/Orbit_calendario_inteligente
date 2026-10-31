@@ -114,7 +114,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
             </div>
             <ul className="min-w-0 space-y-3 md:space-y-4">
               {seccion.tareas.map((tarea) => (
-                <li key={tarea.id}><TarjetaTarea tarea={{ ...tarea, fechaLimite: tarea.fechaLimite.toISOString() }} /></li>
+                <li key={tarea.id}><TarjetaTarea tarea={{ ...tarea, fechaLimite: tarea.fechaLimite.toISOString() }} contexto={seccion.id === 'hoy' ? 'hoy' : seccion.id === 'sin-hora' ? 'sin-hora' : undefined} /></li>
               ))}
             </ul>
           </section>
