@@ -45,7 +45,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
     <SelectorCalendario vista="mes" />
     <section aria-labelledby="titulo-mes" className="rounded-[28px] border border-[#E2EAE3] bg-white p-4 shadow-[0_6px_28px_#244F4505] sm:p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <h2 id="titulo-mes" aria-live="polite" className="text-xl font-semibold capitalize tracking-tight text-[#2D5749] sm:text-2xl">{formatoMes.format(inicioDiaBolivia(seleccion.mes))}</h2>
+        <h2 id="titulo-mes" aria-live="polite" className="text-xl font-semibold capitalize tracking-tight text-[#2D5749] sm:text-2xl">{formatoMes.format(inicioDiaBolivia(seleccion.mes)).replace(' de ', ' ')}</h2>
         <nav aria-label="Cambiar mes" className="flex gap-2">
           <button type="button" className={botonCalendario} aria-label="Mes anterior" onClick={() => moverMes(-1)}>‹</button>
           <button type="button" className={botonCalendario} onClick={() => {

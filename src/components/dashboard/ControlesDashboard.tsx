@@ -68,7 +68,7 @@ export default function ControlesDashboard({
               </Link>
               <button type="button" onClick={() => abrirPanel('Orbit')} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium text-[#78827B] transition-colors hover:text-[#245B4C] ' + foco}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
-                Orbit
+                Capturar
               </button>
               <button type="button" onClick={() => abrirPanel('Perfil')} className={'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-[11px] md:text-xs font-medium text-[#78827B] transition-colors hover:text-[#245B4C] ' + foco}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="perfil" /></span>
