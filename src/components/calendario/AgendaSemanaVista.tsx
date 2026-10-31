@@ -24,6 +24,16 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
   const dias = carga.agenda ? organizarSemana(carga.agenda, seleccion.lunes) : null;
   const dia = dias?.find(({ fecha }) => fecha === seleccion.dia);
   const horario = dia ? distribuirHorario(dia.bloques, dia.fecha) : null;
+  const cantidad = horario?.bloques.length ?? 0;
+  // Avisar cuando las primeras cuatro horas de la grilla no tienen actividades.
+  const actividadesMasTarde = horario && cantidad > 0 && horario.bloques.every(
+    ({ desde }) => desde >= horario.primeraHora * 60 + 4 * 60,
+  );
+  const referenciaDia = seleccion.dia === seleccion.hoy ? 'hoy' : 'este día';
+  const avisoHorario = cantidad === 0 ? 'Sin actividades con hora para este día.'
+    : actividadesMasTarde
+      ? `Tienes ${cantidad === 1 ? 'una actividad' : 'actividades'} más tarde ${referenciaDia}. Desplázate para ${cantidad === 1 ? 'verla' : 'verlas'}.`
+      : `Tienes ${cantidad} ${cantidad === 1 ? 'actividad programada' : 'actividades programadas'} ${referenciaDia}.`;
 
   function moverSemana(cantidad: number) {
     establecerSeleccion((actual) => ({ ...actual,
@@ -75,7 +85,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
         <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} /></li>)}</ul>
       </section>}
       <section aria-label="Horario del día seleccionado" className="rounded-3xl border border-[#E2EAE3] bg-white p-3 sm:p-5">
-        {dia.bloques.length === 0 && <p className="mb-4 rounded-2xl bg-[#F3F7F1] px-4 py-3 text-sm text-[#6A7F70]">Sin actividades con hora para este día.</p>}
+        <p aria-live="polite" className="mb-3 rounded-2xl bg-[#F3F7F1] px-4 py-2.5 text-xs leading-5 text-[#5E7767]">{avisoHorario}</p>
         <div key={dia.fecha} className="overflow-x-auto px-1 pb-4 pt-4 md:max-h-[70dvh] md:overflow-y-auto md:overscroll-y-contain" tabIndex={0} aria-label="Horario; desplaza horizontalmente si hay actividades simultáneas">
           <div className="relative ml-12" style={{ height: horario.altura, minWidth: Math.max(180, horario.carriles * 158) }}>
             {Array.from({ length: horario.ultimaHora - horario.primeraHora + 1 }, (_, indice) => horario.primeraHora + indice).map((hora) =>
