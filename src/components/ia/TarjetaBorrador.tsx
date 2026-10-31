@@ -61,7 +61,7 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
         </label>
       </header>
       {item.excluido ? <p className="text-xs text-[#657360]">Esta actividad no se enviará a guardar.</p> : <>
-        {original.confianza < 0.6 && <p className="rounded-lg bg-[#FAEBDD] p-2 text-sm font-semibold text-[#914421]">Revisa este ítem</p>}
+        {original.confianza <= 0.6 && <p className="rounded-lg bg-[#FAEBDD] p-2 text-sm font-semibold text-[#914421]">Revisa este ítem</p>}
         <Campo etiqueta="Título" valor={item.titulo} maxLength={200} cambiar={(titulo) => cambiar({ titulo })} />
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <div>

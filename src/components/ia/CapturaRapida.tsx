@@ -32,7 +32,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
   onCerrar: () => void;
 }) {
   const router = useRouter();
-  const { datos: datosPeriodos, guardando: guardandoPeriodo } = usePeriodos();
+  const { datos: datosPeriodos, guardando: guardandoPeriodo, recargar: recargarPeriodos } = usePeriodos();
   const id = useId();
   const [texto, establecerTexto] = useState('');
   const [periodoAplicado, establecerPeriodoAplicado] = useState<string | null>(null);
@@ -168,6 +168,7 @@ export default function CapturaRapida({ onOcupadoChange, onCerrar }: {
       establecerTexto('');
       establecerCorregida(false);
       avisarAgendaActualizada();
+      void recargarPeriodos();
     } catch (error) {
       establecerError(error instanceof Error ? error.message : 'No se pudo conectar con el servidor. Se conservó el borrador.');
     } finally {
