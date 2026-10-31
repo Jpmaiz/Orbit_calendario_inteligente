@@ -33,6 +33,18 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
       return NextResponse.json({ error: 'Evento no encontrado' }, { status: 404 });
     }
 
+    // Horas y vigencia se validan JUNTAS: lo que llega + lo que ya estaba guardado
+    const horaInicio = v.datos.horaInicio ?? existente.horaInicio;
+    const horaFin = v.datos.horaFin ?? existente.horaFin;
+    if (horaFin <= horaInicio) {
+      return NextResponse.json({ error: 'La hora de fin debe ser posterior a la de inicio' }, { status: 400 });
+    }
+    const desde = v.datos.vigenteDesde !== undefined ? v.datos.vigenteDesde : existente.vigenteDesde;
+    const hasta = v.datos.vigenteHasta !== undefined ? v.datos.vigenteHasta : existente.vigenteHasta;
+    if (desde && hasta && hasta <= desde) {
+      return NextResponse.json({ error: 'El fin de vigencia debe ser posterior al inicio' }, { status: 400 });
+    }
+
     if (v.datos.materiaId) {
       const materia = await prisma.materia.findFirst({
         where: { id: v.datos.materiaId, usuarioId: user.id, eliminadoEn: null },
@@ -75,4 +87,4 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
     console.error('Error DELETE /api/eventos/[id]:', error);
     return NextResponse.json({ error: 'Error al eliminar el evento' }, { status: 500 });
   }
-}
+}

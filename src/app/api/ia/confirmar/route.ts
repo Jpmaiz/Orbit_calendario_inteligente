@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
-import { periodoVigente } from '@/lib/periodos/periodos';
+import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
-import { normalizarCodigo, normalizarNombre, esMismaClase, nombreDia, type ClaseFija } from '@/lib/borrador/enriquecer';
+import { normalizarNombre, esMismaClase, nombreDia, type ClaseFija } from '@/lib/borrador/enriquecer';
 import { validarItem, ItemConfirmado } from '@/lib/borrador/validarConfirmacion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
@@ -12,6 +12,7 @@ class YaConfirmada extends Error {}
 
 type Resultado = {
   creados: { tareas: string[]; eventos: string[]; clases: string[]; materias: { id: string; nombre: string }[] };
+  periodoCreado?: { id: string; nombre: string } | null; // semestre que traía el documento (horario del SIAAN)
   omitidos: { indice: number; titulo: string; motivo: string }[];
 };
 
@@ -24,6 +25,7 @@ type Resultado = {
  * - Crea cada materia nueva una sola vez (aunque la usen varios ítems).
  * - Aprende alias: si el usuario vinculó "BD" a "Base de Datos II", la próxima vez lo hace solo.
  * - Una clase de lunes y miércoles se guarda como dos EventoFijo.
+ * - Si el borrador vino de un horario con semestre impreso, crea ese periodo (si no se cruza con otro).
  */
 export async function POST(req: NextRequest) {
   const user = await obtenerUsuario();
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
     // Idempotencia (1/2): si este borrador ya se confirmó, devolver el mismo resultado
     const interpretacion = await prisma.interpretacionIA.findFirst({
       where: { id: interpretacionId, usuarioId: user.id },
-      select: { estado: true, resultado: true },
+      select: { estado: true, resultado: true, respuestaIa: true, usuario: { select: { zonaHoraria: true } } },
     });
     if (!interpretacion) {
       return NextResponse.json({ error: 'Interpretación no encontrada' }, { status: 404 });
@@ -99,6 +101,19 @@ export async function POST(req: NextRequest) {
 
     const periodo = await periodoVigente(user.id);
 
+    // Semestre impreso en el documento (lo leyó /api/ia/extraer-imagen): solo si se guarda alguna clase
+    const zona = interpretacion.usuario?.zonaHoraria ?? 'America/La_Paz';
+    const leido = (interpretacion.respuestaIa as { periodo?: { nombre?: string | null; inicio?: string; fin?: string } | null })?.periodo;
+    let periodoDocumento: { nombre: string; inicio: Date; fin: Date } | null = null;
+    if (leido?.inicio && leido.fin && aGuardar.some(({ item }) => item.clase === 'evento_fijo')) {
+      const inicio = diaEnZona(leido.inicio, '00:00', zona);
+      const fin = diaEnZona(leido.fin, '23:59', zona);
+      const dias = inicio && fin ? (fin.getTime() - inicio.getTime()) / 86_400_000 : 0;
+      if (inicio && fin && dias >= 7 && dias <= 366) {
+        periodoDocumento = { nombre: (leido.nombre ?? `${leido.inicio} a ${leido.fin}`).slice(0, 50), inicio, fin };
+      }
+    }
+
     const resultado: Resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 0) Idempotencia (2/2): "reservar" la interpretación. Solo UNA petición puede pasarla
       //    de 'pendiente' a 'aplicada'. Si otra llegó primero, Postgres hace esperar a esta y
@@ -109,6 +124,25 @@ export async function POST(req: NextRequest) {
         data: { estado: 'aplicada', fueCorregida: body.fueCorregida === true },
       });
       if (reserva.count === 0) throw new YaConfirmada();
+
+      // 0.5) Semestre del documento: se crea si no hay otro en esas fechas (dos semestres no se pisan)
+      let periodoCreado: { id: string; nombre: string } | null = null;
+      let semestre = periodo?.nombre ?? null;
+      if (periodoDocumento) {
+        const choca = await tx.periodoAcademico.findFirst({
+          where: { usuarioId: user.id, eliminadoEn: null, inicio: { lte: periodoDocumento.fin }, fin: { gte: periodoDocumento.inicio } },
+          select: { nombre: true },
+        });
+        if (choca) {
+          semestre = choca.nombre;
+        } else {
+          periodoCreado = await tx.periodoAcademico.create({
+            data: { usuarioId: user.id, ...periodoDocumento },
+            select: { id: true, nombre: true },
+          });
+          semestre = periodoCreado.nombre;
+        }
+      }
 
       // 1) Materias nuevas: una sola vez por nombre normalizado (y reusar si ya existe con ese nombre)
       const idPorClave = new Map<string, string>();
@@ -129,8 +163,9 @@ export async function POST(req: NextRequest) {
           data: {
             usuarioId: user.id,
             nombre: item.materia.nombre,
-            codigo: item.materia.codigo ? normalizarCodigo(item.materia.codigo) : null,
-            semestre: periodo?.nombre ?? null,
+            // Se guarda como se lee ("SIS-233"); al comparar se normaliza
+            codigo: item.materia.codigo ? item.materia.codigo.trim().toUpperCase().slice(0, 30) : null,
+            semestre,
           },
           select: { id: true, nombre: true },
         });
@@ -227,7 +262,7 @@ export async function POST(req: NextRequest) {
       }
 
       // 4) Guardar el resultado: un reintento devolverá exactamente esto
-      const final: Resultado = { creados: { tareas, eventos, clases, materias: materiasCreadas }, omitidos };
+      const final: Resultado = { creados: { tareas, eventos, clases, materias: materiasCreadas }, omitidos, periodoCreado };
       await tx.interpretacionIA.update({ where: { id: interpretacionId }, data: { resultado: final as object } });
       return final;
     }, { timeout: 15_000 }); // varios ítems + la latencia a Supabase: más que los 5 s por defecto
