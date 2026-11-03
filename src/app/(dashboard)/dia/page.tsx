@@ -1,5 +1,4 @@
 import AgendaDiaVista from '@/components/calendario/AgendaDiaVista';
-import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 
@@ -48,7 +47,6 @@ export default async function PaginaDia() {
         </div>
       </header>
 
-      <ControlesDashboard ubicacion="selector" />
       <AgendaDiaVista fechaActual={fechaActual.toISOString()} />
     </div>
   );

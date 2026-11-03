@@ -24,3 +24,40 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ───────────── Orbit: animaciones de la captura (botón Orbit y su hoja) ───────────── */
+@keyframes orbit-orbita { to { transform: rotate(360deg); } }
+@keyframes orbit-latido { 0% { opacity: .45; transform: scale(.7); } 70%, 100% { opacity: 0; transform: scale(1.6); } }
+@keyframes orbit-hoja { from { opacity: 0; transform: translateY(24px) scale(.94); } }
+@keyframes orbit-aparece { from { opacity: 0; transform: translateY(6px); } }
+@keyframes orbit-pop { from { opacity: 0; transform: scale(.6); } }
+@keyframes orbit-crece { from { opacity: 0; transform: scaleY(0); } }
+@keyframes orbit-barre-v { from { top: -12%; } to { top: 100%; } }
+@keyframes orbit-barre-h { from { left: -12%; } to { left: 100%; } }
+@keyframes orbit-cae { from { opacity: 0; transform: translateY(-16px) rotate(-10deg); } }
+@keyframes orbit-traza { to { stroke-dashoffset: 0; } }
+@keyframes orbit-gira { to { transform: rotate(360deg); } }
+
+.orbit-planeta { transform-origin: 12px 12px; animation: orbit-orbita 9s linear infinite; }
+.orbit-boton[aria-expanded="true"] .orbit-planeta { animation-duration: 1.4s; }
+.orbit-boton { position: relative; }
+.orbit-boton::after {
+  content: ""; position: absolute; left: 50%; top: 10px; width: 34px; height: 34px; margin-left: -17px; border-radius: 9999px;
+  border: 2px solid #35695D; opacity: 0; pointer-events: none; animation: orbit-latido 3.4s ease-out 1.5s infinite;
+}
+.orbit-boton[aria-expanded="true"]::after { animation: none; }
+dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1.05); }
+.orbit-aparece { animation: orbit-aparece .35s ease-out both; animation-delay: calc(var(--i, 0) * 60ms); }
+.orbit-pop { animation: orbit-pop .35s cubic-bezier(.2, 1.5, .4, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
+.orbit-bloque { transform-origin: 50% 0; animation: orbit-crece .45s cubic-bezier(.2, 1.3, .4, 1) both; animation-delay: calc(var(--i, 0) * 65ms + 120ms); }
+.orbit-papel { animation: orbit-cae .5s cubic-bezier(.2, 1.2, .4, 1) both; }
+.orbit-scan-v { position: absolute; left: 0; right: 0; height: 12%; background: linear-gradient(to bottom, transparent, rgba(35, 79, 69, .35), transparent); animation: orbit-barre-v 1.3s ease-in-out infinite; }
+.orbit-scan-h { position: absolute; top: 0; bottom: 0; width: 12%; background: linear-gradient(to right, transparent, rgba(35, 79, 69, .35), transparent); animation: orbit-barre-h 1.3s ease-in-out infinite; }
+.orbit-gira { animation: orbit-gira .8s linear infinite; }
+.orbit-traza { stroke-dasharray: 30; stroke-dashoffset: 30; animation: orbit-traza .4s .25s forwards; }
+
+@media (prefers-reduced-motion: reduce) {
+  .orbit-planeta, .orbit-boton::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
+  dialog.orbit-hoja[open], .orbit-aparece, .orbit-pop, .orbit-bloque, .orbit-papel { animation: none; }
+  .orbit-traza { animation: none; stroke-dashoffset: 0; }
+}

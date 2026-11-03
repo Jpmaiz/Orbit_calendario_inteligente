@@ -99,3 +99,25 @@ export function resumenDocumento(datos: unknown): string | null {
   const ref = d.fechaReferencia as { fecha?: string; origen?: string } | null | undefined;
   return ref?.origen === 'documento' ? `${tipo} · fechas calculadas desde el ${ref.fecha}.` : `${tipo} leído.`;
 }
+
+/** Lo que /api/ia/extraer-imagen cuenta del documento (ver docs/ORBIT_FRONT_CONTEXTO.md, v2.3). */
+export type DocumentoLeido = {
+  tipo: 'horario' | 'afiche' | 'captura_chat' | 'pizarra' | 'otro';
+  revision: { hecha: boolean; coinciden: number; conflictos: number };
+  periodo: { nombre: string; inicio: string; fin: string; existe: boolean } | null;
+};
+
+export function leerDocumento(datos: unknown): DocumentoLeido | null {
+  const d = (datos as { documento?: Record<string, unknown> } | null)?.documento;
+  if (!d || typeof d !== 'object') return null;
+  const tipos = ['horario', 'afiche', 'captura_chat', 'pizarra', 'otro'] as const;
+  const r = (d.revision ?? {}) as Record<string, unknown>;
+  const p = d.periodoDetectado as Record<string, unknown> | null | undefined;
+  return {
+    tipo: tipos.includes(d.tipo as never) ? (d.tipo as DocumentoLeido['tipo']) : 'otro',
+    revision: { hecha: r.hecha === true, coinciden: Number(r.coinciden) || 0, conflictos: Number(r.conflictos) || 0 },
+    periodo: p && typeof p.nombre === 'string' && typeof p.inicio === 'string' && typeof p.fin === 'string'
+      ? { nombre: p.nombre, inicio: p.inicio, fin: p.fin, existe: !!p.existente }
+      : null,
+  };
+}
