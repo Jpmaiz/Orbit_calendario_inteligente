@@ -96,3 +96,8 @@ razones) y `horasDelUsuario` (si el usuario las fija, mandan).
 fecha, la entrega se mueve con él. Un evento con algo que estudiar ("cirugía: semiología de apéndice y nudos")
 genera una tarea "Preparación: …" que vence al empezar el evento. El evento en sí es asistencia: 0 h.
 
+### D18. Al usuario solo se le muestran las horas
+**Qué:** el borrador expone `estimado = { horas, carga }`. La dificultad, las razones y los supuestos de la estimación
+se quedan en el backend (`Tarea.estimacion`, motor de prioridad). `carga` (ligera, media, pesada) sirve solo para color.
+**Por qué:** al estudiante le interesa cuánto tiempo necesita, no un puntaje de dificultad ni la explicación del cálculo.
+

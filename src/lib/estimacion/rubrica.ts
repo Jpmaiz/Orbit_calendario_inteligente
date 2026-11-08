@@ -233,6 +233,13 @@ export function estimar(tipo: string, lectura: LecturaEstimacion | null): Estima
   return { horas, minutos: Math.round(horas * 60), dificultad, importancia, origen: 'ia', escala, rango, razones, supuestos };
 }
 
+/** Carga visible para el front, solo como color: ligera (dificultad 1–2), media (3 o sin dato), pesada (4–5). */
+export type Carga = 'ligera' | 'media' | 'pesada';
+export function cargaDe(dificultad: number | null): Carga {
+  if (dificultad === null) return 'media';
+  return dificultad <= 2 ? 'ligera' : dificultad >= 4 ? 'pesada' : 'media';
+}
+
 /** Horas por defecto de un tipo cuando nadie estimó la tarea (centro del rango). Lo usa el motor de prioridad. */
 export function horasPorDefecto(tipo: string): number {
   const [min, max] = rangoDe(tipo, null);

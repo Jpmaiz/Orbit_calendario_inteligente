@@ -427,14 +427,10 @@ components:
         materiaSugerida: { type: [string, "null"], description: "Materia deducida por el contenido; materiaPropuesta llega con seguro=false" }
         estimado:
           type: [object, "null"]
-          description: "Solo tareas. Lo calcula el sistema con la rúbrica que calificó la IA (Fase 1, docs/PROMPTS.md §4)"
+          description: "Solo tareas. Lo calcula el sistema con la rúbrica que calificó la IA (Fase 1). Dificultad, razones y supuestos NO se exponen: se quedan en Tarea.estimacion"
           properties:
-            horas: { type: number, example: 6.5, description: "Horas netas de preparación (sin colchón)" }
-            dificultad: { type: [integer, "null"], minimum: 1, maximum: 5 }
-            importancia: { type: string, enum: [alta, media, baja] }
-            origen: { type: string, enum: [ia, general], description: "general = la IA no pudo leer: centro del rango" }
-            razones: { type: array, items: { type: string }, example: ["Es un examen parcial (4–8 h)", "Cubre 5 temas: Estático, RIP, OSPF, EIGRP, NAT"] }
-            supuestos: { type: array, items: { type: string } }
+            horas: { type: number, example: 6.5, description: "Horas netas de preparación (sin colchón). Mostrar como \"~6 h 30\"" }
+            carga: { type: string, enum: [ligera, media, pesada], description: "Solo para color en el front (dificultad 1–2 / 3 / 4–5). No mostrar como número ni texto" }
 
     Borrador:
       type: object

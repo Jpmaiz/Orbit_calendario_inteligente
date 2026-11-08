@@ -35,21 +35,18 @@ rúbrica y el backend calcula los números (detalle en `docs/PROMPTS.md` §4). N
 **1. Cada tarea del borrador trae `estimado`** (los eventos y clases traen `null`):
 
 ```json
-"estimado": {
-  "horas": 6.5, "dificultad": 4, "importancia": "media", "origen": "ia",
-  "razones": ["Es un examen parcial (4–8 h)", "Cubre 5 temas: Estático, RIP, OSPF, EIGRP, NAT", "Es práctico"],
-  "supuestos": ["Supuse que es un parcial: si es un control o quiz, son menos horas"]
-}
+"estimado": { "horas": 6.5, "carga": "media" }
 ```
 
-Sugerencia de UI: un chip "~6 h 30 · dificultad 4" en la tarjeta y un "¿Por qué?" que muestre `razones`.
-`origen: "general"` = la IA no pudo leer; conviene decir "estimación general".
+- Mostrar solo las horas: "~6 h 30".
+- `carga` (`ligera` · `media` · `pesada`) es **solo para color** (por ejemplo, el borde o el punto del chip). No mostrar
+  la dificultad como número ni como texto, ni explicaciones del cálculo: eso se queda en el backend.
 
 **2. Ya hecho en `borradorCaptura.ts` (cambio mínimo):** `itemParaEnvio` manda `indice` (posición del ítem en el
 borrador). Con eso el backend recupera la estimación al confirmar. **No lo quites:** sin `indice` la tarea se
 guarda con la estimación general.
 
-**3. Nuevos supuestos** (se ven en "Ver origen y supuestos", ya son texto legible):
+**3. Nuevos supuestos del ítem** (no de la estimación; se ven en "Ver origen y supuestos"):
 - `fecha deducida del contexto: confírmala` — viene con `opcionesFecha` de una sola opción: el usuario la toca para confirmar.
 - `materia deducida por el contenido: X` — `materiaPropuesta` llega con `seguro: false`.
 - `vence al empezar «Examen…»` — la entrega vence cuando empieza ese examen o evento.
@@ -62,7 +59,7 @@ que la teoría. `BorradorHorario.tsx` ahora nombra cada fila con la materia (no 
 Un reporte con dos periodos da a cada clase la vigencia de su periodo.
 
 **6. Tarea guardada:** `prioridad` ya no es siempre "media": sale de la importancia. Nuevos campos en `Tarea`:
-`estimacion` (JSON con razones), `horasDelUsuario` (true si el usuario fijó las horas en el formulario),
+`estimacion` (JSON interno con dificultad y razones: no mostrar), `horasDelUsuario` (true si el usuario fijó las horas en el formulario),
 `venceConId` / `venceConClase`.
 
 ---

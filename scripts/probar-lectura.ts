@@ -123,7 +123,7 @@ prueba('Evento con preparación → tarea "Preparación" que vence al empezar el
     item({ clase: 'evento', tipo: null, titulo: 'Cirugía de Apéndice', fechaDicha: { tipo: 'diaSemana', dia: 3, semana: 'sin_especificar' }, hora: '09:00', horaFin: '13:00',
       preparacion: { titulo: null, estimacion: { escala: null, temas: [{ nombre: 'Semiología de apéndice', amplitud: 'normal' }, { nombre: 'Nudos', amplitud: 'normal' }],
         cantidades: { paginasLeer: null, paginasEscribir: null, ejercicios: null, diapositivas: null, minutosExposicion: null },
-        volumen: null, nivelCognitivo: 2, partes: false, grupal: false, formato: 'practico', claridad: 'alta', puntos: null, impostergable: false } } }),
+        volumen: null, nivelCognitivo: 2, partes: false, grupal: false, formato: 'practico', claridad: 'alta', impostergable: false } } }),
     item({ titulo: 'Preguntas de Fisiopatología' }),
   ]);
   assert.equal(lista.length, 3);

@@ -10,7 +10,7 @@
 import { prisma } from '@/lib/prisma/cliente';
 import { resolverFecha, HORA_POR_TIPO } from '@/lib/fechas/resolverFecha';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
-import { estimar } from '@/lib/estimacion/rubrica';
+import { cargaDe, estimar } from '@/lib/estimacion/rubrica';
 import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
@@ -161,11 +161,9 @@ export async function construirBorrador(
 
     borrador.push({
       ...base, materiaPropuesta, horaPropuesta, vigencia, duplicado, choques,
-      // Para mostrar "~6 h · dificultad 3" y "¿Por qué?" en el borrador
-      estimado: estimado && {
-        horas: estimado.horas, dificultad: estimado.dificultad, importancia: estimado.importancia,
-        origen: estimado.origen, razones: estimado.razones, supuestos: estimado.supuestos,
-      },
+      // Al usuario solo le llegan las horas ("~6 h") y una carga para pintar con color.
+      // Dificultad, razones y supuestos se quedan en el backend (Tarea.estimacion, motor de prioridad).
+      estimado: estimado && { horas: estimado.horas, carga: cargaDe(estimado.dificultad) },
     });
   }
 
