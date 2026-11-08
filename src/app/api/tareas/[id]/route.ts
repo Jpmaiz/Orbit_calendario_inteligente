@@ -62,6 +62,10 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (v.datos.fechaLimite !== undefined || v.datos.horaDefinida !== undefined) {
       await moverVinculadas(user.id, id, 'tarea', tarea.fechaLimite, tarea.horaDefinida);
     }
+    // Plan de estudio: si la actividad se cerró, sus bloques futuros salen del calendario
+    if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
+      await prisma.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: id, estado: 'aceptada', fechaInicio: { gt: new Date() } } });
+    }
     return NextResponse.json({ tarea });
   } catch (error) {
     console.error('Error PATCH /api/tareas/[id]:', error);

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { validarTarea } from '@/lib/validacion/tarea';
-import { priorizarTareas } from '@/lib/prioridad';
+import { CONFIG_PRIORIDAD, priorizarTareas } from '@/lib/prioridad';
+import { cargarContextoPlan } from '@/lib/plan/cargar';
+import { horasLibresPorDia } from '@/lib/plan/huecos';
+import { CONFIG_PLAN } from '@/lib/plan/planificador';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 
@@ -19,7 +22,19 @@ export async function GET() {
       orderBy: { fechaLimite: 'asc' },
       include: { materia: { select: { id: true, nombre: true, color: true } } },
     });
-    return NextResponse.json({ tareas: priorizarTareas(tareas) });
+    // Horas de estudio por día: las reales (huecos de las próximas 2 semanas, con tope de 4 h), no un 3 fijo
+    let horasEstudioPorDia = CONFIG_PRIORIDAD.horasEstudioPorDia;
+    try {
+      const ahora = new Date();
+      const ctx = await cargarContextoPlan(user.id, ahora, new Date(ahora.getTime() + 14 * 86_400_000), ahora);
+      horasEstudioPorDia = Math.max(0.5, horasLibresPorDia(ctx.dias, CONFIG_PLAN.maxEstudioDiaMin / 60));
+    } catch (error) {
+      console.error('Capacidad de estudio: se usa el valor por defecto', error);
+    }
+    return NextResponse.json({
+      tareas: priorizarTareas(tareas, new Date(), { ...CONFIG_PRIORIDAD, horasEstudioPorDia }),
+      horasEstudioPorDia,
+    });
   } catch (error) {
     console.error('Error GET /api/tareas:', error);
     return NextResponse.json({ error: 'Error al obtener tareas' }, { status: 500 });

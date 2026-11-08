@@ -123,6 +123,7 @@ model Tarea {
   @@map("tareas")
 }
 
+// Bloques de estudio del plan (Fase 2). motivo = 'estudio' | 'repaso'; estado = 'aceptada' | 'cumplida' | 'omitida'
 model Sugerencia {
   id            String    @id @default(uuid())
   usuarioId     String    @map("usuario_id")
@@ -140,6 +141,7 @@ model Sugerencia {
   tarea    Tarea    @relation(fields: [tareaId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId, fechaInicio])
+  @@index([tareaId])
   @@map("sugerencias")
 }
 

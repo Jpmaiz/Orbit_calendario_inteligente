@@ -243,6 +243,60 @@ paths:
                   clases: { type: array, items: { $ref: "#/components/schemas/Clase" } }
                   eventos: { type: array, items: { $ref: "#/components/schemas/Evento" } }
                   tareas: { type: array, items: { $ref: "#/components/schemas/Tarea" } }
+                  bloques: { type: array, items: { $ref: "#/components/schemas/BloqueEstudio" }, description: "Plan de estudio aceptado (Fase 2)" }
+
+  /api/plan/{tareaId}:
+    parameters:
+      - { name: tareaId, in: path, required: true, schema: { type: string, format: uuid } }
+    get:
+      tags: [Plan]
+      summary: Propone un plan de estudio en los huecos libres hasta la fecha (no guarda)
+      description: >
+        Código determinista (src/lib/plan). Bloques de 60 min (50 + 10 de pausa), máximo 2 h de la materia y 4 h de estudio
+        por día, examen en al menos 3 días con repaso el día anterior y nada el mismo día del examen.
+      parameters:
+        - { name: horas, in: query, required: false, schema: { type: number }, description: "Total elegido con − / +. Si falta, la estimación" }
+      responses:
+        "200":
+          description: Propuesta
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tarea: { type: object, properties: { id: { type: string }, titulo: { type: string }, tipo: { type: string }, fechaLimite: { type: string }, horas: { type: number } } }
+                  propuesta:
+                    type: object
+                    properties:
+                      bloques: { type: array, items: { type: object, properties: { inicio: { type: string }, fin: { type: string }, minutos: { type: integer }, tipo: { type: string, enum: [estudio, repaso] } } } }
+                      minutosNecesarios: { type: integer }
+                      minutosPlanificados: { type: integer }
+                      faltanMin: { type: integer, description: "> 0: no alcanza el tiempo" }
+                      aviso: { type: [string, "null"], example: "Solo caben 2 h de ~6 h antes del domingo." }
+                  guardado: { type: array, items: { $ref: "#/components/schemas/BloqueEstudio" } }
+                  conflictos: { type: array, items: { type: object, properties: { id: { type: string }, motivo: { type: string } } }, description: "Bloques guardados que ahora pisan una clase o evento" }
+                  huecos: { type: array, items: { type: object, properties: { dia: { type: string }, diaSemana: { type: integer }, huecos: { type: array, items: { type: object } } } } }
+        "404": { description: Actividad no encontrada }
+        "409": { description: La actividad ya está cerrada }
+    post:
+      tags: [Plan]
+      summary: Guarda el plan que eligió el usuario (reemplaza sus bloques futuros)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [bloques]
+              properties:
+                bloques: { type: array, maxItems: 40, items: { type: object, required: [inicio, fin], properties: { inicio: { type: string, format: date-time }, fin: { type: string, format: date-time }, tipo: { type: string, enum: [estudio, repaso] } } } }
+      responses:
+        "200": { description: "{ bloques: BloqueEstudio[], minutosPlanificados, resumen, choques: [{ inicio, titulo }] }" }
+        "400": { description: "Bloque de menos de 15 min o más de 4 h, después de la fecha, ya pasado, o bloques que se cruzan" }
+    delete:
+      tags: [Plan]
+      summary: Quita el plan futuro de la actividad
+      responses: { "200": { description: "{ eliminados }" } }
 
   /api/eventos:
     get:
@@ -485,6 +539,16 @@ components:
         - { type: object, required: [accion, materiaId], properties: { accion: { const: vincular }, materiaId: { type: string } } }
         - { type: object, required: [accion, nombre], properties: { accion: { const: crear }, nombre: { type: string }, codigo: { type: [string, "null"] } } }
         - { type: object, properties: { accion: { const: ninguna } } }
+
+    BloqueEstudio:
+      type: object
+      properties:
+        id: { type: string }
+        inicio: { type: string, format: date-time }
+        fin: { type: string, format: date-time }
+        tipo: { type: string, enum: [estudio, repaso] }
+        estado: { type: string, enum: [aceptada, cumplida, omitida] }
+        tarea: { type: object, description: "Solo en /api/agenda: { id, titulo, tipo, materia }" }
 
     ItemConfirmado:
       type: object

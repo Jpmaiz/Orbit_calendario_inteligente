@@ -12,6 +12,7 @@ const MAX_DIAS = 62;
  * - clases: EventoFijo VIGENTES en el rango (una fila por día de la semana; el front las repite)
  * - eventos: Evento de una vez que se cruzan con el rango
  * - tareas: tareas con fecha límite dentro del rango
+ * - bloques: bloques de estudio aceptados del plan (Fase 2), con su actividad
  */
 export async function GET(req: NextRequest) {
   const user = await obtenerUsuario();
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
     }
 
     const materia = { select: { id: true, nombre: true, color: true } };
-    const [clases, eventos, tareas] = await Promise.all([
+    const [clases, eventos, tareas, bloques] = await Promise.all([
       prisma.eventoFijo.findMany({
         where: {
           usuarioId: user.id,
@@ -68,11 +69,30 @@ export async function GET(req: NextRequest) {
         orderBy: { fechaLimite: 'asc' },
         include: { materia },
       }),
+      prisma.sugerencia.findMany({
+        where: {
+          usuarioId: user.id,
+          estado: { in: ['aceptada', 'cumplida'] },
+          fechaInicio: { lte: hasta },
+          fechaFin: { gte: desde },
+          tarea: { eliminadoEn: null },
+        },
+        orderBy: { fechaInicio: 'asc' },
+        select: {
+          id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true,
+          tarea: { select: { id: true, titulo: true, tipo: true, materia } },
+        },
+      }),
     ]);
 
-    return NextResponse.json({ desde, hasta, zonaHoraria: zona, clases, eventos, tareas });
+    return NextResponse.json({
+      desde, hasta, zonaHoraria: zona, clases, eventos, tareas,
+      bloques: bloques.map((b) => ({
+        id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, tarea: b.tarea,
+      })),
+    });
   } catch (error) {
     console.error('Error GET /api/agenda:', error);
     return NextResponse.json({ error: 'Error al obtener la agenda' }, { status: 500 });
   }
-}
+}

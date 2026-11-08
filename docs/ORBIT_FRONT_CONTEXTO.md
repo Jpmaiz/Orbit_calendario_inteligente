@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.4 · 08/11/2026)
+# Orbit — Contexto del backend para el front (v2.5 · 08/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.5 (08/11) — plan de estudio](#novedades-25)
 ★ [Novedades de la v2.4 (08/11) — horas, dificultad y "vence con"](#novedades-24)
 ★ [Novedades de la v2.3 (29/10) — captura por foto y PDF](#novedades-23)
 ★ [Novedades de la v2.2 (28/10) — leer primero si ya integraste la v2.1](#novedades)
@@ -22,6 +23,30 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-25"></a>
+## ★ Novedades de la v2.5 (08/11/2026)
+
+**Fase 2: plan de estudio.** Orbit reparte las horas de una actividad en los huecos libres hasta su fecha.
+
+**Flujo sugerido**
+1. Después de confirmar una tarea con `estimado.horas >= 1`, invitación discreta: "Necesita ~6 h. Te armé un plan con tus
+   horas libres. **Ver plan** · Ahora no". "Ahora no" no vuelve a preguntar; la tarjeta queda con "Planificar".
+2. **Ver plan** → `GET /api/plan/{tareaId}` devuelve `propuesta.bloques` (ya colocados), `huecos` (por día, para tocar un
+   hueco y agregar un bloque) y `guardado` (si ya tenía plan).
+3. En la vista de semana: tocar un hueco agrega un bloque de 60 min; tocar un bloque lo quita; los botones − / + llaman de
+   nuevo al GET con `?horas=6.5` (paso de media hora). Contador: "4 h 10 de ~6 h" con `minutosPlanificados` / `minutosNecesarios`.
+4. **Guardar plan** → `POST /api/plan/{tareaId}` con `{ bloques: [{ inicio, fin, tipo }] }`. Reemplaza los bloques futuros
+   de esa actividad. Si responde `choques`, avisar ("se cruza con Farmacología").
+5. `propuesta.aviso` (por ejemplo, "Solo caben 2 h de ~6 h antes del domingo.") se muestra tal cual.
+6. Si `conflictos` trae algo (una clase o evento nuevo cayó encima de un bloque), preguntar antes de moverlo.
+
+**En la agenda:** `GET /api/agenda` trae `bloques` (inicio, fin, tipo estudio/repaso, tarea). Pintarlos con el color
+de la materia y menos intensidad que una clase. `tipo: "repaso"` puede llevar una marca.
+
+**Quitar el plan:** `DELETE /api/plan/{tareaId}`. Al completar una tarea, sus bloques futuros se quitan solos.
 
 ---
 

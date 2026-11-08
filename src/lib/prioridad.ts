@@ -13,7 +13,7 @@
 import { horasPorDefecto } from "@/lib/estimacion/rubrica";
 
 export const CONFIG_PRIORIDAD = {
-  /** Horas de estudio disponibles por día (fuera de clases). Fase 5: saldrá del horario real. */
+  /** Horas de estudio disponibles por día. Valor por defecto: GET /api/tareas lo reemplaza por el real (huecos del horario). */
   horasEstudioPorDia: 3,
   /**
    * Colchón por la "falacia de planificación" (Buehler et al., 1994): la gente subestima
@@ -252,4 +252,4 @@ export function priorizarTareas<T extends TareaParaPriorizar>(
         b.prioridadCalculada.puntaje - a.prioridadCalculada.puntaje ||
         new Date(a.fechaLimite).getTime() - new Date(b.fechaLimite).getTime(),
     );
-}
+}

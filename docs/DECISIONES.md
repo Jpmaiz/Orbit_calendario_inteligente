@@ -101,3 +101,13 @@ genera una tarea "Preparación: …" que vence al empezar el evento. El evento e
 se quedan en el backend (`Tarea.estimacion`, motor de prioridad). `carga` (ligera, media, pesada) sirve solo para color.
 **Por qué:** al estudiante le interesa cuánto tiempo necesita, no un puntaje de dificultad ni la explicación del cálculo.
 
+### D19. Planificador determinista de bloques de estudio
+**Qué:** `src/lib/plan/` reparte las horas de una actividad en los huecos libres (franja 07:00–22:30 menos clases,
+eventos y otros bloques, con 15 min de margen). Bloques de 60 min (50 + 10 de pausa), máximo 2 h de la materia y 4 h de
+estudio por día; un examen va en al menos 3 días, con repaso corto el día anterior y nada el mismo día; los días se eligen
+repartidos y los más cercanos a la fecha reciben más. Si no alcanza, se arma lo que cabe y se dice cuánto falta.
+**Por qué:** estudio espaciado (Cepeda et al., 2006) y pausas fijas (Biwer et al., 2023); la IA no decide horarios.
+**Datos:** los bloques aceptados se guardan en `sugerencias` (motivo estudio/repaso, estado aceptada/cumplida/omitida);
+el plan propuesto no se guarda hasta "Guardar plan". La capacidad diaria del motor de prioridad sale de los huecos reales.
+**Pendiente:** franja preferida del usuario (Fase 3 la aprende de los bloques que mueve); replanificar todo de una vez.
+
