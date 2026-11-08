@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Guía de experiencia de usuario — Fases 1 a 3 (leer antes de diseñar)](#guia-ux)
 ★ [Novedades de la v2.6 (08/11) — Orbit aprende sin pedir nada](#novedades-26)
 ★ [Novedades de la v2.5 (08/11) — plan de estudio](#novedades-25)
 ★ [Novedades de la v2.4 (08/11) — horas, dificultad y "vence con"](#novedades-24)
@@ -24,6 +25,111 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="guia-ux"></a>
+## ★ Guía de experiencia de usuario — Fases 1 a 3
+
+> Para las pantallas nuevas (horas estimadas, plan de estudio, pregunta de la semana). Usa la tipografía (Geist),
+> los colores y las animaciones `orbit-*` que ya están en `globals.css`. Si algo de esta guía choca con lo que ya
+> funciona bien en la app, dilo antes de cambiarlo.
+
+### Principios (no romperlos)
+
+1. **Orbit propone, el usuario decide con un toque.** Nunca un formulario para algo que Orbit ya sabe.
+2. **Cero mantenimiento.** No pedir marcar tareas ni bloques, no confirmar dos veces, nada de notificaciones insistentes.
+   Si el usuario no hace nada, todo está bien.
+3. **Solo horas.** Se muestra "~6 h". La dificultad nunca aparece como número ni texto: solo como color (`carga`).
+   Nada de explicaciones del cálculo.
+4. **Una acción principal por pantalla.** Lo secundario va como enlace de texto ("Ahora no", "Cancelar").
+5. **Calma.** Animaciones de 400 ms o menos con las clases `orbit-*` existentes; respetar `prefers-reduced-motion`.
+
+### Colores
+
+| Uso | Color |
+|---|---|
+| Texto · secundario · borde | `#263D34` · `#647168` · `#E3E8DE` |
+| Acción principal · foco | `#35695D` · `#28746B` |
+| Aviso (fondo · texto) | `#FCF2DE` · `#916820` |
+| Éxito (fondo · texto) | `#E7F8EF` · `#1F5D50` |
+| Error | `#A34955` |
+| Carga ligera · media · pesada | `#82AB95` · `#C5A355` · `#C98B7A` |
+
+La carga se pinta como **punto o borde izquierdo de 3 px**, nunca como etiqueta. Para lectores de pantalla:
+`aria-label="Carga media"` (no visible).
+
+### Formato de horas
+
+`< 1 h` → "~45 min" · `1 h` → "~1 h" · `6.5` → "~6 h 30". Siempre con "~": es una estimación.
+
+### Pantalla por pantalla
+
+**1. Tarjeta del borrador (tarea)**
+- Chip "~6 h 30" con el punto de color de la carga, a la derecha de la fecha. Eventos y clases no llevan chip.
+- Fecha deducida (`opcionesFecha` de una opción): chip "mar 10 nov · Confirmar" con borde de aviso hasta que lo toque.
+- Materia deducida (`seguro: false`): se muestra con un "¿Es Anatomía Patológica?" de un toque, no como error.
+
+**2. Después de confirmar: invitación al plan**
+- Solo si alguna tarea tiene `estimado.horas >= 1`. Una sola invitación, para la que vence antes:
+  "Necesita ~6 h. Te armé un plan con tus horas libres." → **Ver plan** (botón) · Ahora no (texto).
+- Las demás tareas quedan con un enlace "Planificar" en su tarjeta. No apilar invitaciones.
+- "Ahora no" cierra y no vuelve a preguntar por esa tarea.
+
+**3. Vista del plan** (hoja inferior en móvil, panel lateral en escritorio)
+- Encabezado: título de la actividad y "~6 h hasta el mié 11".
+- Grilla de la semana, con el mismo estilo que la mini semana del horario (`BorradorHorario`):
+  - Huecos libres (`huecos`): áreas muy suaves con borde punteado.
+  - Bloques propuestos: color de la materia al 30 %, con entrada `orbit-bloque`. El repaso lleva una marca "R".
+  - Si la fecha está a más de 7 días: pestañas por semana.
+- Interacciones:
+  - Tocar un hueco → agrega un bloque de 60 min en ese punto (ajustado a 15 min y al hueco).
+  - Tocar un bloque → "Quitar".
+  - Stepper − / + de 30 min → vuelve a pedir `GET ?horas=` (con 300 ms de espera). Si el usuario ya movió bloques a
+    mano, avisar antes: "Esto rehace el plan".
+- Contador con barra: "4 h de ~6 h" (`minutosPlanificados` / `minutosNecesarios`), con `aria-live`.
+- `propuesta.aviso`: franja de aviso arriba de la grilla, tal cual llega.
+- Botones: **Guardar plan** · Cancelar. Al guardar: aviso breve "Plan guardado · 6 h" y los bloques aparecen en la agenda.
+  Si el POST devuelve `choques`: una línea por cruce bajo el contador ("Se cruza con Farmacología"), sin bloquear.
+- Sin huecos: "No quedan horas libres antes del miércoles." y solo el botón Cerrar.
+
+**4. Agenda**
+- Bloques de estudio más suaves que una clase: color de la materia al 18 % y borde izquierdo punteado.
+  Texto "Estudio · Examen de Redes" o "Repaso · Examen de Redes".
+- Tocar un bloque → hoja con "Mover" (abre la vista del plan). Sin ✓ ni ✗.
+- Si un bloque está en `conflictos`: punto de aviso y "Se cruza con X. ¿Lo muevo?" → **Mover**.
+
+**5. Pregunta de la semana**
+- Tarjeta arriba del día o del calendario (no modal, no notificación), con X para cerrar.
+- `texto` + tres botones del mismo tamaño: Menos · Lo justo · Más.
+- Al tocar: "Gracias" por 1,5 s y la tarjeta se cierra (`orbit-pop`). Si la cierra con la X, no llamar a nada.
+
+**6. Actividades que ya pasaron**
+- Aparecen como hechas (check suave, texto atenuado) sin preguntar nada.
+- En su menú, la opción de texto "Reabrir" (`PATCH { estado: "pendiente" }`).
+
+### Lo que NO hacer
+
+- Mostrar dificultad, razones, supuestos de la estimación o el factor personal.
+- Pedir marcar tareas o bloques como hechos, o mostrar rachas o porcentajes de cumplimiento.
+- Mandar notificaciones para la pregunta semanal o para el plan.
+- Abrir la vista del plan sin que el usuario la pida.
+- Usar rojo para cosas que no son errores (un plan que no alcanza es un aviso, no un error).
+
+### Accesibilidad
+
+Áreas táctiles de 44 px como mínimo, foco visible (`#28746B`), contraste AA, `aria-live` en el contador y en los avisos.
+La carga es lo único que se expresa solo con color, y lleva su `aria-label`.
+
+### Lista para dar por terminado
+
+- [ ] Chip de horas con color de carga en el borrador y en la tarjeta de la tarea.
+- [ ] Invitación al plan después de confirmar (una sola) y enlace "Planificar".
+- [ ] Vista del plan: grilla, tocar hueco y bloque, stepper, contador, aviso, guardar, choques.
+- [ ] Bloques de estudio en la agenda y aviso de conflictos.
+- [ ] Pregunta de la semana como tarjeta descartable.
+- [ ] Actividades pasadas como hechas, con "Reabrir".
+- [ ] Probado en móvil (375 px) y con `prefers-reduced-motion`.
 
 ---
 
