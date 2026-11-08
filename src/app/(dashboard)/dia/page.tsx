@@ -1,4 +1,6 @@
 import AgendaDiaVista from '@/components/calendario/AgendaDiaVista';
+import PreguntaAprendizaje from '@/components/aprendizaje/PreguntaAprendizaje';
+import { diaEnBolivia } from '@/components/calendario/organizarTareasDia';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 
@@ -11,22 +13,22 @@ async function cargarDatosDia() {
       ? user.user_metadata.full_name
       : user?.email?.split('@')[0] ?? 'estudiante';
 
-  if (!user) return { nombre: nombreSesion, fechaActual };
+  if (!user) return { nombre: nombreSesion, fechaActual, usuarioId: null };
 
   try {
     const perfil = await prisma.usuario.findUnique({
       where: { id: user.id },
       select: { nombre: true },
     });
-    return { nombre: perfil?.nombre || nombreSesion, fechaActual };
+    return { nombre: perfil?.nombre || nombreSesion, fechaActual, usuarioId: user.id };
   } catch {
     console.warn('No se pudo cargar el nombre del perfil.');
-    return { nombre: nombreSesion, fechaActual };
+    return { nombre: nombreSesion, fechaActual, usuarioId: user.id };
   }
 }
 
 export default async function PaginaDia() {
-  const { nombre, fechaActual } = await cargarDatosDia();
+  const { nombre, fechaActual, usuarioId } = await cargarDatosDia();
   const primerNombre = nombre.trim().split(/\s+/)[0] || 'estudiante';
   const fechaFormateada = fechaActual.toLocaleDateString('es-BO', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -47,6 +49,7 @@ export default async function PaginaDia() {
         </div>
       </header>
 
+      {usuarioId && <PreguntaAprendizaje key={usuarioId + ':' + diaEnBolivia(fechaActual)} claveConsulta={usuarioId + ':' + diaEnBolivia(fechaActual)} />}
       <AgendaDiaVista fechaActual={fechaActual.toISOString()} />
     </div>
   );
