@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import PanelPlanEstudio from '../plan/PanelPlanEstudio';
-import type { EstadoTarea, PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
+import IndicadorEstimacion from '../estimacion/IndicadorEstimacion';
+import { formatearHoras } from '../estimacion/estimacionFrontend';
+import type { EstadoTarea, EstimacionTarea, PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
 
-type TareaTarjeta = TareaConHoraDefinida & {
+type TareaTarjeta = TareaConHoraDefinida & EstimacionTarea & {
   id: string;
   titulo: string;
   fechaLimite: string;
@@ -49,7 +51,6 @@ const estilosNivel: Record<PrioridadCalculada['nivel'], { linea: string; etiquet
   vencida: { linea: '#B24C54', etiqueta: 'bg-[#F9E7E7] text-[#923C43]', nombre: 'Vencida' },
   ninguna: { linea: '#9AA69C', etiqueta: 'bg-[#EEF1ED] text-[#5F6E63]', nombre: 'Sin prioridad' },
 };
-const nombresPrioridad: Record<string, string> = { alta: 'Alta', media: 'Media', baja: 'Baja' };
 
 export default function TarjetaTarea({ tarea, contexto }: Props) {
   const router = useRouter();
@@ -149,44 +150,20 @@ export default function TarjetaTarea({ tarea, contexto }: Props) {
           {tarea.materia.nombre}
         </p>}
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <IndicadorEstimacion estimado={tarea.estimado} horasDelUsuario={tarea.horasDelUsuario} />
           {estiloNivel ? <span className={'rounded-full px-2 py-1 font-medium ' + estiloNivel.etiqueta}>
             Prioridad calculada: {estiloNivel.nombre}
           </span> : <span className="text-[#75816F]">Prioridad calculada no disponible</span>}
           {tarea.estado !== 'pendiente' && !completada && <span className="text-[#647168]">{nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</span>}
         </div>
-        {calculada && calculada.sobrecargaHoras > 0 && (
-          <p className="mt-2 inline-block rounded-lg bg-[#FAF0DB] px-2.5 py-1.5 text-xs font-medium text-[#806020]">
-            Sobrecarga: {calculada.sobrecargaHoras} h
-          </p>
-        )}
+        {calculada && calculada.sobrecargaHoras > 0 && <p className="mt-2 inline-block rounded-lg bg-[#FAF0DB] px-2.5 py-1.5 text-xs font-medium text-[#806020]">
+          Sobrecarga: {formatearHoras(calculada.sobrecargaHoras)}
+        </p>}
         <details className="mt-2 border-t border-[#F0F2EC] text-sm text-[#526A5A]">
-          <summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35695D]">{calculada ? '¿Por qué?' : 'Detalles'}</summary>
+          <summary className="min-h-11 cursor-pointer py-3 text-xs font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35695D]">Detalles</summary>
           <div className="space-y-3 pb-3 text-xs leading-5">
             <p>Vencimiento: {fechaFormateada}{!tarea.horaDefinida && ' · Hora por definir'}</p>
-            <p>Prioridad elegida: {nombresPrioridad[tarea.prioridad] ?? tarea.prioridad}</p>
             {!completada && <p>Estado: {nombresEstado[tarea.estado as EstadoTarea] ?? tarea.estado}</p>}
-            {calculada && <>
-            <p className="whitespace-pre-wrap">{calculada.mensaje}</p>
-            {calculada.desglose.origenHoras === 'por_tipo' && (
-              <p className="mb-3 leading-5">Horas estimadas por tipo de tarea</p>
-            )}
-            <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {[
-                ['Urgencia', calculada.desglose.urgencia],
-                ['Importancia', calculada.desglose.importancia],
-                ['Horas base', calculada.desglose.horasBase],
-                ['Factor de colchón', calculada.desglose.factorColchon],
-                ['Horas de otras tareas', calculada.desglose.horasOtrasTareas],
-                ['Horas necesarias', calculada.horasNecesarias],
-                ['Holgura (días)', calculada.holguraDias],
-                ['Horas por día', calculada.horasPorDia],
-              ].map(([nombre, valor]) => (
-                <div key={nombre} className="flex flex-wrap justify-between gap-x-3 gap-y-1">
-                  <dt>{nombre}</dt><dd className="font-semibold">{valor}</dd>
-                </div>
-              ))}
-            </dl>
-            </>}
           </div>
         </details>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-x-3 border-t border-[#F0F2EC]">

@@ -1,6 +1,8 @@
 import { esPeriodoActual, type PeriodoAcademico } from '../periodos/periodosFrontend';
 import { diaEnBolivia } from '../calendario/organizarTareasDia';
 import { fechaElegidaISO } from './flujoCaptura';
+import type { Estimado } from '@/tipos/tarea';
+import { leerEstimado } from '../estimacion/estimacionFrontend';
 
 export const tiposTarea = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'] as const;
 export type ClaseItem = 'tarea' | 'evento' | 'evento_fijo';
@@ -15,6 +17,7 @@ export type PropuestaMateria =
   | { accion: 'crear'; nombre: string; codigo: string | null; clave: string }
   | { accion: 'preguntar_nombre'; codigo: string };
 export type ItemExtraido = {
+  estimado?: Estimado | null;
   clase: ClaseItem; titulo: string; tipo: string | null; fechaDicha: unknown;
   venceCon: number | null; // Posición del destino en la lista original, nunca un ID.
   hora: string | null; horaFin: string | null; diasSemana: number[];
@@ -106,6 +109,7 @@ export function leerBorrador(v: unknown): Borrador {
       const vg = i.vigencia === null ? null : objeto(i.vigencia);
       const d = i.duplicado === null ? null : objeto(i.duplicado);
       return {
+        estimado: i.clase === 'tarea' ? leerEstimado(i.estimado) : null,
         clase: i.clase, titulo: texto(i.titulo), tipo: nullable(i.tipo), fechaDicha: i.fechaDicha, venceCon,
         hora: nullable(i.hora), horaFin: nullable(i.horaFin), diasSemana: lista(i.diasSemana).map(numero),
         materia: nullable(i.materia), codigoMateria: nullable(i.codigoMateria), descripcion: nullable(i.descripcion),

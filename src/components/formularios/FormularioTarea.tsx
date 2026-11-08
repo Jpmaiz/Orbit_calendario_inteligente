@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { esDificultad } from '@/tipos/tarea';
+import { minutosDesdeHoras } from '../estimacion/estimacionFrontend';
 import type { Dificultad, TareaConHoraDefinida } from '@/tipos/tarea';
 import { HORA_POR_TIPO, instanteEnZona } from '@/lib/fechas/resolverFecha';
 import { useRouter } from 'next/navigation';
@@ -51,7 +51,7 @@ export function fechaParaEnvio(fecha: string, hora: string, tipo: string, horaDe
   return limite;
 }
 
-type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'horaLimite' | 'duracionEstMin' | 'prioridad' | 'dificultad';
+type Campo = 'titulo' | 'tipo' | 'fechaLimite' | 'horaLimite' | 'duracionEstMin' | 'prioridad';
 type DatosCreacion = Omit<ValoresTarea, 'materia'>;
 type Duplicado = { pregunta: string; sugerenciasDiferencia: string[]; datos: DatosCreacion };
 
@@ -167,9 +167,8 @@ export default function FormularioTarea(props: Props = {}) {
     const prioridad = String(datos.get('prioridad') ?? '');
     const duracionTexto = String(datos.get('duracionEstMin') ?? '').trim();
     const duracionInvalida = (formulario.elements.namedItem('duracionEstMin') as HTMLInputElement).validity.badInput;
-    const duracionEstMin = duracionTexto === '' ? null : Number(duracionTexto);
-    const dificultadTexto = String(datos.get('dificultad') ?? '');
-    const dificultad = dificultadTexto === '' ? null : Number(dificultadTexto);
+    const duracionEstMin = minutosDesdeHoras(duracionTexto);
+    const dificultad = iniciales?.dificultad ?? null;
     const descripcion = String(datos.get('descripcion') ?? '').trim();
     const materiaId = materiaSeleccionada;
     const nuevosErrores: Partial<Record<Campo, string>> = {};
@@ -183,9 +182,8 @@ export default function FormularioTarea(props: Props = {}) {
       nuevosErrores.horaLimite = 'Selecciona una hora válida o marca Hora por definir.';
     }
     if (duracionInvalida || (duracionEstMin !== null && (!Number.isInteger(duracionEstMin) || duracionEstMin <= 0 || duracionEstMin > 6000))) {
-      nuevosErrores.duracionEstMin = 'Ingresa una duración de 1 a 6000 minutos, sin decimales, o deja el campo vacío.';
+      nuevosErrores.duracionEstMin = 'Indica entre 1 minuto y 100 horas; puedes usar horas decimales o dejar el campo vacío.';
     }
-    if (!esDificultad(dificultad)) nuevosErrores.dificultad = 'Selecciona una dificultad de 1 a 5 o Sin especificar.';
     if (!prioridades.some(([valor]) => valor === prioridad)) nuevosErrores.prioridad = 'Selecciona una prioridad.';
     establecerErrores(nuevosErrores);
     establecerError(null);
@@ -195,8 +193,6 @@ export default function FormularioTarea(props: Props = {}) {
       (formulario.elements.namedItem(primerCampo) as HTMLElement | null)?.focus();
       return;
     }
-
-    if (!esDificultad(dificultad)) return;
 
     const cambios: Partial<Omit<ValoresTarea, 'materia'>> = {};
     if (iniciales) {
@@ -211,7 +207,6 @@ export default function FormularioTarea(props: Props = {}) {
       if (horaDefinida !== iniciales.horaDefinida) cambios.horaDefinida = horaDefinida;
       if (prioridad !== iniciales.prioridad) cambios.prioridad = prioridad;
       if (duracionEstMin !== iniciales.duracionEstMin) cambios.duracionEstMin = duracionEstMin;
-      if (dificultad !== iniciales.dificultad) cambios.dificultad = dificultad;
       if (descripcion !== (iniciales.descripcion ?? '')) cambios.descripcion = descripcion || null;
       if (materiaId !== (iniciales.materiaId ?? '')) cambios.materiaId = materiaId || null;
       if (Object.keys(cambios).length === 0) {
@@ -335,21 +330,9 @@ export default function FormularioTarea(props: Props = {}) {
             {errorCampo('prioridad')}
           </div>
           <div>
-            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Duración estimada (minutos)</label>
-            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" min={1} max={6000} step={1} placeholder="Sin especificar" defaultValue={iniciales?.duracionEstMin ?? ''} className={estiloCampo} />
+            <label htmlFor={prefijo + '-duracionEstMin'} className="text-sm font-semibold">Horas estimadas</label>
+            <input {...accesibilidad('duracionEstMin')} name="duracionEstMin" type="number" min={1 / 60} max={100} step="any" placeholder="Sin especificar" defaultValue={iniciales?.duracionEstMin != null ? iniciales.duracionEstMin / 60 : ''} className={estiloCampo} />
             {errorCampo('duracionEstMin')}
-          </div>
-          <div>
-            <label htmlFor={prefijo + '-dificultad'} className="text-sm font-semibold">Dificultad</label>
-            <select {...accesibilidad('dificultad')} name="dificultad" defaultValue={iniciales?.dificultad ?? ''} className={estiloCampo}>
-              <option value="">Sin especificar</option>
-              <option value="1">1 Muy fácil</option>
-              <option value="2">2 Fácil</option>
-              <option value="3">3 Media</option>
-              <option value="4">4 Difícil</option>
-              <option value="5">5 Muy difícil</option>
-            </select>
-            {errorCampo('dificultad')}
           </div>
         </div>
         <div>

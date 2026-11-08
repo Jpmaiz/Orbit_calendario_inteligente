@@ -2,6 +2,14 @@ import type { ResultadoPrioridad } from '@/lib/prioridad';
 
 export type PrioridadCalculada = ResultadoPrioridad;
 
+export type CargaEstudio = 'ligera' | 'media' | 'pesada';
+export type Estimado = { horas: number; carga: CargaEstudio | null };
+/** Proyección frontend de la duración vigente; estimado no es un campo nuevo del API de tareas. */
+export type EstimacionTarea = {
+  duracionEstMin?: number | null; horasDelUsuario?: boolean; estimado?: Estimado | null;
+};
+
+
 export type TareaConHoraDefinida = {
   horaDefinida: boolean;
 };

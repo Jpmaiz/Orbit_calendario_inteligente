@@ -1,6 +1,7 @@
 'use client';
 
 import { useId } from 'react';
+import IndicadorEstimacion from '../estimacion/IndicadorEstimacion';
 import {
   diaISO, horaISO, problemasItem, tiposTarea,
   type ClaseItem, type ItemRevision, type MateriaUsuario,
@@ -80,6 +81,10 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
             </select>
           </div>}
         </div>
+
+        {item.clase === 'tarea' && original.estimado && (original.clase === 'tarea' && item.tipo === original.tipo
+          ? <IndicadorEstimacion estimado={original.estimado} />
+          : <p className="text-xs text-[#647168]">Las horas se actualizarán al guardar.</p>)}
 
         <section aria-labelledby={id + '-materia'} className="space-y-2 border-t border-[#E3E8DE] pt-3">
           <h4 id={id + '-materia'} className="text-xs font-semibold">Materia</h4>

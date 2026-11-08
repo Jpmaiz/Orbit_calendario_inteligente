@@ -1,8 +1,9 @@
-import type { PrioridadCalculada } from '@/tipos/tarea';
+import { leerEstimacionTarea } from '../estimacion/estimacionFrontend';
+import type { EstimacionTarea, PrioridadCalculada } from '@/tipos/tarea';
 import { diaEnBolivia } from './organizarTareasDia';
 
 type MateriaAgenda = { nombre: string; color: string } | null;
-export type TareaAgenda = {
+export type TareaAgenda = EstimacionTarea & {
   id: string; titulo: string; tipo: string; prioridad: string; estado: string;
   fechaLimite: Date; completadaEn: Date | null; horaDefinida: boolean;
   materia: MateriaAgenda;
@@ -59,6 +60,7 @@ function leerTarea(valor: unknown): TareaAgenda {
   const datos = registro(valor);
   if (typeof datos.horaDefinida !== 'boolean') throw new Error('La tarea no indica si su hora está definida.');
   return {
+    ...leerEstimacionTarea(datos),
     id: texto(datos.id), titulo: texto(datos.titulo), tipo: texto(datos.tipo),
     prioridad: texto(datos.prioridad), estado: texto(datos.estado),
     fechaLimite: fecha(datos.fechaLimite), completadaEn: fechaOpcional(datos.completadaEn),

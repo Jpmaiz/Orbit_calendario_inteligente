@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { formatearHoras } from '../estimacion/estimacionFrontend';
 import {
   cargarPlan, eliminarPlan, ErrorPlan, guardarPlan,
   type BloquePlan, type DatosPlan, type ResultadoPlan,
@@ -129,7 +130,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, onCerrar }: {
         <button type="button" disabled={ocupada} className={boton + ' underline'} onClick={() => void consultar()}>Volver a consultar</button>
       </div>}
       {datos && !cargando && <>
-        <p className="text-sm text-[#647168]">Horas sugeridas: ~{datos.tarea.horas} h · Fecha de la actividad: {fecha.format(new Date(datos.tarea.fechaLimite))}</p>
+        <p className="text-sm text-[#647168]">Horas sugeridas: {formatearHoras(datos.tarea.horas)} · Fecha de la actividad: {fecha.format(new Date(datos.tarea.fechaLimite))}</p>
         <section aria-label="Plan guardado" className="space-y-2">
           <h3 className="text-sm font-semibold">Plan guardado</h3>
           {datos.guardado.length ? <ListaBloques bloques={datos.guardado} /> : <p className="text-sm text-[#647168]">Todavía no hay bloques guardados.</p>}
