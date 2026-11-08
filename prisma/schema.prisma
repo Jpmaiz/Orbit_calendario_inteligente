@@ -30,6 +30,7 @@ model Usuario {
   interpretaciones InterpretacionIA[]
   aliasMaterias    AliasMateria[]
   periodos         PeriodoAcademico[]
+  senales          SenalAprendizaje[]
 
   @@map("usuarios")
 }
@@ -107,6 +108,9 @@ model Tarea {
   // "Vence con": entrega que se hace al empezar otro examen o evento; si ese cambia de fecha, esta se mueve
   venceConId          String?   @map("vence_con_id")
   venceConClase       String?   @map("vence_con_clase")              // 'tarea' | 'evento'
+  // Fase 3: se cierra sola al pasar la fecha (el usuario puede reabrirla y ya no se vuelve a cerrar)
+  cerradaSolaEn       DateTime? @map("cerrada_sola_en")
+  horasReales         Float?    @map("horas_reales")                 // si respondió la pregunta semanal
 
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
@@ -116,6 +120,7 @@ model Tarea {
   usuario      Usuario       @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   materia      Materia?      @relation(fields: [materiaId], references: [id])
   sugerencias  Sugerencia[]
+  senales      SenalAprendizaje[]
 
   @@index([usuarioId, fechaLimite])
   @@index([usuarioId, estado])
@@ -240,4 +245,27 @@ model PeriodoAcademico {
 
   @@index([usuarioId, fin])
   @@map("periodos_academicos")
+}
+
+// Fase 3: lo que Orbit aprende de lo que el usuario ya hace (sin pedirle marcar nada). Ver src/lib/aprendizaje/senales.ts
+model SenalAprendizaje {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  tareaId    String?  @map("tarea_id")
+  materiaId  String?  @map("materia_id")
+  tipoTarea  String?  @map("tipo_tarea")
+  clase      String                       // horas | franja | pregunta
+  fuente     String                       // plan | edicion | respuesta | mostrada
+  razon      Float?                       // horas reales ÷ horas del estudiante promedio
+  franja     String?                      // manana | tarde | noche
+  voto       Int?                         // +1 / −1
+  peso       Float    @default(1)
+
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  usuario  Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  tarea    Tarea?  @relation(fields: [tareaId], references: [id], onDelete: SetNull)
+
+  @@index([usuarioId, clase, creadoEn])
+  @@map("senales_aprendizaje")
 }

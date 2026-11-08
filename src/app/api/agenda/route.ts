@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { diaEnZona } from '@/lib/periodos/periodos';
+import { cerrarVencidas } from '@/lib/tareas/cierre';
 
 const DIA_MS = 86_400_000;
 const MAX_DIAS = 62;
@@ -39,6 +40,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: `El rango debe ser de 1 a ${MAX_DIAS} días` }, { status: 400 });
     }
 
+    await cerrarVencidas(user.id); // lo que ya pasó se da por hecho (Fase 3)
     const materia = { select: { id: true, nombre: true, color: true } };
     const [clases, eventos, tareas, bloques] = await Promise.all([
       prisma.eventoFijo.findMany({

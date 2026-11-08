@@ -111,3 +111,13 @@ repartidos y los más cercanos a la fecha reciben más. Si no alcanza, se arma l
 el plan propuesto no se guarda hasta "Guardar plan". La capacidad diaria del motor de prioridad sale de los huecos reales.
 **Pendiente:** franja preferida del usuario (Fase 3 la aprende de los bloques que mueve); replanificar todo de una vez.
 
+### D20. Aprender sin pedirle nada al usuario
+**Qué:** Orbit no pide marcar tareas ni bloques. Al pasar la fecha (+1 h) la actividad se da por hecha (`cerradaSolaEn`;
+si el usuario la reabre, no se vuelve a cerrar). Aprende de lo que el usuario ya hace: el total con que guarda un plan
+(si se aleja 30 min o más de lo estimado), los bloques que pone o saca respecto de la propuesta (franja preferida) y las
+horas que cambia a mano. Una pregunta como máximo por semana, solo de actividades de 4 h o más; ignorarla no cuenta.
+**Cálculo:** `src/lib/estimacion/personal.ts`. Razón real ÷ estimada en escala logarítmica, lo reciente pesa más (media vida
+120 días), mezcla n ÷ (n + 3) por niveles (esta materia y tipo → este tipo → otros tipos), factor entre ×0,5 y ×2. Las señales
+implícitas pesan 0,5; la respuesta y la edición, 1. El factor se aplica en silencio: el usuario solo ve las horas.
+**Por qué:** marcar cosas cansa y la app deja de usarse; el silencio cuenta como "todo bien".
+

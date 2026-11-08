@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
-import { horasPorDefecto } from '@/lib/estimacion/rubrica';
-import { inicioDePlan, limiteDePlan, planificar, textoHoras } from '@/lib/plan/planificador';
+import { textoHoras } from '@/lib/plan/planificador';
 import { bloquesEnConflicto, cargarContextoPlan } from '@/lib/plan/cargar';
+import { proponerPlan } from '@/lib/plan/proponer';
+import { franjaDe } from '@/lib/estimacion/personal';
+import { registrarFranjas, registrarHoras } from '@/lib/aprendizaje/senales';
 
 type Contexto = { params: Promise<{ tareaId: string }> };
 
@@ -14,7 +16,10 @@ const MAX_BLOQUES = 40;
 async function tareaPropia(id: string, usuarioId: string) {
   return prisma.tarea.findFirst({
     where: { id, usuarioId, eliminadoEn: null },
-    select: { id: true, titulo: true, tipo: true, materiaId: true, fechaLimite: true, horaDefinida: true, duracionEstMin: true, estado: true },
+    select: {
+      id: true, titulo: true, tipo: true, materiaId: true, fechaLimite: true, horaDefinida: true,
+      duracionEstMin: true, estado: true, estimacion: true,
+    },
   });
 }
 
@@ -44,24 +49,9 @@ export async function GET(req: NextRequest, { params }: Contexto) {
     if (!abierta(tarea.estado)) return NextResponse.json({ error: 'La actividad ya está cerrada' }, { status: 409 });
 
     const pedidas = Number(new URL(req.url).searchParams.get('horas'));
-    const horas = Number.isFinite(pedidas) && pedidas > 0
-      ? Math.min(100, Math.round(pedidas * 2) / 2)
-      : tarea.duracionEstMin ? tarea.duracionEstMin / 60 : horasPorDefecto(tarea.tipo);
-
-    const ahora = new Date();
-    const zonaUsuario = await prisma.usuario.findUnique({ where: { id: user.id }, select: { zonaHoraria: true } });
-    const limite = limiteDePlan(tarea, zonaUsuario?.zonaHoraria ?? 'America/La_Paz');
-    const desde = inicioDePlan(limite, ahora);
-    // Los bloques guardados se miran desde hoy hasta la fecha REAL (pueden haber quedado después del límite)
-    const hasta = new Date(Math.max(limite.getTime(), tarea.fechaLimite.getTime()));
-    const ctx = await cargarContextoPlan(user.id, ahora < desde ? ahora : desde, hasta, ahora, tarea.id, tarea.materiaId);
-
-    const plan = limite > ahora
-      ? planificar({ ...tarea, horas }, {
-          dias: ctx.dias.filter((d) => d.huecos.some((h) => h.inicio >= desde)),
-          zona: ctx.zona, minutosMateriaPorDia: ctx.minutosMateriaPorDia, minutosEstudioPorDia: ctx.minutosEstudioPorDia,
-        }, ahora)
-      : null;
+    const { plan, horas, ctx } = await proponerPlan(
+      user.id, tarea, Number.isFinite(pedidas) && pedidas > 0 ? Math.min(100, Math.round(pedidas * 2) / 2) : null,
+    );
 
     return NextResponse.json({
       tarea: { id: tarea.id, titulo: tarea.titulo, tipo: tarea.tipo, fechaLimite: tarea.fechaLimite, horas },
@@ -169,6 +159,14 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     }
 
     const minutos = creados.reduce((s, b) => s + Math.round((b.fechaFin.getTime() - b.fechaInicio.getTime()) / MIN_MS), 0);
+
+    // Aprendizaje (Fase 3), sin pedir nada: lo que el usuario cambió respecto de lo que Orbit propuso
+    try {
+      await aprenderDelPlan(user.id, tarea, v.bloques, ahora);
+    } catch (error) {
+      console.error('Aprendizaje del plan (no bloquea):', error);
+    }
+
     return NextResponse.json({
       bloques: creados.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado })),
       minutosPlanificados: minutos,
@@ -179,6 +177,41 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     console.error('Error POST /api/plan/[tareaId]:', error);
     return NextResponse.json({ error: 'Error al guardar el plan' }, { status: 500 });
   }
+}
+
+/**
+ * Señales que deja guardar un plan:
+ * - Horas: si el total guardado (con los bloques que ya pasaron) se aleja 30 min o más de lo estimado,
+ *   ese total es una pista de lo que realmente necesita (peso 0,5).
+ * - Franja: los bloques que puso donde Orbit no propuso votan por esa franja; los que sacó, en contra.
+ */
+async function aprenderDelPlan(
+  usuarioId: string,
+  tarea: NonNullable<Awaited<ReturnType<typeof tareaPropia>>>,
+  guardados: BloqueValido[],
+  ahora: Date,
+) {
+  const pasados = await prisma.sugerencia.findMany({
+    where: { usuarioId, tareaId: tarea.id, estado: { in: ['aceptada', 'cumplida'] }, fechaFin: { lte: ahora } },
+    select: { fechaInicio: true, fechaFin: true },
+  });
+  const minutosDe = (b: { inicio: Date; fin: Date }) => (b.fin.getTime() - b.inicio.getTime()) / MIN_MS;
+  const total = guardados.reduce((s, b) => s + minutosDe(b), 0)
+    + pasados.reduce((s, b) => s + minutosDe({ inicio: b.fechaInicio, fin: b.fechaFin }), 0);
+  const estimadoMin = tarea.duracionEstMin ?? 0;
+  if (estimadoMin > 0 && total > 0 && Math.abs(total - estimadoMin) >= 30) {
+    await registrarHoras(usuarioId, tarea, total / 60, 'plan');
+  }
+
+  const { plan, ctx } = await proponerPlan(usuarioId, tarea, total > 0 ? total / 60 : null, ahora);
+  if (!plan || !guardados.length) return;
+  const cruza = (a: { inicio: Date; fin: Date }, b: { inicio: Date; fin: Date }) => a.inicio < b.fin && b.inicio < a.fin;
+  const puestos = guardados.filter((g) => !plan.bloques.some((p) => cruza(g, p)));
+  const sacados = plan.bloques.filter((p) => !guardados.some((g) => cruza(g, p)));
+  await registrarFranjas(usuarioId, tarea.id, [
+    ...puestos.map((b) => ({ franja: franjaDe(b.inicio, ctx.zona), voto: 1 })),
+    ...sacados.map((b) => ({ franja: franjaDe(b.inicio, ctx.zona), voto: -1 })),
+  ]);
 }
 
 /** DELETE /api/plan/[tareaId] → quita el plan futuro de la actividad. 200 { eliminados } */

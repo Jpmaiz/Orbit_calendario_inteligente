@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.5 · 08/11/2026)
+# Orbit — Contexto del backend para el front (v2.6 · 08/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.6 (08/11) — Orbit aprende sin pedir nada](#novedades-26)
 ★ [Novedades de la v2.5 (08/11) — plan de estudio](#novedades-25)
 ★ [Novedades de la v2.4 (08/11) — horas, dificultad y "vence con"](#novedades-24)
 ★ [Novedades de la v2.3 (29/10) — captura por foto y PDF](#novedades-23)
@@ -23,6 +24,24 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-26"></a>
+## ★ Novedades de la v2.6 (08/11/2026)
+
+**Fase 3: Orbit aprende el ritmo del usuario sin pedirle que marque nada.**
+
+1. **No hace falta marcar tareas como hechas.** Al pasar la fecha, el backend las cierra solo (`estado: completada`,
+   `cerradaSolaEn` con fecha). No mostrar "¿la hiciste?". Si el usuario quiere reabrir una, `PATCH /api/tareas/{id}` con
+   `{ estado: "pendiente" }` y ya no se vuelve a cerrar sola.
+2. **Los bloques del plan no se marcan.** Sin ✓ ni ✗. Orbit aprende cuando el usuario cambia el plan (− / +, agregar o
+   quitar bloques) y lo guarda con el POST de siempre. No hay que mandar nada extra.
+3. **Pregunta de la semana:** al abrir la app, `GET /api/aprendizaje/pregunta`. Si trae `pregunta`, mostrar una tarjeta
+   discreta con `texto` y tres botones (Menos · Lo justo · Más) y una forma de cerrarla. Al tocar uno:
+   `POST /api/aprendizaje/pregunta` con `{ tareaId, respuesta }`. Si la cierra, no llamar a nada: no vuelve.
+   Nunca como notificación.
+4. **Las horas ya vienen ajustadas** al usuario en `estimado.horas`. No mostrar el factor ni explicaciones.
 
 ---
 

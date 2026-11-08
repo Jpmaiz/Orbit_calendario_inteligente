@@ -11,6 +11,8 @@ import { prisma } from '@/lib/prisma/cliente';
 import { resolverFecha, HORA_POR_TIPO } from '@/lib/fechas/resolverFecha';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 import { cargaDe, estimar } from '@/lib/estimacion/rubrica';
+import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
+import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
@@ -39,9 +41,11 @@ export async function cargarContexto(usuarioId: string, ahora: Date) {
     }),
     periodoVigente(usuarioId, ahora),
   ]);
+  const aprendido = await cargarAprendizaje(usuarioId, ahora);
   return {
     zona: usuario?.zonaHoraria ?? 'America/La_Paz',
     materias, alias, clases: clases as ClaseFija[], eventos: eventos as EventoPuntual[], periodo,
+    senalesHoras: aprendido.horas,
   };
 }
 
@@ -163,7 +167,14 @@ export async function construirBorrador(
       ...base, materiaPropuesta, horaPropuesta, vigencia, duplicado, choques,
       // Al usuario solo le llegan las horas ("~6 h") y una carga para pintar con color.
       // Dificultad, razones y supuestos se quedan en el backend (Tarea.estimacion, motor de prioridad).
-      estimado: estimado && { horas: estimado.horas, carga: cargaDe(estimado.dificultad) },
+      estimado: estimado && {
+        // Fase 3: ajustado al ritmo del usuario (el factor no se muestra)
+        horas: aplicarFactor(estimado.horas, factorPersonal(
+          ctx.senalesHoras ?? [], materiaPropuesta.accion === 'vincular' ? materiaPropuesta.materiaId : null,
+          item.tipo ?? 'tarea', opciones.ahora,
+        ).factor),
+        carga: cargaDe(estimado.dificultad),
+      },
     });
   }
 

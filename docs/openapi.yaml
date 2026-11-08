@@ -298,6 +298,31 @@ paths:
       summary: Quita el plan futuro de la actividad
       responses: { "200": { description: "{ eliminados }" } }
 
+  /api/aprendizaje/pregunta:
+    get:
+      tags: [Aprendizaje]
+      summary: La pregunta de la semana (o null)
+      description: >
+        Como máximo una cada 7 días, de una actividad de 4 h o más que terminó en las últimas 2 semanas y de la que Orbit no
+        aprendió nada por otro lado. Al devolverla queda registrada: si el usuario la ignora, no vuelve.
+      responses:
+        "200": { description: "{ pregunta: { tareaId, titulo, texto, horasSugeridas, opciones: [menos, justo, mas] } | null }" }
+    post:
+      tags: [Aprendizaje]
+      summary: Guarda la respuesta (un toque)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tareaId]
+              properties:
+                tareaId: { type: string }
+                respuesta: { type: string, enum: [menos, justo, mas] }
+                horas: { type: number, description: "Opcional: horas exactas; mandan sobre la respuesta" }
+      responses: { "200": { description: "{ ok: true }" } }
+
   /api/eventos:
     get:
       tags: [Clases]

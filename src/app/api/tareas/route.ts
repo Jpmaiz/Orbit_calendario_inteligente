@@ -6,6 +6,7 @@ import { CONFIG_PRIORIDAD, priorizarTareas } from '@/lib/prioridad';
 import { cargarContextoPlan } from '@/lib/plan/cargar';
 import { horasLibresPorDia } from '@/lib/plan/huecos';
 import { CONFIG_PLAN } from '@/lib/plan/planificador';
+import { cerrarVencidas } from '@/lib/tareas/cierre';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 
@@ -17,6 +18,8 @@ export async function GET() {
   }
 
   try {
+    // Lo que ya pasó se da por hecho (Fase 3): el usuario no tiene que marcar nada
+    await cerrarVencidas(user.id);
     const tareas = await prisma.tarea.findMany({
       where: { usuarioId: user.id, eliminadoEn: null },
       orderBy: { fechaLimite: 'asc' },

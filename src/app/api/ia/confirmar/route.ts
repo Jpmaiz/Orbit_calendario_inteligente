@@ -7,6 +7,8 @@ import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { normalizarNombre, esMismaClase, nombreDia, type ClaseFija } from '@/lib/borrador/enriquecer';
 import { validarItem, ItemConfirmado } from '@/lib/borrador/validarConfirmacion';
 import { estimar } from '@/lib/estimacion/rubrica';
+import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
+import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
@@ -131,6 +133,9 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Lo aprendido del usuario (Fase 3), leído fuera de la transacción
+    const aprendido = await cargarAprendizaje(user.id);
+
     const resultado: Resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       // 0) Idempotencia (2/2): "reservar" la interpretación. Solo UNA petición puede pasarla
       //    de 'pendiente' a 'aplicada'. Si otra llegó primero, Postgres hace esperar a esta y
@@ -208,14 +213,18 @@ export async function POST(req: NextRequest) {
           // Estimación: la IA calificó (rúbrica), el sistema calcula con el tipo final
           const leido = leidoDe(item);
           const est = estimar(item.tipo, leido?.clase === 'tarea' ? leido.estimacion : null);
+          // Fase 3: se ajusta al ritmo del usuario (sin mostrarle el factor)
+          const personal = factorPersonal(aprendido.horas, materiaId, item.tipo, ahora);
+          const horas = aplicarFactor(est.horas, personal.factor);
           const t = await tx.tarea.create({
             data: {
               usuarioId: user.id, materiaId, titulo: item.titulo, tipo: item.tipo, fechaLimite: item.inicio,
               horaDefinida: item.horaDefinida, descripcion: item.descripcion,
               prioridad: est.importancia, estado: 'pendiente', origen: 'texto',
-              duracionEstMin: est.minutos, dificultad: est.dificultad,
+              duracionEstMin: Math.round(horas * 60), dificultad: est.dificultad,
               estimacion: {
-                horas: est.horas, dificultad: est.dificultad, importancia: est.importancia, origen: est.origen,
+                horas, horasPromedio: est.horas, factorPersonal: personal.factor, datosPersonales: personal.datos,
+                dificultad: est.dificultad, importancia: est.importancia, origen: est.origen,
                 escala: est.escala, rango: est.rango, razones: est.razones, supuestos: est.supuestos,
                 lectura: leido?.estimacion ?? null,
               } as object,
@@ -321,4 +330,4 @@ export async function POST(req: NextRequest) {
     console.error('Error en /api/ia/confirmar:', error);
     return NextResponse.json({ error: 'Error al guardar el borrador' }, { status: 500 });
   }
-}
+}

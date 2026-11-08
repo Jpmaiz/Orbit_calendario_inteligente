@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { validarTarea } from '@/lib/validacion/tarea';
 import { moverVinculadas } from '@/lib/tareas/vinculos';
+import { registrarHoras } from '@/lib/aprendizaje/senales';
 
 type Contexto = { params: Promise<{ id: string }> };
 
@@ -62,6 +63,15 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (v.datos.fechaLimite !== undefined || v.datos.horaDefinida !== undefined) {
       await moverVinculadas(user.id, id, 'tarea', tarea.fechaLimite, tarea.horaDefinida);
     }
+    // Aprendizaje (Fase 3): si el usuario cambió las horas a mano, ese es su número real (peso 1)
+    if (v.datos.duracionEstMin != null && v.datos.duracionEstMin !== existente.duracionEstMin) {
+      try {
+        await registrarHoras(user.id, { ...existente, materiaId: tarea.materiaId, tipo: tarea.tipo }, v.datos.duracionEstMin / 60, 'edicion');
+      } catch (error) {
+        console.error('Aprendizaje por edición (no bloquea):', error);
+      }
+    }
+
     // Plan de estudio: si la actividad se cerró, sus bloques futuros salen del calendario
     if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
       await prisma.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: id, estado: 'aceptada', fechaInicio: { gt: new Date() } } });
