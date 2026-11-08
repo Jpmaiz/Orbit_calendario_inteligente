@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import PanelPlanEstudio from '../plan/PanelPlanEstudio';
 import type { EstadoTarea, PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
 import { useRouter } from 'next/navigation';
 import { useRef, useState, useTransition } from 'react';
@@ -52,6 +53,7 @@ const nombresPrioridad: Record<string, string> = { alta: 'Alta', media: 'Media',
 
 export default function TarjetaTarea({ tarea, contexto }: Props) {
   const router = useRouter();
+  const [planAbierto, setPlanAbierto] = useState(false);
   const [accion, establecerAccion] = useState<'estado' | 'eliminar' | null>(null);
   const [error, establecerError] = useState<string | null>(null);
   const [confirmarEliminacion, establecerConfirmarEliminacion] = useState(false);
@@ -203,6 +205,10 @@ export default function TarjetaTarea({ tarea, contexto }: Props) {
             {completada ? 'Reabrir' : 'Completar'}
           </label>
           <div className="flex min-w-0 flex-wrap items-center gap-1">
+            {(tarea.estado === 'pendiente' || tarea.estado === 'en_proceso') && <button type="button" disabled={ocupada} onClick={() => setPlanAbierto(true)}
+              className="min-h-11 rounded-lg px-2 text-xs font-medium text-[#35695D] hover:bg-[#F2F6EF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#35695D] disabled:opacity-50">
+              Planificar estudio
+            </button>}
             {ocupada ? (
               <span aria-disabled="true" className="inline-flex min-h-11 items-center px-2 text-xs text-[#A3ABA0]">Editar</span>
             ) : (
@@ -238,6 +244,7 @@ export default function TarjetaTarea({ tarea, contexto }: Props) {
           </p>
         )}
       </div>
+      {planAbierto && <PanelPlanEstudio tareaId={tarea.id} titulo={tarea.titulo} onCerrar={() => setPlanAbierto(false)} />}
     </article>
   );
 }
