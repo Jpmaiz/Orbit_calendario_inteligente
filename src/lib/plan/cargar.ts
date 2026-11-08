@@ -18,7 +18,7 @@ export type ContextoDeUsuario = {
   dias: HuecosDelDia[];
   minutosMateriaPorDia: Map<string, number>;
   minutosEstudioPorDia: Map<string, number>;
-  propios: BloqueGuardado[];                 // bloques aceptados de esta actividad (desde `desde`)
+  propios: BloqueGuardado[];                 // TODOS los bloques futuros aceptados de esta actividad
 };
 
 /**
@@ -28,7 +28,7 @@ export type ContextoDeUsuario = {
 export async function cargarContextoPlan(
   usuarioId: string, desde: Date, hasta: Date, ahora: Date, tareaId?: string, materiaId?: string | null,
 ): Promise<ContextoDeUsuario> {
-  const [usuario, clases, eventos, bloques] = await Promise.all([
+  const [usuario, clases, eventos, bloques, propiosFuturos] = await Promise.all([
     prisma.usuario.findUnique({ where: { id: usuarioId }, select: { zonaHoraria: true } }),
     prisma.eventoFijo.findMany({
       where: {
@@ -55,6 +55,15 @@ export async function cargarContextoPlan(
       select: { id: true, tareaId: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true, tarea: { select: { titulo: true, materiaId: true } } },
       orderBy: { fechaInicio: 'asc' },
     }),
+    // Los bloques propios se traen TODOS los futuros, sin tope: si la fecha se adelantó, los que quedaron
+    // después siguen visibles (y salen como conflicto) para poder quitarlos o reemplazarlos.
+    tareaId
+      ? prisma.sugerencia.findMany({
+          where: { usuarioId, tareaId, estado: 'aceptada', fechaFin: { gt: ahora } },
+          select: { id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true },
+          orderBy: { fechaInicio: 'asc' },
+        })
+      : Promise.resolve([]),
   ]);
   const zona: string = usuario?.zonaHoraria ?? 'America/La_Paz';
 
@@ -80,9 +89,7 @@ export async function cargarContextoPlan(
     dias: huecosLibres(desde, hasta, ocupaciones, zona, ahora),
     minutosMateriaPorDia,
     minutosEstudioPorDia,
-    propios: bloques
-      .filter((b) => b.tareaId === tareaId)
-      .map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado })),
+    propios: propiosFuturos.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado })),
   };
 }
 

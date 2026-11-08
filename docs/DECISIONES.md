@@ -120,4 +120,6 @@ horas que cambia a mano. Una pregunta como máximo por semana, solo de actividad
 120 días), mezcla n ÷ (n + 3) por niveles (esta materia y tipo → este tipo → otros tipos), factor entre ×0,5 y ×2. Las señales
 implícitas pesan 0,5; la respuesta y la edición, 1. El factor se aplica en silencio: el usuario solo ve las horas.
 **Por qué:** marcar cosas cansa y la app deja de usarse; el silencio cuenta como "todo bien".
+**Ajustes (8/11):** sin hora definida, la tarea se cierra al terminar su día (la hora guardada es interna); reabrir una tarea,
+cerrada sola o a mano, impide que se vuelva a cerrar sola hasta que cambie su fecha. Borrar las horas vuelve a la estimación.
 

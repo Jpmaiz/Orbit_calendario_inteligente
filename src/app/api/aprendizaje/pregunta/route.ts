@@ -24,28 +24,33 @@ export async function GET() {
 
   try {
     const ahora = new Date();
-    const ultima = await prisma.senalAprendizaje.findFirst({
-      where: { usuarioId: user.id, clase: 'pregunta', creadoEn: { gte: new Date(ahora.getTime() - CADA_DIAS * DIA_MS) } },
-      select: { id: true },
-    });
-    if (ultima) return NextResponse.json({ pregunta: null });
-
-    const candidata = await prisma.tarea.findFirst({
-      where: {
-        usuarioId: user.id, eliminadoEn: null, estado: 'completada',
-        duracionEstMin: { gte: MINUTOS_MINIMOS },
-        fechaLimite: { gte: new Date(ahora.getTime() - RECIENTE_DIAS * DIA_MS), lte: ahora },
-        horasReales: null,
-        senales: { none: { clase: { in: ['horas', 'pregunta'] } } }, // ya se aprendió de ella o ya se preguntó
-      },
-      orderBy: { fechaLimite: 'desc' },
-      select: { id: true, titulo: true, duracionEstMin: true },
+    // Elegir y registrar en una sola transacción serializable: dos pedidos a la vez no muestran dos preguntas
+    const candidata = await prisma.$transaction(async (tx) => {
+      const ultima = await tx.senalAprendizaje.findFirst({
+        where: { usuarioId: user.id, clase: 'pregunta', creadoEn: { gte: new Date(ahora.getTime() - CADA_DIAS * DIA_MS) } },
+        select: { id: true },
+      });
+      if (ultima) return null;
+      const t = await tx.tarea.findFirst({
+        where: {
+          usuarioId: user.id, eliminadoEn: null, estado: 'completada',
+          duracionEstMin: { gte: MINUTOS_MINIMOS },
+          fechaLimite: { gte: new Date(ahora.getTime() - RECIENTE_DIAS * DIA_MS), lte: ahora },
+          horasReales: null,
+          senales: { none: { clase: { in: ['horas', 'pregunta'] } } }, // ya se aprendió de ella o ya se preguntó
+        },
+        orderBy: { fechaLimite: 'desc' },
+        select: { id: true, titulo: true, duracionEstMin: true },
+      });
+      if (!t) return null;
+      await tx.senalAprendizaje.create({ data: { usuarioId: user.id, tareaId: t.id, clase: 'pregunta', fuente: 'mostrada', peso: 0 } });
+      return t;
+    }, { isolationLevel: 'Serializable' }).catch((e: { code?: string }) => {
+      if (e?.code === 'P2034') return null; // otro pedido ganó la carrera: esta vez no hay pregunta
+      throw e;
     });
     if (!candidata) return NextResponse.json({ pregunta: null });
 
-    await prisma.senalAprendizaje.create({
-      data: { usuarioId: user.id, tareaId: candidata.id, clase: 'pregunta', fuente: 'mostrada', peso: 0 },
-    });
     const sugeridas = (candidata.duracionEstMin ?? 0) / 60;
     return NextResponse.json({
       pregunta: {
