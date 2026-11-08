@@ -95,7 +95,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
               {horario.bloques.map(({ bloque, top, height, carril, hasta }) => <li key={bloque.id}
                 className={'absolute pr-2 ' + (hasta === null ? 'border-t-2 border-dotted border-[#84A897]' : '')}
                 style={{ top, height, left: `${carril / horario.carriles * 100}%`, width: `${100 / horario.carriles}%` }}>
-                <TarjetaActividad bloque={bloque} />
+                <TarjetaActividad bloque={bloque} fecha={dia.fecha} />
               </li>)}
             </ol>
           </div>

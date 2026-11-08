@@ -1,6 +1,6 @@
 import type { BloqueSemana } from './agendaSemana';
 import { formatoHoraBolivia, inicioDiaBolivia, sumarDias } from './agendaSemana';
-import type { TareaAgenda } from './agendaDia';
+import type { BloqueEstudioAgenda, TareaAgenda } from './agendaDia';
 import { diaEnBolivia } from './organizarTareasDia';
 
 export const botonCalendario = 'min-h-11 rounded-xl border border-[#DEE8E1] bg-white px-4 text-sm font-medium text-[#35695D] transition-colors hover:bg-[#EDF3EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
@@ -12,6 +12,7 @@ export const tiposActividad = [
   { tipo: 'clase', nombre: 'Clases', color: '#80ACC3', fondo: '#E5F0F7' },
   { tipo: 'evento', nombre: 'Eventos', color: '#C5A355', fondo: '#FBF0D9' },
   { tipo: 'tarea', nombre: 'Tareas', color: '#82AB95', fondo: '#E7F2E9' },
+  { tipo: 'estudio', nombre: 'Estudio', color: '#A392C4', fondo: '#F2EDF8' },
 ] as const;
 
 export function materiaAportaContexto(titulo: string, materia: string): boolean {
@@ -40,7 +41,27 @@ export function TareaSinHora({ tarea, mostrarTipo = true, mostrarHora = true }: 
   </article>;
 }
 
-export function TarjetaActividad({ bloque, mostrarTipo = true }: { bloque: BloqueSemana; mostrarTipo?: boolean }) {
+export function TarjetaEstudio({ bloque, fecha }: { bloque: BloqueEstudioAgenda; fecha?: string }) {
+  // Recortar solo la presentación al día visible; conservar los instantes originales.
+  const inicio = fecha ? new Date(Math.max(+bloque.inicio, +inicioDiaBolivia(fecha))) : bloque.inicio;
+  const fin = fecha ? new Date(Math.min(+bloque.fin, +inicioDiaBolivia(sumarDias(fecha, 1)))) : bloque.fin;
+  return <article className="h-full min-w-0 overflow-auto rounded-[20px] border border-[#E0D6EE] border-l-[3px] [border-left-style:dashed] border-l-[#A392C4] bg-[#F2EDF8] p-3 text-[#514369] [overflow-wrap:anywhere]">
+    <p className="text-xs font-semibold uppercase tracking-wider">{bloque.tipo === 'repaso' ? 'Estudio · Repaso' : 'Estudio'}</p>
+    <h4 className="mt-0.5 text-sm font-semibold leading-snug">{bloque.tarea.titulo}</h4>
+    <p className="mt-1 text-xs leading-5">
+      <time dateTime={inicio.toISOString()}>{formatoHoraBolivia.format(inicio)}</time>
+      {' – '}<time dateTime={fin.toISOString()}>{formatoHoraBolivia.format(fin)}</time>
+      {diaEnBolivia(fin) !== diaEnBolivia(inicio) && <span> (día siguiente)</span>}
+    </p>
+    {bloque.tarea.materia && <p className="mt-1 flex items-center gap-1.5 text-xs">
+      <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: bloque.tarea.materia.color }} />
+      {bloque.tarea.materia.nombre}
+    </p>}
+  </article>;
+}
+
+export function TarjetaActividad({ bloque, mostrarTipo = true, fecha }: { bloque: BloqueSemana; mostrarTipo?: boolean; fecha?: string }) {
+  if (bloque.tipo === 'estudio') return <TarjetaEstudio bloque={bloque.datos} fecha={fecha} />;
   const estilo = tiposActividad.find(({ tipo }) => tipo === bloque.tipo)!;
   const datos = bloque.datos;
   return <article className="h-full min-w-0 overflow-auto rounded-[20px] border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
@@ -84,7 +105,7 @@ export function distribuirHorario(bloques: BloqueSemana[], fecha: string) {
   const posiciones = bloques.map((bloque) => {
     const desde = minutos(bloque.hora);
     const fin = bloque.tipo === 'clase' ? minutos(bloque.datos.horaFin)
-      : bloque.tipo === 'evento' && bloque.datos.fin
+      : (bloque.tipo === 'evento' || bloque.tipo === 'estudio') && bloque.datos.fin
         ? (Math.min(finDia, bloque.datos.fin.getTime()) - inicio) / 60000 : null;
     return { bloque, desde, hasta: fin === null ? null : Math.max(desde, fin) };
   });

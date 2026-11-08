@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
-import { materiaAportaContexto } from './presentacionCalendario';
+import { materiaAportaContexto, TarjetaEstudio } from './presentacionCalendario';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia } from './organizarTareasDia';
 import {
@@ -124,7 +124,13 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
       </section>
       {horario && (
         <>
-          {horario.clases.length === 0 && horario.eventos.length === 0 && <p className="text-sm text-[#657360]">No tienes clases ni eventos hoy.</p>}
+          {horario.clases.length === 0 && horario.eventos.length === 0 && horario.bloques.length === 0 && <p className="text-sm text-[#657360]">No tienes clases, eventos ni bloques de estudio hoy.</p>}
+          {horario.bloques.length > 0 && <section aria-labelledby="titulo-estudio" className="min-w-0 space-y-4">
+            <h2 id="titulo-estudio" className="text-lg font-semibold tracking-[-0.02em]">Estudio de hoy</h2>
+            <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
+              {horario.bloques.map((bloque) => <li key={bloque.id}><TarjetaEstudio bloque={bloque} fecha={hoy} /></li>)}
+            </ul>
+          </section>}
           {horario.clases.length > 0 && <section aria-labelledby="titulo-clases" className="min-w-0 space-y-4">
             <h2 id="titulo-clases" className="text-lg font-semibold tracking-[-0.02em]">Clases de hoy</h2>
             <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">

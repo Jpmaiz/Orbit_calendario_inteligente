@@ -1,4 +1,4 @@
-import { horarioDelDia, type AgendaDia, type ClaseAgenda, type EventoAgenda, type TareaAgenda } from './agendaDia';
+import { horarioDelDia, type AgendaDia, type BloqueEstudioAgenda, type ClaseAgenda, type EventoAgenda, type TareaAgenda } from './agendaDia';
 import { diaEnBolivia } from './organizarTareasDia';
 
 export function sumarDias(fecha: string, cantidad: number): string {
@@ -21,7 +21,9 @@ export function inicioDiaBolivia(fecha: string): Date {
 export type BloqueSemana =
   | { tipo: 'clase'; id: string; hora: string; datos: ClaseAgenda }
   | { tipo: 'evento'; id: string; hora: string; datos: EventoAgenda }
-  | { tipo: 'tarea'; id: string; hora: string; datos: TareaAgenda };
+  | { tipo: 'tarea'; id: string; hora: string; datos: TareaAgenda }
+  | { tipo: 'estudio'; id: string; hora: string;
+      datos: BloqueEstudioAgenda & { titulo: string; materia: BloqueEstudioAgenda['tarea']['materia'] } };
 
 export const formatoHoraBolivia = new Intl.DateTimeFormat('es-BO', {
   timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
@@ -44,6 +46,11 @@ export function organizarSemana(agenda: AgendaDia, lunes: string) {
           tipo: 'evento', id: 'evento-' + datos.id,
           hora: datos.inicio < inicio ? '00:00' : formatoHoraBolivia.format(datos.inicio), datos,
         })),
+      ...horario.bloques.map((datos): BloqueSemana => ({
+        tipo: 'estudio', id: 'estudio-' + datos.id,
+        hora: datos.inicio < inicio ? '00:00' : formatoHoraBolivia.format(datos.inicio),
+        datos: { ...datos, titulo: datos.tarea.titulo, materia: datos.tarea.materia },
+      })),
       ...tareas.filter((tarea) => tarea.horaDefinida).map((datos): BloqueSemana => ({
         tipo: 'tarea', id: 'tarea-' + datos.id, hora: formatoHoraBolivia.format(datos.fechaLimite), datos,
       })),

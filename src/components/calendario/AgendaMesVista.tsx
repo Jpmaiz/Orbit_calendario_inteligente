@@ -99,7 +99,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
         return <section key={tipo} aria-label={nombre} className="space-y-2">
           <h3 className="text-xs font-semibold text-[#6B8072]">{nombre}</h3>
           <ul className="grid gap-3 sm:grid-cols-2">
-            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} mostrarTipo={false} /></li>)}
+            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} mostrarTipo={false} fecha={seleccion.dia} /></li>)}
             {sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarTipo={false} /></li>)}
           </ul>
         </section>;

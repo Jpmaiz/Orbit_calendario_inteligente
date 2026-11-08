@@ -17,7 +17,13 @@ export type EventoAgenda = {
   id: string; titulo: string; inicio: Date; fin: Date | null;
   ubicacion: string | null; descripcion: string | null; materia: MateriaAgenda;
 };
-export type AgendaDia = { tareas: TareaAgenda[]; clases: ClaseAgenda[]; eventos: EventoAgenda[] };
+export type BloqueEstudioAgenda = {
+  id: string; inicio: Date; fin: Date; tipo: 'estudio' | 'repaso'; estado: string;
+  tarea: { id: string; titulo: string; tipo: string; materia: MateriaAgenda };
+};
+export type AgendaDia = {
+  tareas: TareaAgenda[]; clases: ClaseAgenda[]; eventos: EventoAgenda[]; bloques: BloqueEstudioAgenda[];
+};
 
 function registro(valor: unknown): Record<string, unknown> {
   if (typeof valor !== 'object' || valor === null || Array.isArray(valor)) {
@@ -101,6 +107,18 @@ export function leerAgenda(valor: unknown): AgendaDia {
   }
   return {
     tareas: lista(datos.tareas).map(leerTarea),
+    bloques: (datos.bloques === undefined ? [] : lista(datos.bloques)).map((valor): BloqueEstudioAgenda => {
+      const bloque = registro(valor), tarea = registro(bloque.tarea);
+      const inicio = fecha(bloque.inicio), fin = fecha(bloque.fin);
+      if (fin <= inicio) throw new Error('El bloque de estudio tiene un intervalo inválido.');
+      if (bloque.tipo !== 'estudio' && bloque.tipo !== 'repaso') throw new Error('Tipo de bloque de estudio desconocido.');
+      return {
+        id: texto(bloque.id), inicio, fin, tipo: bloque.tipo, estado: texto(bloque.estado),
+        tarea: {
+          id: texto(tarea.id), titulo: texto(tarea.titulo), tipo: texto(tarea.tipo), materia: materia(tarea.materia),
+        },
+      };
+    }),
     clases: lista(datos.clases).map((valor) => {
       const clase = registro(valor);
       const diaSemana = numero(clase.diaSemana);
@@ -147,6 +165,8 @@ export function horarioDelDia(agenda: AgendaDia, fechaActual: Date) {
       (!clase.vigenteDesde || clase.vigenteDesde < fin) &&
       (!clase.vigenteHasta || clase.vigenteHasta >= inicio))
       .sort((a, b) => a.horaInicio.localeCompare(b.horaInicio)),
+    bloques: agenda.bloques.filter((bloque) => bloque.inicio < fin && bloque.fin > inicio)
+      .sort((a, b) => a.inicio.getTime() - b.inicio.getTime()),
     eventos: agenda.eventos.filter((evento) =>
       evento.inicio < fin && (evento.fin ? evento.fin > inicio : evento.inicio >= inicio))
       .sort((a, b) => a.inicio.getTime() - b.inicio.getTime()),
