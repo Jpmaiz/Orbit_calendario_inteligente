@@ -38,7 +38,8 @@ export default function BorradorHorario({ items, materias, documento, cambiar }:
       const clave = it.original.codigoMateria?.toLowerCase().replace(/[^a-z0-9]/g, '') || it.titulo.trim().toLowerCase();
       const g = mapa.get(clave);
       if (g) g.indices.push(i);
-      else mapa.set(clave, { clave, nombre: it.titulo, codigo: it.original.codigoMateria, color: PALETA[mapa.size % PALETA.length], indices: [i] });
+      // Nombre de la materia, no de la clase ("Cirugía I", no "Cirugía I · Práctica")
+      else mapa.set(clave, { clave, nombre: it.original.materia ?? it.titulo, codigo: it.original.codigoMateria, color: PALETA[mapa.size % PALETA.length], indices: [i] });
     });
     return [...mapa.values()];
   }, [items]);

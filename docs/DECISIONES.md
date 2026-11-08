@@ -76,3 +76,23 @@ del SIAAN trae el semestre impreso, al confirmar se crea solo.
 
 ### D14. Soft delete
 **Qué:** borrar = marcar `eliminadoEn`. Permite deshacer y conserva el historial para métricas.
+
+### D15. Estimación: la IA califica, el sistema calcula
+**Qué:** la IA califica cada tarea con una rúbrica (escala, temas y su amplitud, cantidades, nivel cognitivo,
+componentes, formato, claridad, peso académico) y cita la frase que respalda cada factor alto. Las horas, la
+dificultad y la importancia las calcula `src/lib/estimacion/rubrica.ts` con reglas fijas.
+**Por qué:** el mismo texto da siempre el mismo resultado, cada número tiene un "¿por qué?" y la IA no puede
+inflar las horas: no las da. Un factor alto sin evidencia baja a su valor medio. Más temas suman cada vez
+menos tiempo y el rango del tipo es un techo. Las tasas son parámetros iniciales que se calibrarán con las horas
+reales que reporten los usuarios.
+
+### D16. La estimación se calcula en el servidor al confirmar
+**Qué:** el front manda el `indice` de cada ítem del borrador; `confirmar` recupera lo que leyó la IA y calcula
+con el tipo final que dejó el usuario. Las horas nunca llegan del front. La tarea guarda `estimacion` (con sus
+razones) y `horasDelUsuario` (si el usuario las fija, mandan).
+
+### D17. "Vence con" y preparación de eventos
+**Qué:** una entrega "al ingresar al examen" queda vinculada a ese examen (`venceConId`); si el examen cambia de
+fecha, la entrega se mueve con él. Un evento con algo que estudiar ("cirugía: semiología de apéndice y nudos")
+genera una tarea "Preparación: …" que vence al empezar el evento. El evento en sí es asistencia: 0 h.
+

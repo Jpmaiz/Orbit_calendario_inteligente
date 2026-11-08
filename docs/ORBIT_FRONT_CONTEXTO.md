@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.3 · 29/10/2026)
+# Orbit — Contexto del backend para el front (v2.4 · 08/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.4 (08/11) — horas, dificultad y "vence con"](#novedades-24)
 ★ [Novedades de la v2.3 (29/10) — captura por foto y PDF](#novedades-23)
 ★ [Novedades de la v2.2 (28/10) — leer primero si ya integraste la v2.1](#novedades)
 0. [Paso 0 — Pregunta qué hay hecho](#paso-0)
@@ -21,6 +22,48 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-24"></a>
+## ★ Novedades de la v2.4 (08/11/2026)
+
+**Fase 1: Orbit estima horas, dificultad e importancia de cada tarea.** La IA califica la actividad con una
+rúbrica y el backend calcula los números (detalle en `docs/PROMPTS.md` §4). No cambia ningún endpoint; se
+**agregan** campos.
+
+**1. Cada tarea del borrador trae `estimado`** (los eventos y clases traen `null`):
+
+```json
+"estimado": {
+  "horas": 6.5, "dificultad": 4, "importancia": "media", "origen": "ia",
+  "razones": ["Es un examen parcial (4–8 h)", "Cubre 5 temas: Estático, RIP, OSPF, EIGRP, NAT", "Es práctico"],
+  "supuestos": ["Supuse que es un parcial: si es un control o quiz, son menos horas"]
+}
+```
+
+Sugerencia de UI: un chip "~6 h 30 · dificultad 4" en la tarjeta y un "¿Por qué?" que muestre `razones`.
+`origen: "general"` = la IA no pudo leer; conviene decir "estimación general".
+
+**2. Ya hecho en `borradorCaptura.ts` (cambio mínimo):** `itemParaEnvio` manda `indice` (posición del ítem en el
+borrador). Con eso el backend recupera la estimación al confirmar. **No lo quites:** sin `indice` la tarea se
+guarda con la estimación general.
+
+**3. Nuevos supuestos** (se ven en "Ver origen y supuestos", ya son texto legible):
+- `fecha deducida del contexto: confírmala` — viene con `opcionesFecha` de una sola opción: el usuario la toca para confirmar.
+- `materia deducida por el contenido: X` — `materiaPropuesta` llega con `seguro: false`.
+- `vence al empezar «Examen…»` — la entrega vence cuando empieza ese examen o evento.
+
+**4. Nuevos ítems que arma el sistema:** si un evento trae algo que estudiar ("cirugía: semiología de apéndice y
+nudos"), el borrador incluye después del evento una tarea **"Preparación: …"** que vence al empezar el evento.
+
+**5. Horarios:** las prácticas ("[4-B]") llegan como clases con título "Materia · Práctica" y la **misma materia**
+que la teoría. `BorradorHorario.tsx` ahora nombra cada fila con la materia (no con el título de la primera clase).
+Un reporte con dos periodos da a cada clase la vigencia de su periodo.
+
+**6. Tarea guardada:** `prioridad` ya no es siempre "media": sale de la importancia. Nuevos campos en `Tarea`:
+`estimacion` (JSON con razones), `horasDelUsuario` (true si el usuario fijó las horas en el formulario),
+`venceConId` / `venceConClase`.
 
 ---
 

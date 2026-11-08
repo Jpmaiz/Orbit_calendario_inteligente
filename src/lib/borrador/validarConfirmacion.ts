@@ -9,13 +9,15 @@ export type MateriaElegida =
   | { accion: 'crear'; nombre: string; codigo: string | null }
   | { accion: 'ninguna' };
 
+/** "indice": posición del ítem en el borrador (= en lo que leyó la IA). Con él se recupera la estimación
+ *  y el vínculo "vence con"; nunca se confía en horas que mande el front. null = front antiguo. */
+type Comunes = { titulo: string; materia: MateriaElegida; materiaDetectada: string | null; indice: number | null };
+
 export type ItemConfirmado =
-  | { clase: 'tarea'; titulo: string; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null;
-      materia: MateriaElegida; materiaDetectada: string | null; confirmarNueva: boolean }
-  | { clase: 'evento'; titulo: string; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null;
-      materia: MateriaElegida; materiaDetectada: string | null }
-  | { clase: 'evento_fijo'; titulo: string; diasSemana: number[]; hora: string; horaFin: string; ubicacion: string | null;
-      vigencia: { desde: Date; hasta: Date } | null; materia: MateriaElegida; materiaDetectada: string | null };
+  | (Comunes & { clase: 'tarea'; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null; confirmarNueva: boolean })
+  | (Comunes & { clase: 'evento'; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null })
+  | (Comunes & { clase: 'evento_fijo'; diasSemana: number[]; hora: string; horaFin: string; ubicacion: string | null;
+      vigencia: { desde: Date; hasta: Date } | null });
 
 type R<T> = { ok: true; valor: T } | { ok: false; error: string };
 
@@ -48,7 +50,8 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
   if (!titulo) return { ok: false, error: pre + 'falta el título' };
   const materia = validarMateria(x.materia);
   if (!materia.ok) return { ok: false, error: pre + materia.error };
-  const comunes = { titulo, materia: materia.valor, materiaDetectada: texto(x.materiaDetectada, 100) };
+  const indice = Number.isInteger(x.indice) && (x.indice as number) >= 0 && (x.indice as number) < 50 ? (x.indice as number) : null;
+  const comunes = { titulo, materia: materia.valor, materiaDetectada: texto(x.materiaDetectada, 100), indice };
 
   if (x.clase === 'tarea') {
     if (!(TIPOS_TAREA as readonly string[]).includes(x.tipo as string)) return { ok: false, error: pre + 'tipo inválido' };
@@ -96,4 +99,4 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
   }
 
   return { ok: false, error: pre + 'clase inválida (tarea, evento o evento_fijo)' };
-}
+}

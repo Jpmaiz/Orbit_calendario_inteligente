@@ -37,12 +37,24 @@ export function horasDeFila(t: string): { inicio: string; fin: string | null } |
 
 const VACIA = /^(-+|—|vac[ií]a|libre|x|\.|n\/a)?$/i;
 
-/** "SIS-233 [1] Aula: LRED/A1-3" → { codigo: "SIS-233", paralelo: "1", aula: "LRED/A1-3", materia: null } */
+/**
+ * "SIS-233 [1] Aula: LRED/A1-3" → { codigo: "SIS-233", paralelo: "1", aula: "LRED/A1-3", materia: null }
+ * "SEM-223 [4-B] Aula: T2-GSE1-C/PB-2 (14:15-16:30)" → paralelo "4-B" y horario real 14:15–16:30
+ * (el horario escrito en la casilla manda sobre el de la fila: la clase termina 16:30, no 16:45).
+ */
 export function leerCasilla(texto: string): Omit<CeldaHorario, 'dia' | 'inicio' | 'fin'> | null {
   const t = (texto ?? '').replace(/\s+/g, ' ').trim();
   if (VACIA.test(t)) return null;
 
   let resto = t;
+  // Horario escrito dentro de la casilla: "(14:15-16:30)", "(14:15 a 16:30)"
+  let horario: { inicio: string; fin: string } | null = null;
+  const mHora = /\(\s*(\d{1,2}[:.h]\d{2})\s*(?:-|–|a|al|hasta)\s*(\d{1,2}[:.h]\d{2})\s*\)/i.exec(resto);
+  if (mHora) {
+    const h = horasDeFila(`${mHora[1]} ${mHora[2]}`);
+    if (h?.fin) horario = { inicio: h.inicio, fin: h.fin };
+    resto = (resto.slice(0, mHora.index) + resto.slice(mHora.index + mHora[0].length)).replace(/\s+/g, ' ').trim();
+  }
   // Aula: lo que sigue a "Aula", "Amb." o "Ambiente"
   let aula: string | null = null;
   const mAula = /\b(?:aula\b|amb\.|ambiente\b)\s*:?\s*(.+)$/i.exec(resto);
@@ -50,11 +62,11 @@ export function leerCasilla(texto: string): Omit<CeldaHorario, 'dia' | 'inicio' 
     aula = mAula[1].trim() || null;
     resto = resto.slice(0, mAula.index).trim();
   }
-  // Paralelo: "[1]", "(2)", "P1", "Par. 2", "Paralelo 2"
+  // Paralelo: "[1]", "[4-B]" (grupo de práctica), "(2)", "P1", "Par. 2", "Paralelo 2"
   let paralelo: string | null = null;
-  const mPar = /\[(\w{1,3})\]|\((\d{1,2})\)|\bP(?:ar(?:alelo)?)?\.?\s?(\d{1,2})\b/i.exec(resto);
+  const mPar = /\[\s*([\w]{1,3}(?:\s*-\s*[\w]{1,3})?)\s*\]|\((\d{1,2})\)|\bP(?:ar(?:alelo)?)?\.?\s?(\d{1,2})\b/i.exec(resto);
   if (mPar) {
-    paralelo = mPar[1] ?? mPar[2] ?? mPar[3];
+    paralelo = (mPar[1] ?? mPar[2] ?? mPar[3]).replace(/\s+/g, '').toUpperCase();
     resto = (resto.slice(0, mPar.index) + resto.slice(mPar.index + mPar[0].length)).trim();
   }
   // Sigla: letras + números ("SIS-233", "MAT 361", "INF110")
@@ -66,7 +78,7 @@ export function leerCasilla(texto: string): Omit<CeldaHorario, 'dia' | 'inicio' 
   }
   const materia = resto.replace(/^[-–·:,\s]+|[-–·:,\s]+$/g, '') || null;
   if (!codigo && !materia) return null;
-  return { codigo, materia: materia && materia.length > 1 ? materia : null, aula, paralelo };
+  return { codigo, materia: materia && materia.length > 1 ? materia : null, aula, paralelo, horario };
 }
 
 /**

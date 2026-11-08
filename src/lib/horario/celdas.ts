@@ -16,6 +16,8 @@ export type CeldaHorario = {
   materia: string | null; // nombre si la celda lo trae
   aula: string | null;
   paralelo: string | null;
+  /** Horario escrito dentro de la casilla ("(14:15-16:30)"): manda sobre el de las filas. */
+  horario?: { inicio: string; fin: string } | null;
 };
 
 /** Fila de la tabla de materias inscritas (si el documento la trae). */
@@ -29,6 +31,7 @@ export type ClaseLeida = {
   aula: string | null;
   paralelo: string | null;
   docente: string | null;
+  practica: boolean;       // grupo de práctica ("[4-B]" de una materia que también tiene "[4]")
   diasSemana: number[];
   hora: string;
   horaFin: string;
@@ -103,8 +106,22 @@ export function unirCeldas(celdas: CeldaHorario[]) {
     }
     bloques.push(actual);
   }
+  // Si alguna casilla del bloque trae su horario escrito, ese manda (14:15–16:45 por filas → 14:15–16:30 real)
+  for (const b of bloques) {
+    const escrito = b.celdas.find((c) => c.horario)?.horario;
+    if (escrito && aMin(escrito.inicio) < aMin(b.fin) && aMin(b.inicio) < aMin(escrito.fin)) {
+      b.inicio = escrito.inicio;
+      b.fin = escrito.fin;
+    }
+  }
   return bloques;
 }
+
+/** "4-B" es grupo de práctica si la misma sigla también tiene el paralelo "4" (teoría). */
+const esGrupoPractica = (paralelo: string | null, teorias: Set<string>, codigo: string | null) => {
+  const m = paralelo ? /^(\w+)-[A-Z]{1,2}$/i.exec(paralelo) : null;
+  return !!(m && codigo && teorias.has(`${normalizarCodigo(codigo)}|${m[1].toUpperCase()}`));
+};
 
 /**
  * 2) Agrupa los días que tienen la misma materia, el mismo horario y la misma aula:
@@ -115,14 +132,32 @@ export function agruparClases(
   materias: MateriaLeida[],
   dudosas: Set<string> = new Set(),
 ): ClaseLeida[] {
-  const porCodigo = new Map(materias.filter((m) => m.codigo).map((m) => [normalizarCodigo(m.codigo!), m]));
+  // La tabla puede traer la misma sigla dos veces (teoría y práctica, con docentes distintos): primero por sigla + paralelo
+  const porCodigoParalelo = new Map(
+    materias.filter((m) => m.codigo && m.paralelo).map((m) => [`${normalizarCodigo(m.codigo!)}|${m.paralelo!.replace(/\s+/g, '').toUpperCase()}`, m]),
+  );
+  const porCodigo = new Map<string, MateriaLeida>();
+  for (const m of materias) {
+    const k = m.codigo ? normalizarCodigo(m.codigo) : null;
+    if (k && (!porCodigo.has(k) || !/-/.test(m.paralelo ?? ''))) porCodigo.set(k, m); // preferir la fila de teoría
+  }
+  const bloques = unirCeldas(celdas);
+  const teorias = new Set(
+    [...bloques, ...materias.map((m) => ({ codigo: m.codigo, paralelo: m.paralelo }))]
+      .filter((b) => b.codigo && b.paralelo && !/-/.test(b.paralelo))
+      .map((b) => `${normalizarCodigo(b.codigo!)}|${b.paralelo!.toUpperCase()}`),
+  );
   const grupos = new Map<string, ClaseLeida>();
 
-  for (const b of unirCeldas(celdas)) {
-    const tabla = b.codigo ? porCodigo.get(normalizarCodigo(b.codigo)) : undefined;
+  for (const b of bloques) {
+    const codigoNorm = b.codigo ? normalizarCodigo(b.codigo) : null;
+    const tabla = codigoNorm
+      ? (b.paralelo ? porCodigoParalelo.get(`${codigoNorm}|${b.paralelo}`) : undefined) ?? porCodigo.get(codigoNorm)
+      : undefined;
+    const practica = esGrupoPractica(b.paralelo, teorias, b.codigo);
     const nombreLeido = tabla?.nombre ?? b.materia;
     const nombre = nombreLeido ? nombreFormal(nombreLeido) : b.codigo ?? 'Clase'; // la sigla se deja tal cual
-    const k = `${claveMateria(b)}|${claveAula(b.aula)}|${b.inicio}|${b.fin}`;
+    const k = `${claveMateria(b)}|${practica ? 'p' : 't'}|${claveAula(b.aula)}|${b.inicio}|${b.fin}`;
     const dudosa = b.celdas.some((c) => dudosas.has(claveCelda(c)));
     const existente = grupos.get(k);
     if (existente) {
@@ -137,6 +172,7 @@ export function agruparClases(
         aula: b.aula,
         paralelo: b.paralelo ?? tabla?.paralelo ?? null,
         docente: tabla?.docente ?? null,
+        practica,
         diasSemana: [b.dia],
         hora: b.inicio,
         horaFin: b.fin,

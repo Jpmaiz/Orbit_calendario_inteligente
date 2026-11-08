@@ -9,7 +9,7 @@ import { normalizarCodigo, normalizarNombre } from '@/lib/borrador/enriquecer';
 export const PALETA_MATERIAS = ['#2F6F5E', '#3B5BA5', '#B4583B', '#7A4EA3', '#A3833B', '#2E8A99', '#A33B6B', '#5E7A2F'];
 
 type ItemClase = {
-  clase: string; titulo: string; codigoMateria: string | null; diasSemana: number[];
+  clase: string; titulo: string; materia: string | null; codigoMateria: string | null; diasSemana: number[];
   hora: string | null; horaFin: string | null; ubicacion: string | null; confianza: number;
 };
 
@@ -27,11 +27,12 @@ export function agruparPorMateria(items: ItemClase[]): MateriaDelHorario[] {
   const grupos = new Map<string, MateriaDelHorario>();
   items.forEach((it, indice) => {
     if (it.clase !== 'evento_fijo' || !it.hora || !it.horaFin) return;
-    const clave = it.codigoMateria ? `c:${normalizarCodigo(it.codigoMateria)}` : `n:${normalizarNombre(it.titulo)}`;
+    const clave = it.codigoMateria ? `c:${normalizarCodigo(it.codigoMateria)}` : `n:${normalizarNombre(it.materia ?? it.titulo)}`;
     let g = grupos.get(clave);
     if (!g) {
       g = {
-        clave, nombre: it.titulo, codigo: it.codigoMateria,
+        // El nombre de la materia, no el de la clase ("Cirugía I", no "Cirugía I · Práctica")
+        clave, nombre: it.materia ?? it.titulo, codigo: it.codigoMateria,
         color: PALETA_MATERIAS[grupos.size % PALETA_MATERIAS.length],
         indices: [], sesiones: [], revisar: false,
       };

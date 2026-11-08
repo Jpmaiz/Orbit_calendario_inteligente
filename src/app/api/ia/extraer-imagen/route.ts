@@ -7,6 +7,9 @@ import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { diaEnZona } from '@/lib/periodos/periodos';
 import { agruparPorMateria } from '@/lib/horario/resumen';
 import { avisosFechasPasadas, cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
+import { prepararItems } from '@/lib/borrador/prepararItems';
+import { normalizarCodigo } from '@/lib/borrador/enriquecer';
+import { quitarDatosPersonales } from '@/lib/privacidad';
 
 // Un horario se lee dos veces (lectura + revisión): puede tardar más que un texto
 export const maxDuration = 60;
@@ -46,9 +49,10 @@ export async function POST(req: NextRequest) {
   if (typeof imagenes === 'string') {
     return NextResponse.json({ error: imagenes }, { status: 400 });
   }
+  // El texto del PDF trae carnet, registro y nombre del estudiante: se quitan antes de mandarlo a la IA
   const textoAdjunto =
     typeof body.textoAdjunto === 'string' && body.textoAdjunto.trim()
-      ? body.textoAdjunto.trim().slice(0, MAX_TEXTO_ADJUNTO)
+      ? quitarDatosPersonales(body.textoAdjunto.trim().slice(0, MAX_TEXTO_ADJUNTO))
       : null;
 
   try {
@@ -63,12 +67,13 @@ export async function POST(req: NextRequest) {
     const latencia = Date.now() - inicio;
     const { lectura } = r;
     const advertencias = [...r.avisos];
+    const items = prepararItems(r.items);
 
     // 2) Fecha de referencia: en una captura, "mañana" se cuenta desde el día de los mensajes
     let referencia: Date | undefined;
     let fechaReferencia: { fecha: string; origen: 'documento' | 'hoy' } | null = null;
     // Ítems con "mañana" / "el lunes" que no dicen de qué día es el mensaje
-    const usaRelativas = r.items.some((i) => i.fechaDicha && i.fechaDicha.tipo !== 'exacta' && !i.fechaReferencia);
+    const usaRelativas = items.some((i) => i.fechaDicha && i.fechaDicha.tipo !== 'exacta' && !i.fechaReferencia);
     if (lectura.fechaDocumento) {
       const d = diaEnZona(lectura.fechaDocumento, '12:00', ctx.zona);
       if (d && d.getTime() <= ahora.getTime() + DIA_MS) {
@@ -87,6 +92,20 @@ export async function POST(req: NextRequest) {
     // 3) Periodo impreso en el documento (horario de la U): da la vigencia de las clases
     let periodoDetectado = null;
     let vigencia = null;
+    // Varios periodos (uno anual y uno semestral): cada clase toma las fechas del periodo de su sigla
+    const vigenciaPorCodigo = new Map<string, { desde: string; hasta: string; periodo: string }>();
+    if (lectura.periodos.length > 1) {
+      for (const p of lectura.periodos) {
+        const desde = diaEnZona(p.inicio, '00:00', ctx.zona);
+        const hasta = diaEnZona(p.fin, '23:59', ctx.zona);
+        if (!desde || !hasta) continue;
+        for (const sigla of p.siglas) {
+          vigenciaPorCodigo.set(normalizarCodigo(sigla), {
+            desde: desde.toISOString(), hasta: hasta.toISOString(), periodo: p.nombre ?? `${p.inicio} a ${p.fin}`,
+          });
+        }
+      }
+    }
     if (lectura.periodo) {
       const desde = diaEnZona(lectura.periodo.inicio, '00:00', ctx.zona);
       const hasta = diaEnZona(lectura.periodo.fin, '23:59', ctx.zona);
@@ -104,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4) El sistema decide (igual que con texto)
-    const borrador = await construirBorrador(user.id, r.items, ctx, { ahora, referencia, vigencia });
+    const borrador = await construirBorrador(user.id, items, ctx, { ahora, referencia, vigencia, vigenciaPorCodigo });
     advertencias.push(...avisosFechasPasadas(borrador, ahora, ctx.zona));
 
     // Se guarda lo LEÍDO (sin la imagen ni el texto del PDF, que pueden tener datos personales)
@@ -117,12 +136,13 @@ export async function POST(req: NextRequest) {
           tipoDocumento: lectura.tipoDocumento,
           fechaDocumento: lectura.fechaDocumento,
           periodo: lectura.periodo,
+          periodos: lectura.periodos,
           materias: lectura.materias,
           celdas: lectura.celdas,
           revision: r.revision,
-          items: r.items,
+          items,
         } as object,
-        confianza: r.items.length ? r.items.reduce((s, i) => s + i.confianza, 0) / r.items.length : null,
+        confianza: items.length ? items.reduce((s, i) => s + i.confianza, 0) / items.length : null,
         modeloUsado: modeloIA,
         tiempoRespuestaMs: latencia,
         estado: 'pendiente',

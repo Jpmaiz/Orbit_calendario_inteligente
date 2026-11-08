@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { validarEventoPuntual, validarRango } from '@/lib/validacion/eventoPuntual';
 import { revisarEvento } from '@/lib/eventos/revisarEvento';
+import { moverVinculadas } from '@/lib/tareas/vinculos';
 
 type Contexto = { params: Promise<{ id: string }> };
 
@@ -80,6 +81,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
 
     const evento = await prisma.evento.update({ where: { id }, data: v.datos, include: { materia } });
+    // "Vence con": la preparación de este evento vence cuando empieza; si se movió, se mueve con él
+    if (v.datos.inicio !== undefined) await moverVinculadas(user.id, id, 'evento', evento.inicio);
     const { choques } = await revisarEvento(user.id, evento.titulo, evento.inicio, evento.fin, id);
     return NextResponse.json({ evento, choques });
   } catch (error) {

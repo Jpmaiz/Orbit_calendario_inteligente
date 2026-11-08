@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { validarTarea } from '@/lib/validacion/tarea';
+import { moverVinculadas } from '@/lib/tareas/vinculos';
 
 type Contexto = { params: Promise<{ id: string }> };
 
@@ -46,6 +47,8 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
 
     const data: Prisma.TareaUncheckedUpdateInput = { ...v.datos };
+    // Horas que fija el usuario: mandan sobre la estimación (null = vuelve a la estimación)
+    if (v.datos.duracionEstMin !== undefined) data.horasDelUsuario = v.datos.duracionEstMin !== null;
 
     // completadaEn se maneja solo según el estado
     if (v.datos.estado !== undefined) {
@@ -54,6 +57,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
 
     const tarea = await prisma.tarea.update({ where: { id }, data });
+
+    // "Vence con": si cambió la fecha de este examen, las entregas atadas a él se mueven con él
+    if (v.datos.fechaLimite !== undefined || v.datos.horaDefinida !== undefined) {
+      await moverVinculadas(user.id, id, 'tarea', tarea.fechaLimite, tarea.horaDefinida);
+    }
     return NextResponse.json({ tarea });
   } catch (error) {
     console.error('Error PATCH /api/tareas/[id]:', error);

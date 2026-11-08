@@ -6,6 +6,8 @@ import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { normalizarNombre, esMismaClase, nombreDia, type ClaseFija } from '@/lib/borrador/enriquecer';
 import { validarItem, ItemConfirmado } from '@/lib/borrador/validarConfirmacion';
+import { estimar } from '@/lib/estimacion/rubrica';
+import type { ItemExtraido } from '@/lib/ia/extraccion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
 class YaConfirmada extends Error {}
@@ -26,6 +28,10 @@ type Resultado = {
  * - Aprende alias: si el usuario vinculó "BD" a "Base de Datos II", la próxima vez lo hace solo.
  * - Una clase de lunes y miércoles se guarda como dos EventoFijo.
  * - Si el borrador vino de un horario con semestre impreso, crea ese periodo (si no se cruza con otro).
+ * - Cada tarea se guarda con su estimación (horas, dificultad, importancia) calculada aquí, en el servidor,
+ *   con lo que leyó la IA y el tipo que dejó el usuario. Nunca con números que mande el front.
+ * - "Vence con": una entrega que se hace al empezar un examen queda vinculada a él (si el examen cambia de
+ *   fecha, la entrega se mueve con él). Si el examen ya existía (duplicado), se vincula al existente.
  */
 export async function POST(req: NextRequest) {
   const user = await obtenerUsuario();
@@ -81,6 +87,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Alguna materia no existe o no es tuya' }, { status: 400 });
     }
 
+    // Lo que leyó la IA, en el orden del borrador (ver prepararItems)
+    const leidos = ((interpretacion.respuestaIa as { items?: ItemExtraido[] } | null)?.items ?? []) as ItemExtraido[];
+    const leidoDe = (it: ItemConfirmado): ItemExtraido | null => {
+      if (it.indice !== null) return leidos[it.indice] ?? null;
+      // Front antiguo (sin índice): por título
+      return leidos.find((l) => normalizarNombre(l.titulo) === normalizarNombre(it.titulo)) ?? null;
+    };
+    // Índice del borrador → lo que quedó guardado (para "vence con")
+    const guardadoPorIndice = new Map<number, { clase: 'tarea' | 'evento'; id: string }>();
+
     // Duplicados seguros: se omiten salvo que el usuario haya dicho "es otra"
     const omitidos: { indice: number; titulo: string; motivo: string }[] = [];
     const aGuardar: { item: ItemConfirmado; indice: number }[] = [];
@@ -93,6 +109,7 @@ export async function POST(req: NextRequest) {
         });
         if (dup.estado === 'seguro') {
           omitidos.push({ indice: i, titulo: it.titulo, motivo: `Ya existe «${dup.tarea.titulo}»` });
+          if (it.indice !== null) guardadoPorIndice.set(it.indice, { clase: 'tarea', id: dup.tarea.id });
           continue;
         }
       }
@@ -188,15 +205,25 @@ export async function POST(req: NextRequest) {
         const materiaId = materiaIdDe(item);
 
         if (item.clase === 'tarea') {
+          // Estimación: la IA calificó (rúbrica), el sistema calcula con el tipo final
+          const leido = leidoDe(item);
+          const est = estimar(item.tipo, leido?.clase === 'tarea' ? leido.estimacion : null);
           const t = await tx.tarea.create({
             data: {
               usuarioId: user.id, materiaId, titulo: item.titulo, tipo: item.tipo, fechaLimite: item.inicio,
               horaDefinida: item.horaDefinida, descripcion: item.descripcion,
-              prioridad: 'media', estado: 'pendiente', origen: 'texto',
+              prioridad: est.importancia, estado: 'pendiente', origen: 'texto',
+              duracionEstMin: est.minutos, dificultad: est.dificultad,
+              estimacion: {
+                horas: est.horas, dificultad: est.dificultad, importancia: est.importancia, origen: est.origen,
+                escala: est.escala, rango: est.rango, razones: est.razones, supuestos: est.supuestos,
+                lectura: leido?.estimacion ?? null,
+              } as object,
             },
             select: { id: true },
           });
           tareas.push(t.id);
+          if (item.indice !== null) guardadoPorIndice.set(item.indice, { clase: 'tarea', id: t.id });
         } else if (item.clase === 'evento') {
           // Mismo nombre y a menos de 1 h del inicio → ya existe
           const cercanos = await tx.evento.findMany({
@@ -204,10 +231,12 @@ export async function POST(req: NextRequest) {
               usuarioId: user.id, eliminadoEn: null,
               inicio: { gte: new Date(item.inicio.getTime() - 3_600_000), lte: new Date(item.inicio.getTime() + 3_600_000) },
             },
-            select: { titulo: true },
+            select: { id: true, titulo: true },
           });
-          if (cercanos.some((e: { titulo: string }) => normalizarNombre(e.titulo) === normalizarNombre(item.titulo))) {
+          const mismo = cercanos.find((e: { titulo: string }) => normalizarNombre(e.titulo) === normalizarNombre(item.titulo));
+          if (mismo) {
             omitidos.push({ indice, titulo: item.titulo, motivo: `Ya existe «${item.titulo}» a esa hora` });
+            if (item.indice !== null) guardadoPorIndice.set(item.indice, { clase: 'evento', id: mismo.id });
             continue;
           }
           const e = await tx.evento.create({
@@ -218,6 +247,7 @@ export async function POST(req: NextRequest) {
             select: { id: true },
           });
           eventos.push(e.id);
+          if (item.indice !== null) guardadoPorIndice.set(item.indice, { clase: 'evento', id: e.id });
         } else {
           const repetidos: number[] = [];
           for (const dia of item.diasSemana) {
@@ -261,6 +291,17 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // 3.5) "Vence con": la entrega queda atada al examen o evento (guardado ahora o ya existente)
+      for (const { item } of aGuardar) {
+        if (item.clase !== 'tarea' || item.indice === null) continue;
+        const propia = guardadoPorIndice.get(item.indice);
+        const destinoIndice = leidos[item.indice]?.venceCon;
+        const destino = destinoIndice != null ? guardadoPorIndice.get(destinoIndice) : undefined;
+        if (propia?.clase === 'tarea' && tareas.includes(propia.id) && destino && destino.id !== propia.id) {
+          await tx.tarea.update({ where: { id: propia.id }, data: { venceConId: destino.id, venceConClase: destino.clase } });
+        }
+      }
+
       // 4) Guardar el resultado: un reintento devolverá exactamente esto
       const final: Resultado = { creados: { tareas, eventos, clases, materias: materiasCreadas }, omitidos, periodoCreado };
       await tx.interpretacionIA.update({ where: { id: interpretacionId }, data: { resultado: final as object } });
@@ -280,4 +321,4 @@ export async function POST(req: NextRequest) {
     console.error('Error en /api/ia/confirmar:', error);
     return NextResponse.json({ error: 'Error al guardar el borrador' }, { status: 500 });
   }
-}
+}

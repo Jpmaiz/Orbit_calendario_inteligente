@@ -3,16 +3,19 @@
  * Es el mismo para todas las entradas: texto, foto, captura, PDF y dictado.
  *
  * Todo lo de aquí es código determinista: fechas, materia propuesta, hora propuesta,
- * vigencia de clases, duplicados y choques.
+ * vigencia de clases, duplicados, choques y la estimación de horas y dificultad (Fase 1).
+ *
+ * Los ítems llegan ya pasados por prepararItems (preparación de eventos, "venceCon", preparativos).
  */
 import { prisma } from '@/lib/prisma/cliente';
 import { resolverFecha, HORA_POR_TIPO } from '@/lib/fechas/resolverFecha';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
+import { estimar } from '@/lib/estimacion/rubrica';
 import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 import {
-  proponerMateria, proponerHoraDesdeHorario, choquesDeEvento, revisarClase, nombreDia, normalizarNombre,
+  proponerMateria, proponerHoraDesdeHorario, choquesDeEvento, revisarClase, nombreDia, normalizarNombre, normalizarCodigo,
   type ClaseFija, type EventoPuntual,
 } from '@/lib/borrador/enriquecer';
 
@@ -50,6 +53,8 @@ export type OpcionesBorrador = {
   referencia?: Date;
   /** Vigencia que trae el propio documento (periodo impreso en el horario). Tiene prioridad. */
   vigencia?: { desde: string; hasta: string; periodo: string } | null;
+  /** Documento con varios periodos (anual y semestral): vigencia por sigla normalizada ("sme223"). */
+  vigenciaPorCodigo?: Map<string, { desde: string; hasta: string; periodo: string }>;
 };
 
 export async function construirBorrador(
@@ -72,7 +77,20 @@ export async function construirBorrador(
   const borrador = [];
   for (const item of items) {
     const base = armarFechas(item, referenciaDe(item, opciones, zona), zona);
-    const materiaPropuesta = proponerMateria(item.materia, item.codigoMateria, materias, alias);
+    let materiaPropuesta = proponerMateria(item.materia, item.codigoMateria, materias, alias);
+    // Materia no nombrada pero deducida por el contenido: se propone sin darla por segura
+    if (materiaPropuesta.accion === 'ninguna' && item.materiaSugerida) {
+      const sugerida = proponerMateria(item.materiaSugerida, null, materias, alias);
+      if (sugerida.accion === 'vincular') {
+        materiaPropuesta = { ...sugerida, seguro: false };
+        base.supuestos.push(`materia deducida por el contenido: ${sugerida.nombre}`);
+      }
+    }
+    if (item.clase === 'tarea' && item.venceCon !== null && items[item.venceCon]) {
+      base.supuestos.push(`vence al empezar «${items[item.venceCon].titulo}»`);
+    }
+    // Horas, dificultad e importancia: la IA calificó, el sistema calcula
+    const estimado = item.clase === 'tarea' ? estimar(item.tipo ?? 'tarea', item.estimacion) : null;
     const materiaClave = item.materia ? normalizarNombre(item.materia) : null;
     const inicioItem = base.inicio ? new Date(base.inicio) : null;
 
@@ -113,7 +131,10 @@ export async function construirBorrador(
     }
 
     if (item.clase === 'evento_fijo') {
-      if (opciones.vigencia) {
+      const propia = item.codigoMateria ? opciones.vigenciaPorCodigo?.get(normalizarCodigo(item.codigoMateria)) : undefined;
+      if (propia) {
+        vigencia = propia;
+      } else if (opciones.vigencia) {
         vigencia = opciones.vigencia;
       } else if (periodo) {
         vigencia = { desde: periodo.inicio.toISOString(), hasta: periodo.fin.toISOString(), periodo: periodo.nombre };
@@ -138,7 +159,26 @@ export async function construirBorrador(
       }
     }
 
-    borrador.push({ ...base, materiaPropuesta, horaPropuesta, vigencia, duplicado, choques });
+    borrador.push({
+      ...base, materiaPropuesta, horaPropuesta, vigencia, duplicado, choques,
+      // Para mostrar "~6 h · dificultad 3" y "¿Por qué?" en el borrador
+      estimado: estimado && {
+        horas: estimado.horas, dificultad: estimado.dificultad, importancia: estimado.importancia,
+        origen: estimado.origen, razones: estimado.razones, supuestos: estimado.supuestos,
+      },
+    });
+  }
+
+  // "Vence con": la entrega vence cuando empieza su examen o evento, con la misma hora
+  // (si el examen aún no tiene hora, la entrega tampoco: "hora por definir", no 23:59).
+  for (const b of borrador) {
+    if (b.clase !== 'tarea' || b.venceCon === null) continue;
+    const destino = borrador[b.venceCon];
+    if (destino?.inicio && !b.opcionesFecha?.length) {
+      b.inicio = destino.inicio;
+      b.horaDefinida = destino.horaDefinida;
+      b.supuestos = b.supuestos.filter((x) => x !== 'hora');
+    }
   }
   return borrador;
 }
@@ -232,6 +272,13 @@ export function armarFechas(item: ItemExtraido, referencia: Date, zona: string) 
         if (fin > r.fecha) base.fin = fin.toISOString();
       }
     }
+  }
+  // Fecha deducida del contexto (el texto no dice el día): se propone, el usuario la confirma con un toque
+  if (item.fechaInferida && base.inicio) {
+    const etiqueta = new Intl.DateTimeFormat('es-BO', { timeZone: zona, weekday: 'long', day: 'numeric', month: 'short' })
+      .format(new Date(base.inicio));
+    base.opcionesFecha = [{ etiqueta: `${etiqueta} (deducida del texto)`, fecha: base.inicio }];
+    base.supuestos.push('fecha deducida del contexto: confírmala');
   }
   return base;
 }

@@ -10,6 +10,8 @@
  * El puntaje lo calcula esta fórmula, explicable paso a paso.
  */
 
+import { horasPorDefecto } from "@/lib/estimacion/rubrica";
+
 export const CONFIG_PRIORIDAD = {
   /** Horas de estudio disponibles por día (fuera de clases). Fase 5: saldrá del horario real. */
   horasEstudioPorDia: 3,
@@ -28,14 +30,14 @@ export const CONFIG_PRIORIDAD = {
 
 export type ConfigPrioridad = typeof CONFIG_PRIORIDAD;
 
-/** Horas por defecto si nadie estimó la tarea (ni el usuario ni la IA). */
-export const HORAS_POR_TIPO: Record<string, number> = {
-  examen: 6,
-  proyecto: 10,
-  entrega: 4,
-  exposicion: 3,
-  tarea: 2,
-};
+/**
+ * Horas por defecto si nadie estimó la tarea (ni el usuario ni la IA): el centro del rango de su tipo,
+ * el mismo que usa la estimación (src/lib/estimacion/rubrica.ts). Así hay una sola fuente de verdad.
+ * Las horas estimadas son NETAS: el colchón por falacia de planificación se aplica solo aquí.
+ */
+export const HORAS_POR_TIPO: Record<string, number> = Object.fromEntries(
+  ['examen', 'proyecto', 'entrega', 'exposicion', 'tarea'].map((t) => [t, horasPorDefecto(t)]),
+);
 
 const URGENCIA_MAX = 75;
 const PESO_PRIORIDAD = { alta: 25, media: 15, baja: 5 } as const;
@@ -250,4 +252,4 @@ export function priorizarTareas<T extends TareaParaPriorizar>(
         b.prioridadCalculada.puntaje - a.prioridadCalculada.puntaje ||
         new Date(a.fechaLimite).getTime() - new Date(b.fechaLimite).getTime(),
     );
-}
+}

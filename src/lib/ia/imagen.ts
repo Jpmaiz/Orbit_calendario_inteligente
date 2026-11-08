@@ -12,7 +12,7 @@
  */
 import type { AdaptadorIA, ImagenEntrada } from './adaptador';
 import {
-  REGLAS_ITEMS, hoyComoTexto, materiasComoTexto, normalizarItems,
+  CAMPOS_VACIOS, REGLAS_ITEMS, hoyComoTexto, materiasComoTexto, normalizarItems,
   type ContextoExtraccion, type ItemExtraido,
 } from './extraccion';
 import {
@@ -25,11 +25,14 @@ export const TIPOS_DOCUMENTO = ['horario', 'afiche', 'captura_chat', 'pizarra', 
 export type TipoDocumento = (typeof TIPOS_DOCUMENTO)[number];
 
 export type PeriodoLeido = { nombre: string | null; inicio: string; fin: string }; // AAAA-MM-DD
+/** Un periodo del documento con las siglas que lo cursan (un reporte puede traer uno anual y uno semestral). */
+export type PeriodoConSiglas = PeriodoLeido & { siglas: string[] };
 
 export type LecturaImagen = {
   tipoDocumento: TipoDocumento;
   fechaDocumento: string | null; // AAAA-MM-DD: fecha del afiche, de los mensajes de una captura, etc.
-  periodo: PeriodoLeido | null;
+  periodo: PeriodoLeido | null;        // el principal: el que cursan más materias (se crea como periodo del usuario)
+  periodos: PeriodoConSiglas[];        // todos los del documento: cada clase toma las fechas del suyo
   materias: MateriaLeida[];
   grilla: GrillaLeida | null;
   celdas: CeldaHorario[];        // celdas FINALES (después de comparar y arbitrar)
@@ -65,11 +68,16 @@ const REGLAS_HORARIO = `HORARIO (grilla de clases semanal) → llena "grilla":
     Cada fila lleva EXACTAMENTE tantas celdas como "dias". La posición en la lista es lo que dice el día: cuenta bien.
   - Copia el texto de cada casilla tal cual se ve (ej. "SIS-233 [1] Aula: LRED/A1-3"). No lo resumas ni lo separes.
   - Si una casilla está combinada y ocupa varias filas, repite su texto en cada fila que cubre.
+- Si una casilla trae su horario escrito ("(14:15-16:30)"), cópialo tal cual dentro del texto de la casilla.
+- Si hay varias páginas y la grilla CONTINÚA en otra página sin la fila de días, usa los mismos días de la primera
+  página, en el mismo orden (las columnas están en la misma posición), y pon esas filas a continuación.
 - ${FOTO}
 - Si el documento trae una tabla de materias (sigla, nombre, paralelo, docente), cópiala en "materias".
   Escribe el "nombre" en forma formal: mayúscula inicial y tildes correctas
   ("ANALISIS DE ALGORITMOS" → "Análisis de Algoritmos"; "REDES DE COMPUTADORAS II" → "Redes de Computadoras II").
-- Si dice el periodo o semestre con fechas ("Del: 03/08/2026 Al: 12/01/2027"), ponlo en "periodo" (fechas AAAA-MM-DD).`;
+- Si dice el periodo o semestre con fechas ("Del: 03/08/2026 Al: 12/01/2027"), ponlo en "periodos" (fechas AAAA-MM-DD)
+  con las siglas de las materias que aparecen bajo ese periodo. Un reporte puede traer DOS periodos
+  (uno anual y uno semestral): pon los dos, cada uno con sus siglas. Si las prácticas repiten las siglas, no las dupliques.`;
 
 const REGLAS_OTROS = `AFICHE, CAPTURA DE CHAT, PIZARRA u OTRO → llena "items":
 - Mismo formato de ítem que se explica abajo. Un afiche de un evento (feria, concierto, charla) es un "evento".
@@ -87,7 +95,7 @@ const FORMATO = `Devuelve SOLO un JSON con esta forma:
 {
   "tipoDocumento": "horario" | "afiche" | "captura_chat" | "pizarra" | "otro",
   "fechaDocumento": "AAAA-MM-DD" o null,
-  "periodo": { "nombre": string o null, "inicio": "AAAA-MM-DD", "fin": "AAAA-MM-DD" } o null,
+  "periodos": [ { "nombre": string o null, "inicio": "AAAA-MM-DD", "fin": "AAAA-MM-DD", "siglas": [string] } ],
   "materias": [ { "codigo": string o null, "nombre": string, "paralelo": string o null, "docente": string o null } ],
   "grilla": { "dias": [string], "filas": [ { "horario": string, "celdas": [string] } ] } o null,
   "items": [ ... ]
@@ -126,9 +134,11 @@ export function construirPromptColumnas(textoAdjunto: string | null): string {
   return `Esta imagen es una grilla de horario de clases (columnas = días, filas = horas).
 Léela COLUMNA POR COLUMNA:
 - Recorre las columnas de DÍAS de izquierda a derecha (no la columna de horas).
+- Si hay varias páginas y la grilla continúa en otra página sin la fila de días, esas casillas son de los MISMOS días
+  (misma posición de columna que en la primera página): agrégalas a la columna que corresponde.
 - En cada una, baja de arriba hacia abajo y anota SOLO las casillas ocupadas, con:
   "horario" = el texto de la columna de horas de ESA fila (míralo a la izquierda, en la misma fila), tal cual;
-  "texto" = el texto de la casilla tal cual (ej. "SIS-233 [1] Aula: LRED/A1-3").
+  "texto" = el texto de la casilla tal cual (ej. "SIS-233 [1] Aula: LRED/A1-3"), con su horario escrito si lo trae ("(14:15-16:30)").
 - Si una casilla combinada ocupa varias filas, anótala una vez por cada fila que cubre.
 - Incluye TODAS las columnas de días, aunque estén vacías ("ocupadas": []).
 ${FOTO}
@@ -192,11 +202,19 @@ export function normalizarLectura(crudo: unknown): LecturaImagen {
     ? (r.tipoDocumento as TipoDocumento)
     : 'otro';
 
-  const p = (r.periodo ?? null) as Record<string, unknown> | null;
-  const periodo =
-    p && esFecha(p.inicio) && esFecha(p.fin) && p.fin > p.inicio
-      ? { nombre: texto(p.nombre, 50), inicio: p.inicio, fin: p.fin }
-      : null;
+  // "periodos" (varios, con siglas). Se acepta también "periodo" (uno solo), por compatibilidad.
+  const crudos = lista(r.periodos).length ? lista(r.periodos) : r.periodo ? [r.periodo] : [];
+  const periodos: PeriodoConSiglas[] = [];
+  for (const x of crudos.slice(0, 4)) {
+    const p = (x ?? {}) as Record<string, unknown>;
+    if (!esFecha(p.inicio) || !esFecha(p.fin) || p.fin <= p.inicio) continue;
+    if (periodos.some((q) => q.inicio === p.inicio && q.fin === p.fin)) continue;
+    const siglas = lista(p.siglas).map((s) => texto(s, 30)).filter((s): s is string => !!s);
+    periodos.push({ nombre: texto(p.nombre, 50), inicio: p.inicio, fin: p.fin, siglas: [...new Set(siglas)] });
+  }
+  // Principal: el que cursan más materias; si empatan, el que termina después
+  const principal = [...periodos].sort((a, b) => b.siglas.length - a.siglas.length || b.fin.localeCompare(a.fin))[0];
+  const periodo = principal ? { nombre: principal.nombre, inicio: principal.inicio, fin: principal.fin } : null;
 
   const materias: MateriaLeida[] = [];
   for (const x of lista(r.materias).slice(0, 20)) {
@@ -215,6 +233,7 @@ export function normalizarLectura(crudo: unknown): LecturaImagen {
     tipoDocumento: tipo,
     fechaDocumento: esFecha(r.fechaDocumento) ? r.fechaDocumento : null,
     periodo,
+    periodos,
     materias,
     grilla: normalizarGrilla(r.grilla),
     celdas: [],
@@ -225,10 +244,15 @@ export function normalizarLectura(crudo: unknown): LecturaImagen {
 // ───────────────────────── Clases → ítems del borrador ─────────────────────────
 
 function claseAItem(c: ClaseLeida): ItemExtraido {
-  const detalles = [c.paralelo ? `Paralelo ${c.paralelo}` : null, c.docente ? `Docente: ${c.docente}` : null].filter(Boolean);
+  const detalles = [
+    c.paralelo ? `${c.practica ? 'Grupo de práctica' : 'Paralelo'} ${c.paralelo}` : null,
+    c.docente ? `Docente: ${c.docente}` : null,
+  ].filter(Boolean);
   return {
+    ...CAMPOS_VACIOS,
     clase: 'evento_fijo',
-    titulo: c.nombre,
+    // La práctica es otra clase de la MISMA materia: cambia el título, no la materia
+    titulo: c.practica && c.nombreConocido ? `${c.nombre} · Práctica` : c.nombre,
     tipo: null,
     fechaDicha: null,
     fechaFinDicha: null,

@@ -22,6 +22,7 @@ Todos los prompts siguen la misma regla. La IA **solo describe lo que ve o lo qu
 | Copia el texto de cada casilla del horario | Separa sigla, paralelo y aula (`grilla.ts`) |
 | Lee la grilla dos veces | Compara casilla por casilla y decide qué es confiable (`celdas.ts`) |
 | Escribe el nombre de la materia | Busca la materia por código, alias o nombre (`proponerMateria`) |
+| Califica la actividad con una rúbrica (temas, nivel cognitivo, formato…) | Calcula horas, dificultad e importancia (`estimacion/rubrica.ts`) |
 | — | Duplicados, choques, vigencia, prioridad |
 
 **Por qué:** un modelo de lenguaje puede sumar mal días o confundir columnas, pero describe bien. Lo que se
@@ -37,7 +38,7 @@ una hora "25:00", un día 9 o un tipo inventado se descartan. Nunca se confía a
 - **Archivo:** `src/lib/ia/extraccion.ts` → `construirPromptExtraccion` + `REGLAS_ITEMS`
 - **Endpoint:** `POST /api/ia/extraer` · **1 llamada**
 - **Entra:** el texto del estudiante, hoy, zona horaria, sus materias.
-- **Sale:** `{ items: [...] }`, un ítem por actividad (máx. 10).
+- **Sale:** `{ items: [...] }`, un ítem por actividad (máx. 12). Cada tarea trae su `estimacion` (rúbrica, ver §4).
 
 **Reglas clave del prompt y por qué:**
 
@@ -52,6 +53,13 @@ una hora "25:00", un día 9 o un tipo inventado se descartan. Nunca se confía a
 | Si solo hay código ("SIS-311"), va en `codigoMateria` | El sistema la busca por código o pide el nombre |
 | `evidencia` = fragmento exacto | Para mostrar de dónde salió cada ítem |
 | Eventos de varios días → `fechaFinDicha` | "Feria del 20 al 29" es UN evento, no diez |
+| Extraer también lo que se menciona de paso ("el día del examen de la 4.ª unidad") | Ese examen es otra actividad; si ya existe, lo detecta el control de duplicados |
+| Día no dicho pero claro por el contexto → `fechaInferida: true` | El sistema lo propone como opción y el usuario lo confirma con un toque |
+| `venceCon`: "entregar al ingresar a rendir el examen" | La entrega toma la fecha y hora del examen y queda vinculada a él |
+| `materiaSugerida`: la materia no se nombra pero el contenido la delata | Se propone sin darla por segura (patologías + IHQ → Anatomía Patológica) |
+| `preparacion` en un evento ("cirugía: estudiar apéndice y nudos") | El evento es asistencia (0 h); el sistema crea la tarea "Preparación: …" |
+| `preparativos` y `referencias` | "Entregar en físico" va al checklist; el libro, a los detalles. Nunca suman horas |
+| Ignorar saludos y ruido ("buenos días", "cualquier duda inbox") | No son actividades |
 
 ---
 
@@ -108,6 +116,14 @@ con mensajes de "Ayer" y "Hoy" (3/3 fechas correctas).
 
 Script para repetir las pruebas: `npx tsx --env-file=.env scripts/probar-imagen.ts <imagen> [texto.txt]`.
 
+**Ajustes por un horario de Medicina (v2.1, 7/11/2026):** el reporte traía prácticas con paralelo "[4-B]",
+una casilla con su hora escrita "(14:15-16:30)", dos periodos (anual y semestral) y la grilla seguía en la
+página 2 sin la fila de días. Ahora: el paralelo acepta guion y "4-B" se marca como práctica si existe "[4]";
+la hora escrita en la casilla manda sobre la de la fila; la IA devuelve `periodos` con sus siglas y cada clase
+toma las fechas de su periodo; los prompts piden heredar los días de la página 1. Además, el texto del PDF se
+limpia de carnet, registro y nombre antes de mandarlo (`src/lib/privacidad.ts`). Pruebas sin IA:
+`npx tsx scripts/probar-lectura.ts`.
+
 ---
 
 ## 3. Confianza
@@ -122,8 +138,59 @@ Mejora pendiente: calibrarlos con un set de horarios de prueba.
 
 ---
 
+## 4. Estimación de horas y dificultad (Fase 1)
+
+- **Archivos:** reglas para la IA en `REGLAS_ITEMS` (bloque ESTIMACION); cálculo en `src/lib/estimacion/rubrica.ts`.
+- **Misma llamada** que la extracción: no agrega espera.
+- **Fundamento:** documento "Orbit: fundamento de la estimación y el plan de estudio" (Rice, Webb DOK, Wood,
+  Sweller, Buehler). **Pruebas:** `npx tsx scripts/probar-rubrica.ts` (sin IA) y
+  `npx tsx --env-file=.env scripts/probar-estimacion.ts` (con IA).
+
+**Lo que califica la IA** (para un estudiante promedio que asistió a clases; NO da horas):
+
+| Campo | Qué es | Regla clave |
+|---|---|---|
+| `escala` | control / parcial / final (solo exámenes) | Oral o evaluación de práctica = control. Si no se sabe: null (el sistema supone parcial y lo avisa) |
+| `temas` + `amplitud` | Los contenidos que nombra el texto | "Cardio", "la 4.ª competencia" = amplio (cuenta como 3). Subdivisiones = un tema. En una comparación, cada cosa comparada es un tema. El nombre del propio trabajo no es un tema |
+| `cantidades` | Páginas, ejercicios, diapositivas, minutos de exposición | "20 pts" es la calificación: no es cantidad y se ignora |
+| `volumen` | bajo / medio / alto | Solo si no hay temas ni cantidades |
+| `nivelCognitivo` | 1 recordar · 2 aplicar · 3 analizar o integrar · 4 crear | Cuadro comparativo o historia clínica = 3 |
+| `partes`, `grupal`, `formato`, `claridad` | Componentes, coordinación, oral/práctico/a mano, instrucciones vagas | |
+| `impostergable` | "Entrega impostergable", "no se recibe tarde" | Sube la importancia a alta; nunca suma horas |
+| `evidencia` | Frase exacta que justifica cada factor alto | **Sin frase, el factor baja a su valor medio** (lo aplica `normalizarLecturaEstimacion`) |
+
+**Lo que calcula el sistema:**
+
+1. **Rango por tipo** (h): control 1–2 · parcial 4–8 · final 8–14 · tarea 1–3 · entrega 2–5 · exposición 3–6 · proyecto 10–30.
+2. **Horas:** con cantidades, por tasas (15 o 6 pág/h leídas, 1 o 2 h por página escrita, 15 o 35 min por ejercicio,
+   15 min por diapositiva, 6 min de preparación por minuto expuesto). Si no, posición en el rango =
+   temas ÷ (temas + 5): 1 tema 17 %, 5 temas 50 %, 10 temas 67 %; nunca el máximo. Sin temas, volumen
+   (25 / 50 / 65 %). Nivel 3–4: +10 puntos. Ajuste: +10 % varias partes, +10 % grupal, tope +20 %. Se recorta
+   al rango y se redondea a media hora.
+3. **Dificultad** = nivel cognitivo + 0,5 por cada factor alto, de 1 a 5. Factores: componentes (varias partes, grupal,
+   5 o más temas equivalentes, o examen final, que integra todo) · oral o práctico · claridad baja.
+4. **Importancia** (va a `prioridad`): final, exposición y proyecto = alta; parcial y entrega = media; control y tarea = baja.
+   Impostergable = alta. La calificación ("sobre 20 puntos") no se toma en cuenta en nada.
+5. **Respaldo:** si la IA no pudo leer, centro del rango y `origen: general`.
+
+Las horas son **netas**: el colchón por falacia de planificación (×1,25 a ×1,75) lo aplica solo `prioridad.ts`.
+Si el usuario fija las horas, `horasDelUsuario = true` y ninguna estimación las reemplaza.
+
+**Ajustes tras la primera prueba con DeepSeek (7/11):** la IA contaba "nefríticos vs nefróticos" como 1 tema y el
+título de la historia clínica como tema (salían 1,5 h en vez de 2 h); ponía "preparar la demo" como preparativo;
+un final de 6 temas salía con dificultad 2. Se aclararon las reglas de temas, preparativos y nivel (defender = 3),
+y los componentes ahora incluyen muchos temas y el examen final. La entrega "vence con" toma la hora del examen
+(antes quedaba 23:59).
+
+**Por qué así:** la primera versión ubicaba volumen alto en el máximo del rango (un final con 5 temas daba 14 h).
+Era exagerado: más temas no deben sumar tiempo en línea recta. Con rendimiento decreciente da 11,5 h.
+
+---
+
 ## Cómo cambiar un prompt sin romper nada
 
 1. Editar el prompt en su archivo (`extraccion.ts` o `imagen.ts`).
-2. Repetir las pruebas con `scripts/probar-imagen.ts` (horario PDF, foto chueca, afiche, captura).
+2. Repetir las pruebas con `scripts/probar-imagen.ts` (horario PDF, foto chueca, afiche, captura),
+   `scripts/probar-estimacion.ts` (textos de ejemplo y `--consistencia`) y las pruebas sin IA:
+   `scripts/probar-rubrica.ts` y `scripts/probar-lectura.ts`.
 3. Si cambia el formato de salida, actualizar también su `normalizar…` (validación) y este documento.

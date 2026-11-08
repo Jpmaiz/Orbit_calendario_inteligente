@@ -86,6 +86,8 @@ export async function POST(req: NextRequest) {
     const tarea = await prisma.tarea.create({
       data: {
         ...resto,
+        // Si el usuario escribió las horas, son suyas: ninguna estimación las reemplaza
+        horasDelUsuario: resto.duracionEstMin != null,
         titulo: titulo!,
         tipo: tipo!,
         fechaLimite: fechaLimite!,

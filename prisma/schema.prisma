@@ -101,6 +101,13 @@ model Tarea {
   planIA              Json?     @map("plan_ia")
     horaDefinida        Boolean   @default(true) @map("hora_definida") // false = "hora por definir"
 
+  // Fase 1: estimación (la IA califica con la rúbrica, el sistema calcula; ver src/lib/estimacion/rubrica.ts)
+  estimacion          Json?                                          // { horas, dificultad, importancia, origen, razones, lectura }
+  horasDelUsuario     Boolean   @default(false) @map("horas_del_usuario") // true = el usuario fijó las horas: no se recalculan
+  // "Vence con": entrega que se hace al empezar otro examen o evento; si ese cambia de fecha, esta se mueve
+  venceConId          String?   @map("vence_con_id")
+  venceConClase       String?   @map("vence_con_clase")              // 'tarea' | 'evento'
+
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")
@@ -112,6 +119,7 @@ model Tarea {
 
   @@index([usuarioId, fechaLimite])
   @@index([usuarioId, estado])
+  @@index([venceConId])
   @@map("tareas")
 }
 

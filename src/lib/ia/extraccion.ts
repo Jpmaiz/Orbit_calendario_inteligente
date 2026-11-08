@@ -3,6 +3,7 @@
  * La IA solo LEE y DESMENUZA. Fechas, materias y duplicados los decide el sistema.
  */
 import type { FechaDicha } from '@/lib/fechas/resolverFecha';
+import { normalizarLecturaEstimacion, type LecturaEstimacion } from '@/lib/estimacion/rubrica';
 
 export type ClaseItem = 'tarea' | 'evento' | 'evento_fijo';
 export const TIPOS_TAREA = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'] as const;
@@ -24,6 +25,13 @@ export type ItemExtraido = {
   confianza: number;                         // 0–1
   evidencia: string;                         // fragmento del texto de donde salió
   fechaReferencia: string | null;            // AAAA-MM-DD: día en que se dijo (mensaje de una captura). null = hoy
+  fechaInferida: boolean;                    // el texto no dice el día: se dedujo del contexto (se pide confirmar)
+  venceCon: number | null;                   // vence cuando empieza otro ítem de la lista (índice): "entregar al ingresar al examen"
+  materiaSugerida: string | null;            // materia deducida por el contenido (no nombrada): se pide confirmar
+  estimacion: LecturaEstimacion | null;      // tareas: rúbrica para calcular horas y dificultad (lo calcula el sistema)
+  preparacion: { titulo: string | null; estimacion: LecturaEstimacion | null } | null; // evento que hay que llevar estudiado
+  preparativos: string[];                    // lo que hay que llevar o tener listo
+  referencias: string[];                     // libros o fuentes
 };
 
 export type ContextoExtraccion = {
@@ -51,22 +59,34 @@ export const REGLAS_ITEMS = `Cada ítem:
   "tipo": "examen" | "tarea" | "entrega" | "proyecto" | "exposicion" | null,
   "fechaDicha": FECHA o null,
   "fechaFinDicha": FECHA o null,
+  "fechaInferida": true | false,
+  "venceCon": número o null,
   "hora": "HH:mm" o null,
   "horaFin": "HH:mm" o null,
   "diasSemana": [números],
   "materia": string o null,
   "codigoMateria": string o null,
+  "materiaSugerida": string o null,
   "descripcion": string o null,
   "ubicacion": string o null,
+  "estimacion": ESTIMACION o null,
+  "preparacion": { "titulo": string, "estimacion": ESTIMACION } o null,
+  "preparativos": [string],
+  "referencias": [string],
   "confianza": número de 0 a 1,
   "evidencia": "fragmento exacto del texto de donde salió este ítem"
 }
 
+ACTIVIDADES: extrae TODAS, también las que se mencionan de paso ("para el día del examen de la 4.ª unidad"
+también anuncia un examen: es otro ítem). Ignora saludos y frases sin actividad ("buenos días", "cualquier duda inbox").
+
 CLASE:
 - "tarea": hay que preparar o entregar algo para una fecha (examen, entrega, proyecto, exposición, tarea). Lleva "tipo".
-- "evento": ocurre una vez en un horario (reunión de grupo, charla, feria). "tipo" = null.
+- "evento": ocurre una vez en un horario (reunión de grupo, charla, feria, cirugía, práctica en hospital). "tipo" = null.
     Si dura varios días ("del 20 al 29 de noviembre"), "fechaDicha" = primer día y "fechaFinDicha" = último día.
     Si es un solo día, "fechaFinDicha" = null.
+    Si para el evento hay que llevar estudiado algo ("estudiar semiología de apéndice y nudos"), ponlo en "preparacion"
+    con su ESTIMACION (los temas a estudiar). No crees otro ítem para eso: el sistema lo crea.
 - "evento_fijo": se repite cada semana (una clase). Usa "diasSemana" (1 = lunes … 7 = domingo), "hora" de inicio y "horaFin". "fechaDicha" = null.
 
 TITULO: nombre formal y corto, SIN verbo al inicio (el tipo ya dice la acción), con mayúscula inicial y abreviaturas expandidas.
@@ -79,11 +99,58 @@ FECHA (NO calcules fechas; describe lo que dijo el texto):
         "ambigua" si dice "el próximo lunes" o "el siguiente lunes"; "sin_especificar" si solo dice "el lunes".
 - Relativa: { "tipo": "relativa", "dias": N }  (hoy = 0, mañana = 1, pasado mañana = 2, "en 3 días" = 3)
 - Fecha con número: { "tipo": "exacta", "fecha": "AAAA-MM-DD" }  (si no dice el año, usa el año actual)
-- Si el texto no dice cuándo: null. NUNCA inventes una fecha ni una hora.
+- Si el ítem no dice el día pero el contexto lo deja claro (va en el mismo párrafo que otras actividades de ese día),
+  usa esa fecha y pon "fechaInferida": true. Si no hay forma de saberlo: null. NUNCA inventes una fecha ni una hora.
+- "venceCon": si se entrega cuando empieza otro ítem de esta lista ("entregar al ingresar a rendir el examen"),
+  pon el número de ese ítem (0 = el primero) y usa su misma fecha. Si no, null.
 
 MATERIA: si corresponde a una de las materias del estudiante, usa ese nombre exacto. Si no, escríbela como aparece.
 Si solo aparece un código (ej. "SIS-311"), ponlo en "codigoMateria" y deja "materia" en null.
-DESCRIPCION: temas o detalles útiles ("subnetting, VLANs"). Si no hay, null.
+Si el texto NO nombra la materia pero el contenido apunta claramente a una de las materias del estudiante
+(patologías e inmunohistoquímica → Anatomía Patológica), deja "materia" en null y pon ese nombre exacto en "materiaSugerida".
+Si no estás seguro, "materiaSugerida" = null.
+DESCRIPCION: detalles útiles que no van en otro campo. Si no hay, null.
+PREPARATIVOS: cosas físicas que hay que llevar o entregar ("entregar en físico" → "Llevar el trabajo impreso", "llevar bata").
+Una parte del trabajo ("preparar la demo") NO es un preparativo: es parte de la tarea (ver "partes"). Si no hay, [].
+REFERENCIAS: libros o fuentes que nombra ("Argente-Álvarez, última edición"). Si no hay, [].
+
+ESTIMACION (solo tareas y "preparacion"). Califica la actividad para un estudiante promedio que asistió a clases.
+NO calcules horas: el sistema las calcula con lo que califiques.
+{
+  "escala": "control" | "parcial" | "final" | null,
+  "temas": [ { "nombre": string, "amplitud": "estrecho" | "normal" | "amplio" } ],
+  "cantidades": { "paginasLeer": n o null, "paginasEscribir": n o null, "ejercicios": n o null, "diapositivas": n o null, "minutosExposicion": n o null },
+  "volumen": "bajo" | "medio" | "alto" | null,
+  "nivelCognitivo": 1 | 2 | 3 | 4,
+  "partes": true | false,
+  "grupal": true | false,
+  "formato": "escrito" | "oral" | "practico" | "a_mano" | null,
+  "claridad": "alta" | "media" | "baja",
+  "impostergable": true | false,
+  "evidencia": { "nivel": string, "volumen": string, "partes": string, "grupal": string, "formato": string, "peso": string }
+}
+- escala (solo exámenes): "control" = quiz, control, oral o evaluación de una práctica; "parcial" = parcial o examen de unidad;
+  "final" = examen final. Si el texto no lo deja claro: null (no adivines).
+- temas: los contenidos que hay que estudiar o cubrir, solo si el texto los nombra.
+  "amplio" = un sistema, unidad o competencia completa ("cardio", "digestivo", "toda la unidad 3", "la 4.ª competencia");
+  "estrecho" = un subtema puntual; si no, "normal" (un capítulo es "normal").
+  Las subdivisiones de un tema ("primaria, secundaria y terciaria") son UN tema.
+  En una comparación, CADA cosa comparada es un tema ("nefríticos vs nefróticos" = 2 temas).
+  El nombre del propio trabajo NO es un tema ("historia clínica de litiasis renal" → temas [], usa "volumen").
+- cantidades: solo números que el texto dice sobre el trabajo (páginas, ejercicios, diapositivas, minutos de exposición).
+  "20 pts" o "nota sobre 20 puntos" es la calificación: NO es una cantidad. Ignórala.
+- volumen: solo si no hay temas ni cantidades. Si no se sabe, null.
+- nivelCognitivo: 1 = recordar o definir; 2 = comprender, resolver ejercicios conocidos, aplicar un procedimiento;
+  3 = analizar, comparar, justificar, integrar un caso (cuadro comparativo, historia clínica), exponer o defender un trabajo;
+  4 = crear, diseñar, investigar.
+- partes: varias partes o entregables distintos (diapositivas + demo, informe + código). grupal: se hace en grupo.
+- formato: "oral" (oral, defensa); "practico" (con las manos o en laboratorio: maniobras, nudos, Packet Tracer);
+  "a_mano" (pide hacerlo a mano); "escrito" (escrito normal). Si no se sabe, null.
+- claridad: "baja" si las instrucciones son vagas o no dicen qué entra; "alta" si dicen exactamente qué hacer.
+- impostergable: true si dice "impostergable", "no se recibe tarde" o similar. Nunca suma horas.
+- La calificación ("vale 20 puntos", "nota sobre 20") no se califica en ningún campo: ignórala.
+- evidencia: la frase EXACTA del texto que justifica nivel 3 o 4, volumen alto, partes, grupal, formato oral o práctico,
+  e impostergable. Sin frase que lo respalde, deja "" y usa el valor medio (nivel 2, volumen medio, false, null). No supongas.
 `;
 
 export function construirPromptExtraccion(texto: string, ctx: ContextoExtraccion): string {
@@ -93,7 +160,7 @@ export function construirPromptExtraccion(texto: string, ctx: ContextoExtraccion
   return `Eres un asistente que lee mensajes de estudiantes universitarios en Bolivia y los desmenuza en actividades.
 Hoy es ${hoy}. Materias del estudiante: ${materias}.
 
-Devuelve SOLO un JSON con esta forma: { "items": [ ... ] }. Un ítem por cada actividad del texto (máximo 10).
+Devuelve SOLO un JSON con esta forma: { "items": [ ... ] }. Un ítem por cada actividad del texto (máximo 12).
 
 ${REGLAS_ITEMS}
 
@@ -102,6 +169,8 @@ Texto del estudiante: """${texto}"""`;
 
 const esHora = (v: unknown): v is string => typeof v === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(v);
 const texto = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+const textos = (v: unknown, cantidad: number, max: number) =>
+  Array.isArray(v) ? [...new Set(v.map((x) => texto(x, max)).filter((x): x is string => !!x))].slice(0, cantidad) : [];
 
 export function normalizarFecha(v: unknown): FechaDicha | null {
   const f = (v ?? null) as Record<string, unknown> | null;
@@ -125,7 +194,7 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
   const lista = Array.isArray((crudo as { items?: unknown })?.items) ? (crudo as { items: unknown[] }).items : [];
   const items: ItemExtraido[] = [];
 
-  for (const x of lista.slice(0, 10)) {
+  for (const x of lista.slice(0, 12)) {
     const r = (x ?? {}) as Record<string, unknown>;
     const titulo = texto(r.titulo, 200);
     if (!titulo) continue;
@@ -156,9 +225,32 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       confianza: Math.min(1, Math.max(0, Number(r.confianza) || 0.5)),
       evidencia: texto(r.evidencia, 300) ?? '',
       fechaReferencia: typeof r.fechaReferencia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.fechaReferencia) ? r.fechaReferencia : null,
+      fechaInferida: clase !== 'evento_fijo' && r.fechaInferida === true,
+      venceCon: clase === 'tarea' && Number.isInteger(r.venceCon) && (r.venceCon as number) >= 0 ? (r.venceCon as number) : null,
+      materiaSugerida: texto(r.materiaSugerida, 100),
+      estimacion: clase === 'tarea' ? normalizarLecturaEstimacion(r.estimacion) : null,
+      preparacion: clase === 'evento' ? normalizarPreparacion(r.preparacion) : null,
+      preparativos: textos(r.preparativos, 5, 120),
+      referencias: textos(r.referencias, 5, 120),
     });
   }
-  return items;
+  // "venceCon" tiene que apuntar a OTRO ítem que exista
+  return items.map((it, i) => (it.venceCon !== null && (it.venceCon === i || it.venceCon >= items.length) ? { ...it, venceCon: null } : it));
 }
 
-export const NOMBRE_DIA = (d: number) => DIAS[d - 1] ?? '';
+function normalizarPreparacion(v: unknown): ItemExtraido['preparacion'] {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const p = v as Record<string, unknown>;
+  const estimacion = normalizarLecturaEstimacion(p.estimacion);
+  // Sin temas ni cantidades no hay nada concreto que preparar
+  if (!estimacion || (estimacion.temas.length === 0 && !Object.values(estimacion.cantidades).some(Boolean))) return null;
+  return { titulo: texto(p.titulo, 150), estimacion };
+}
+
+/** Campos nuevos con su valor vacío: para ítems que arma el sistema (clases de un horario). */
+export const CAMPOS_VACIOS = {
+  fechaInferida: false, venceCon: null, materiaSugerida: null, estimacion: null,
+  preparacion: null, preparativos: [], referencias: [],
+} satisfies Partial<ItemExtraido>;
+
+export const NOMBRE_DIA = (d: number) => DIAS[d - 1] ?? '';

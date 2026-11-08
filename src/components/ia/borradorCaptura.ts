@@ -230,8 +230,9 @@ export function problemasItem(i: ItemRevision): string[] {
   }
   return problemas;
 }
-function itemParaEnvio(i: ItemRevision) {
-  const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia };
+/** indice = posición en el borrador: el backend recupera con él la estimación y el vínculo "vence con". */
+function itemParaEnvio(i: ItemRevision, indice: number) {
+  const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia, indice };
   if (i.clase === 'tarea') return {
     ...comunes, clase: 'tarea' as const, tipo: i.tipo, inicio: inicioDe(i)!,
     horaDefinida: i.horaDefinida, descripcion: i.descripcion || null,
@@ -261,7 +262,7 @@ export function construirConfirmacion(interpretacionId: string, items: ItemRevis
   if (errores.length) throw new Error(errores.join('\n'));
   return {
     interpretacionId, fueCorregida,
-    items: incluidos.map(itemParaEnvio),
+    items: items.flatMap((item, indice) => (item.excluido ? [] : [itemParaEnvio(item, indice)])),
   };
 }
 
@@ -274,7 +275,7 @@ export function construirSolicitudRevision(items: ItemRevision[]) {
   const indices = items.flatMap((item, indice) => item.excluido ? [] : [indice]);
   if (!indices.length || indices.length > 20) throw new Error('Incluye entre 1 y 20 actividades para revisar.');
   // El backend devuelve un error por ítem incompleto sin impedir revisar los demás.
-  return { indices, body: { items: indices.map((indice) => itemParaEnvio(items[indice])) } };
+  return { indices, body: { items: indices.map((indice) => itemParaEnvio(items[indice], indice)) } };
 }
 
 export function leerRevisionCalculada(valor: unknown, cantidad: number): ResultadoRevision[] {

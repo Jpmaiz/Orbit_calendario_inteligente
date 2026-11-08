@@ -4,13 +4,14 @@ import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 import { avisosFechasPasadas, cargarContexto, construirBorrador } from '@/lib/borrador/construirBorrador';
+import { prepararItems } from '@/lib/borrador/prepararItems';
 
 /**
  * POST /api/ia/extraer   Body: { texto }
  * Devuelve un BORRADOR enriquecido. NO guarda nada.
  * - La IA desmenuza el texto en ítems.
  * - El sistema calcula fechas, propone materia, propone hora desde el horario,
- *   asigna vigencia a las clases y detecta duplicados y choques (ver construirBorrador).
+ *   asigna vigencia a las clases, detecta duplicados y choques, y estima horas y dificultad (ver construirBorrador).
  */
 export async function POST(req: NextRequest) {
   const user = await obtenerUsuario();
@@ -36,10 +37,12 @@ export async function POST(req: NextRequest) {
 
     // 1) La IA desmenuza
     const inicio = Date.now();
-    const items: ItemExtraido[] = (
+    const leidos: ItemExtraido[] = (
       await ia.extraerItems(texto, { ahora, zonaHoraria: ctx.zona, materias: ctx.materias.map((m) => m.nombre) })
     ).map((i) => ({ ...i, fechaReferencia: null })); // en un texto, "mañana" siempre se cuenta desde hoy
     const latencia = Date.now() - inicio;
+    // Preparación de eventos, "vence con", preparativos. Se guarda ESTA lista: los índices del borrador apuntan a ella.
+    const items = prepararItems(leidos);
 
     // 2) El sistema decide
     const borrador = await construirBorrador(user.id, items, ctx, { ahora });
