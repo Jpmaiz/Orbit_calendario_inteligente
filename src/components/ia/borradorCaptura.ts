@@ -16,6 +16,7 @@ export type PropuestaMateria =
   | { accion: 'preguntar_nombre'; codigo: string };
 export type ItemExtraido = {
   clase: ClaseItem; titulo: string; tipo: string | null; fechaDicha: unknown;
+  venceCon: number | null; // Posición del destino en la lista original, nunca un ID.
   hora: string | null; horaFin: string | null; diasSemana: number[];
   materia: string | null; codigoMateria: string | null; descripcion: string | null;
   ubicacion: string | null; confianza: number; evidencia: string;
@@ -41,6 +42,7 @@ export type ItemRevision = {
   vigenciaDesde: string; vigenciaHasta: string;
   fechaElegida: boolean; propuestaResuelta: boolean;
   decisionDuplicado: 'pendiente' | 'existente' | 'nueva'; excluido: boolean;
+  fechaEditadaManualmente?: boolean; inicioVinculado?: string | null;
 };
 export type ResultadoConfirmacion = {
   creados: { tareas: string[]; eventos: string[]; clases: string[]; materias: { id: string; nombre: string }[] };
@@ -88,17 +90,23 @@ function propuesta(v: unknown): PropuestaMateria {
 export function leerBorrador(v: unknown): Borrador {
   const b = objeto(v);
   const p = b.periodo === null ? null : objeto(b.periodo);
+  const originales = lista(b.items);
   return {
     interpretacionId: texto(b.interpretacionId), advertencias: textos(b.advertencias),
     periodo: p ? { nombre: texto(p.nombre), inicio: fecha(p.inicio), fin: fecha(p.fin) } : null,
-    items: lista(b.items).map((v) => {
+    items: originales.map((v, indice) => {
       const i = objeto(v);
       if (i.clase !== 'tarea' && i.clase !== 'evento' && i.clase !== 'evento_fijo') throw new Error('Clase de actividad desconocida.');
+      const venceCon = i.venceCon == null ? null : numero(i.venceCon);
+      if (venceCon !== null && (!Number.isInteger(venceCon) || venceCon < 0 ||
+          venceCon >= originales.length || venceCon === indice)) {
+        throw new Error('El servidor devolvió un vínculo de actividad inválido.');
+      }
       const h = i.horaPropuesta === null ? null : objeto(i.horaPropuesta);
       const vg = i.vigencia === null ? null : objeto(i.vigencia);
       const d = i.duplicado === null ? null : objeto(i.duplicado);
       return {
-        clase: i.clase, titulo: texto(i.titulo), tipo: nullable(i.tipo), fechaDicha: i.fechaDicha,
+        clase: i.clase, titulo: texto(i.titulo), tipo: nullable(i.tipo), fechaDicha: i.fechaDicha, venceCon,
         hora: nullable(i.hora), horaFin: nullable(i.horaFin), diasSemana: lista(i.diasSemana).map(numero),
         materia: nullable(i.materia), codigoMateria: nullable(i.codigoMateria), descripcion: nullable(i.descripcion),
         ubicacion: nullable(i.ubicacion), confianza: numero(i.confianza), evidencia: texto(i.evidencia),
@@ -169,8 +177,9 @@ export function crearRevision(i: ItemExtraido): ItemRevision {
 }
 export function actualizarRevision(items: ItemRevision[], indice: number, cambios: Partial<ItemRevision>): ItemRevision[] {
   const anterior = items[indice];
-  const siguiente = { ...anterior, ...cambios };
-  return items.map((item, posicion) => {
+  const editaFecha = ['fecha', 'hora', 'horaDefinida'].some((campo) => campo in cambios);
+  const siguiente = { ...anterior, ...cambios, ...(editaFecha ? { fechaEditadaManualmente: true, inicioVinculado: null } : {}) };
+  const revisados = items.map((item, posicion) => {
     if (posicion === indice) return siguiente;
     if (anterior.grupoMateria && item.grupoMateria === anterior.grupoMateria &&
         cambios.materia?.accion === 'crear' && item.materia.accion === 'crear') {
@@ -178,10 +187,72 @@ export function actualizarRevision(items: ItemRevision[], indice: number, cambio
     }
     return item;
   });
+  return sincronizarFechasVinculadas(revisados);
 }
+
+/** Conserva la misma fecha/hora que el destino, sin sobrescribir una edición manual. */
+export function sincronizarFechasVinculadas(items: ItemRevision[]): ItemRevision[] {
+  const resueltos = new Map<number, ItemRevision>();
+  const visitando = new Set<number>();
+  function resolver(indice: number): ItemRevision {
+    const item = items[indice];
+    const listo = resueltos.get(indice);
+    if (listo) return listo;
+    if (visitando.has(indice)) return item;
+    visitando.add(indice);
+    let siguiente = item;
+    const referencia = item.original.venceCon;
+    if (!item.excluido && item.clase === 'tarea' && !item.fechaEditadaManualmente &&
+        referencia != null && referencia !== indice && items[referencia]) {
+      const destino = resolver(referencia);
+      const inicio = inicioDe(destino);
+      if (!destino.excluido && destino.clase !== 'evento_fijo' && destino.fechaElegida &&
+          destino.propuestaResuelta && inicio) {
+        siguiente = {
+          ...item, fecha: diaISO(inicio), hora: destino.horaDefinida ? horaISO(inicio) : '',
+          horaDefinida: destino.horaDefinida, inicioVinculado: inicio, propuestaResuelta: true,
+        };
+      }
+    }
+    visitando.delete(indice);
+    resueltos.set(indice, siguiente);
+    return siguiente;
+  }
+  return items.map((_, indice) => resolver(indice));
+}
+
+/** No se envía venceCon: confirmar lo recupera del borrador original mediante indice. */
+export function problemasVinculos(items: ItemRevision[]): string[] {
+  return items.flatMap((item, indice) => {
+    const referencia = item.original.venceCon;
+    if (item.excluido || referencia == null) return [];
+    const destino = items[referencia];
+    const pre = `Actividad ${indice + 1} («${item.titulo}»): `;
+    if (!destino || referencia === indice) return [pre + 'el vínculo no tiene un destino válido. Omite esta actividad.'];
+    if (destino.excluido) return [pre + `vence con «${destino.titulo}», que está omitida. Vuelve a incluir el destino y revisa su duplicado, o deja esta actividad para después. No se puede usar la existente omitida conservando el vínculo.`];
+    if (item.clase !== 'tarea' || destino.clase === 'evento_fijo') {
+      return [pre + 'este vínculo requiere una tarea y un destino de tipo tarea o evento. Revisa los tipos o deja la actividad vinculada para después.'];
+    }
+    const vistos = new Set<number>([indice]);
+    let siguiente: number | null = referencia;
+    while (siguiente != null && items[siguiente]) {
+      if (vistos.has(siguiente)) return [pre + 'los vínculos forman un ciclo. Deja esta actividad para después.'];
+      vistos.add(siguiente);
+      siguiente = items[siguiente].original.venceCon;
+    }
+    const inicio = inicioDe(item), inicioDestino = inicioDe(destino);
+    if (inicio && inicioDestino && (+new Date(inicio) !== +new Date(inicioDestino) ||
+        item.horaDefinida !== destino.horaDefinida)) {
+      return [pre + `debe vencer al empezar «${destino.titulo}». Revisa ambas fechas y horas; tus cambios manuales se conservaron.`];
+    }
+    return [];
+  });
+}
+
 function esHora(h: string): boolean { return /^([01]\d|2[0-3]):[0-5]\d$/.test(h); }
 const horaInterna: Record<string, string> = { examen: '08:00', exposicion: '08:00', entrega: '23:59', tarea: '23:59', proyecto: '23:59' };
 function inicioDe(i: ItemRevision): string | null {
+  if (i.inicioVinculado && !i.fechaEditadaManualmente) return i.inicioVinculado;
   // Conservar el instante exacto recibido si no se editaron su fecha ni su hora.
   if (i.original.inicio && i.fecha === diaISO(i.original.inicio) &&
       i.horaDefinida === i.original.horaDefinida &&
@@ -258,7 +329,7 @@ function itemParaEnvio(i: ItemRevision, indice: number) {
 export function construirConfirmacion(interpretacionId: string, items: ItemRevision[], fueCorregida: boolean) {
   const incluidos = items.filter((i) => !i.excluido);
   if (!incluidos.length || incluidos.length > 20) throw new Error('Incluye entre 1 y 20 actividades para confirmar.');
-  const errores = incluidos.flatMap(problemasItem);
+  const errores = [...incluidos.flatMap(problemasItem), ...problemasVinculos(items)];
   if (errores.length) throw new Error(errores.join('\n'));
   return {
     interpretacionId, fueCorregida,

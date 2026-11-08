@@ -9,7 +9,7 @@ import TarjetaBorrador, { botonCaptura } from './TarjetaBorrador';
 import BorradorHorario, { contarClases } from './BorradorHorario';
 import {
   actualizarRevision, aplicarPeriodoARevision, construirConfirmacion, crearRevision, leerBorrador, leerMaterias, leerResultado,
-  aplicarRevisionCalculada, construirSolicitudRevision, leerRevisionCalculada, mensajeBackend, problemasItem,
+  aplicarRevisionCalculada, construirSolicitudRevision, leerRevisionCalculada, mensajeBackend, problemasItem, problemasVinculos, sincronizarFechasVinculadas,
   type Borrador, type ItemRevision, type MateriaUsuario, type ResultadoConfirmacion,
 } from './borradorCaptura';
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
@@ -144,7 +144,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
   }
   function mostrarBorrador(nuevo: Borrador) {
     establecerBorrador(nuevo);
-    establecerItems(nuevo.items.map(crearRevision));
+    establecerItems(sincronizarFechasVinculadas(nuevo.items.map(crearRevision)));
     establecerEstadoRevision(null);
     establecerCorregida(false);
     establecerPeriodoAplicado(null);
@@ -294,7 +294,8 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
   const faltaPeriodo = items.some((item) => !item.excluido && item.clase === 'evento_fijo' &&
     item.original.faltantes.includes('periodo') && !item.original.vigencia);
   const incluidos = items.filter((i) => !i.excluido);
-  const pendientes = incluidos.some((i) => problemasItem(i).length > 0);
+  const erroresVinculos = problemasVinculos(items);
+  const pendientes = incluidos.some((i) => problemasItem(i).length > 0) || erroresVinculos.length > 0;
   const ocupada = enviando !== null || guardandoPeriodo;
   const esHorario = !!borrador && documento?.tipo === 'horario' && items.some((i) => i.clase === 'evento_fijo');
   const leyendo = enviando === 'extraer';
@@ -457,6 +458,9 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
               </div>)}
           </fieldset>
 
+          {erroresVinculos.length > 0 && <ul role="alert" aria-label="Vínculos pendientes de revisar" className="space-y-2 rounded-xl bg-[#FCF2DE] p-3 text-xs text-[#916820]">
+            {erroresVinculos.map((mensaje) => <li key={mensaje}>{mensaje}</li>)}
+          </ul>}
           {incluidos.length === 0 && <p className="text-sm text-[#657360]">{items.length ? 'Quitaste todo: no hay nada que agregar.' : 'No encontré nada que agregar. Prueba escribiéndolo de otra forma.'}</p>}
           {pendientes && <p className="text-xs font-medium text-[#A34955]">Completa lo marcado o quítalo para continuar.</p>}
           {corregida && <button type="button" className="min-h-9 text-xs font-semibold text-[#35695D] underline-offset-4 hover:underline" disabled={ocupada || incluidos.length === 0 || incluidos.length > 20} onClick={() => void revisarCambios()}>

@@ -151,6 +151,12 @@ export default function BorradorHorario({ items, materias, documento, cambiar }:
           </li>;
         })}
       </ul>
+      {items.some((item) => item.clase !== 'evento_fijo') && <section aria-label="Otras actividades detectadas" className="space-y-3">
+        <h3 className="text-sm font-semibold text-[#263D34]">Otras actividades detectadas</h3>
+        {items.map((item, indice) => item.clase !== 'evento_fijo' ? (
+          <TarjetaBorrador key={indice} item={item} indice={indice} materias={materias} cambiar={(cambios) => cambiar(indice, cambios)} />
+        ) : null)}
+      </section>}
     </div>
   );
 }
