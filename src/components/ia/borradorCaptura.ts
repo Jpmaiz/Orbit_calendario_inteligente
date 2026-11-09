@@ -16,6 +16,7 @@ export type PropuestaMateria =
   | { accion: 'vincular'; materiaId: string; nombre: string; seguro: boolean; alternativas: { id: string; nombre: string }[] }
   | { accion: 'crear'; nombre: string; codigo: string | null; clave: string }
   | { accion: 'preguntar_nombre'; codigo: string };
+export type ReferenciaExistente = { clase: 'tarea' | 'evento'; id: string };
 export type ItemExtraido = {
   estimado?: Estimado | null;
   clase: ClaseItem; titulo: string; tipo: string | null; fechaDicha: unknown;
@@ -29,7 +30,7 @@ export type ItemExtraido = {
   horaPropuesta: { inicio: string; fin: string; motivo: string } | null;
   vigencia: { desde: string; hasta: string; periodo: string } | null;
   duplicado: { tipoDuplicado: string; pregunta: string; sugerenciasDiferencia?: string[];
-    diasExistentes?: number[]; tarea?: { id: string; titulo: string }; similitud?: number;
+    diasExistentes?: number[]; tarea?: { id: string; titulo: string; fechaLimite?: string; horaDefinida?: boolean }; similitud?: number;
     evento?: { id: string; titulo: string; inicio: string } } | null;
   choques: { titulo: string; cuando: string }[];
 };
@@ -45,6 +46,7 @@ export type ItemRevision = {
   vigenciaDesde: string; vigenciaHasta: string;
   fechaElegida: boolean; propuestaResuelta: boolean;
   decisionDuplicado: 'pendiente' | 'existente' | 'nueva'; excluido: boolean;
+  existenteElegido?: ReferenciaExistente | null; // Omitir no selecciona un existente.
   fechaEditadaManualmente?: boolean; inicioVinculado?: string | null;
 };
 export type ResultadoConfirmacion = {
@@ -90,6 +92,58 @@ function propuesta(v: unknown): PropuestaMateria {
   };
   throw new Error('El servidor devolvió una propuesta de materia desconocida.');
 }
+function leerDuplicado(v: unknown): ItemExtraido['duplicado'] {
+  if (v == null) return null;
+  const d = objeto(v);
+  const t = d.tarea ? objeto(d.tarea) : null;
+  const e = d.evento ? objeto(d.evento) : null;
+  return {
+    tipoDuplicado: texto(d.tipoDuplicado), pregunta: texto(d.pregunta),
+    sugerenciasDiferencia: d.sugerenciasDiferencia === undefined ? undefined : textos(d.sugerenciasDiferencia),
+    diasExistentes: d.diasExistentes === undefined ? undefined : lista(d.diasExistentes).map(numero),
+    tarea: t ? {
+      id: texto(t.id), titulo: texto(t.titulo),
+      fechaLimite: t.fechaLimite == null ? undefined : fecha(t.fechaLimite),
+      horaDefinida: t.horaDefinida == null ? undefined : booleano(t.horaDefinida),
+    } : undefined,
+    evento: e ? { id: texto(e.id), titulo: texto(e.titulo), inicio: fecha(e.inicio) } : undefined,
+    similitud: d.similitud === undefined ? undefined : numero(d.similitud),
+  };
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Solo referencias persistidas provistas por el backend y del mismo tipo que el destino. */
+export function referenciaDuplicado(item: ItemRevision): ReferenciaExistente | null {
+  const duplicado = item.original.duplicado;
+  const registro = item.clase === 'tarea' ? duplicado?.tarea : item.clase === 'evento' ? duplicado?.evento : null;
+  if (!registro || !UUID.test(registro.id) || item.clase === 'evento_fijo') return null;
+  return { clase: item.clase, id: registro.id };
+}
+
+function referenciaElegida(item: ItemRevision): ReferenciaExistente | null {
+  const elegida = item.existenteElegido;
+  const disponible = referenciaDuplicado(item);
+  return item.excluido && item.decisionDuplicado === 'existente' && elegida && disponible &&
+    elegida.clase === disponible.clase && elegida.id === disponible.id ? disponible : null;
+}
+
+/** Sin datos reales completos no se puede asegurar la fecha inicial de una relación persistida. */
+function fechaDelDestino(item: ItemRevision): { inicio: string; horaDefinida: boolean } | null {
+  if (!item.excluido) {
+    const inicio = inicioDe(item);
+    return item.clase !== 'evento_fijo' && item.fechaElegida && item.propuestaResuelta && inicio
+      ? { inicio, horaDefinida: item.horaDefinida } : null;
+  }
+  const elegida = referenciaElegida(item);
+  if (elegida?.clase === 'tarea') {
+    const t = item.original.duplicado?.tarea;
+    return t?.fechaLimite && typeof t.horaDefinida === 'boolean'
+      ? { inicio: t.fechaLimite, horaDefinida: t.horaDefinida } : null;
+  }
+  const e = elegida?.clase === 'evento' ? item.original.duplicado?.evento : null;
+  return e ? { inicio: e.inicio, horaDefinida: true } : null;
+}
+
 export function leerBorrador(v: unknown): Borrador {
   const b = objeto(v);
   const p = b.periodo === null ? null : objeto(b.periodo);
@@ -107,7 +161,6 @@ export function leerBorrador(v: unknown): Borrador {
       }
       const h = i.horaPropuesta === null ? null : objeto(i.horaPropuesta);
       const vg = i.vigencia === null ? null : objeto(i.vigencia);
-      const d = i.duplicado === null ? null : objeto(i.duplicado);
       return {
         estimado: i.clase === 'tarea' ? leerEstimado(i.estimado) : null,
         clase: i.clase, titulo: texto(i.titulo), tipo: nullable(i.tipo), fechaDicha: i.fechaDicha, venceCon,
@@ -122,12 +175,7 @@ export function leerBorrador(v: unknown): Borrador {
         materiaPropuesta: propuesta(i.materiaPropuesta),
         horaPropuesta: h ? { inicio: texto(h.inicio), fin: texto(h.fin), motivo: texto(h.motivo) } : null,
         vigencia: vg ? { desde: fecha(vg.desde), hasta: fecha(vg.hasta), periodo: texto(vg.periodo) } : null,
-        duplicado: d ? {
-          tipoDuplicado: texto(d.tipoDuplicado), pregunta: texto(d.pregunta),
-          sugerenciasDiferencia: d.sugerenciasDiferencia === undefined ? undefined : textos(d.sugerenciasDiferencia),
-          diasExistentes: d.diasExistentes === undefined ? undefined : lista(d.diasExistentes).map(numero),
-          tarea: d.tarea ? { id: texto(objeto(d.tarea).id), titulo: texto(objeto(d.tarea).titulo) } : undefined,
-        } : null,
+        duplicado: leerDuplicado(i.duplicado),
         choques: lista(i.choques).map((v) => { const c = objeto(v); return { titulo: texto(c.titulo), cuando: texto(c.cuando) }; }),
       };
     }),
@@ -182,7 +230,11 @@ export function crearRevision(i: ItemExtraido): ItemRevision {
 export function actualizarRevision(items: ItemRevision[], indice: number, cambios: Partial<ItemRevision>): ItemRevision[] {
   const anterior = items[indice];
   const editaFecha = ['fecha', 'hora', 'horaDefinida'].some((campo) => campo in cambios);
-  const siguiente = { ...anterior, ...cambios, ...(editaFecha ? { fechaEditadaManualmente: true, inicioVinculado: null } : {}) };
+  const limpiaExistente = 'clase' in cambios || ('excluido' in cambios && !cambios.existenteElegido) || cambios.decisionDuplicado === 'nueva';
+  const siguiente = { ...anterior, ...cambios,
+    ...(limpiaExistente ? { existenteElegido: null } : {}),
+    ...(editaFecha ? { fechaEditadaManualmente: true, inicioVinculado: null } : {}),
+  };
   const revisados = items.map((item, posicion) => {
     if (posicion === indice) return siguiente;
     if (anterior.grupoMateria && item.grupoMateria === anterior.grupoMateria &&
@@ -209,12 +261,12 @@ export function sincronizarFechasVinculadas(items: ItemRevision[]): ItemRevision
     if (!item.excluido && item.clase === 'tarea' && !item.fechaEditadaManualmente &&
         referencia != null && referencia !== indice && items[referencia]) {
       const destino = resolver(referencia);
-      const inicio = inicioDe(destino);
-      if (!destino.excluido && destino.clase !== 'evento_fijo' && destino.fechaElegida &&
-          destino.propuestaResuelta && inicio) {
+      const fechaDestino = fechaDelDestino(destino);
+      if (fechaDestino) {
+        const { inicio, horaDefinida } = fechaDestino;
         siguiente = {
-          ...item, fecha: diaISO(inicio), hora: destino.horaDefinida ? horaISO(inicio) : '',
-          horaDefinida: destino.horaDefinida, inicioVinculado: inicio, propuestaResuelta: true,
+          ...item, fecha: diaISO(inicio), hora: horaDefinida ? horaISO(inicio) : '',
+          horaDefinida, inicioVinculado: inicio, fechaElegida: true, propuestaResuelta: true,
         };
       }
     }
@@ -233,7 +285,9 @@ export function problemasVinculos(items: ItemRevision[]): string[] {
     const destino = items[referencia];
     const pre = `Actividad ${indice + 1} («${item.titulo}»): `;
     if (!destino || referencia === indice) return [pre + 'el vínculo no tiene un destino válido. Omite esta actividad.'];
-    if (destino.excluido) return [pre + `vence con «${destino.titulo}», que está omitida. Vuelve a incluir el destino y revisa su duplicado, o deja esta actividad para después. No se puede usar la existente omitida conservando el vínculo.`];
+    if (destino.excluido && !referenciaElegida(destino)) {
+      return [pre + 'El destino está omitido sin una referencia existente válida elegida. Vuelve a incluirlo o elige usar su existente.'];
+    }
     if (item.clase !== 'tarea' || destino.clase === 'evento_fijo') {
       return [pre + 'este vínculo requiere una tarea y un destino de tipo tarea o evento. Revisa los tipos o deja la actividad vinculada para después.'];
     }
@@ -244,9 +298,13 @@ export function problemasVinculos(items: ItemRevision[]): string[] {
       vistos.add(siguiente);
       siguiente = items[siguiente].original.venceCon;
     }
-    const inicio = inicioDe(item), inicioDestino = inicioDe(destino);
+    const fechaDestino = fechaDelDestino(destino);
+    if (destino.excluido && !fechaDestino) {
+      return [pre + 'Faltan la fecha o la indicación de hora del destino existente. No se puede vincular de forma segura.'];
+    }
+    const inicio = inicioDe(item), inicioDestino = fechaDestino?.inicio;
     if (inicio && inicioDestino && (+new Date(inicio) !== +new Date(inicioDestino) ||
-        item.horaDefinida !== destino.horaDefinida)) {
+        item.horaDefinida !== fechaDestino?.horaDefinida)) {
       return [pre + `debe vencer al empezar «${destino.titulo}». Revisa ambas fechas y horas; tus cambios manuales se conservaron.`];
     }
     return [];
@@ -306,12 +364,13 @@ export function problemasItem(i: ItemRevision): string[] {
   return problemas;
 }
 /** indice = posición en el borrador: el backend recupera con él la estimación y el vínculo "vence con". */
-function itemParaEnvio(i: ItemRevision, indice: number) {
+function itemParaEnvio(i: ItemRevision, indice: number, existente: ReferenciaExistente | null = null) {
   const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia, indice };
   if (i.clase === 'tarea') return {
     ...comunes, clase: 'tarea' as const, tipo: i.tipo, inicio: inicioDe(i)!,
     horaDefinida: i.horaDefinida, descripcion: i.descripcion || null,
     confirmarNueva: i.decisionDuplicado === 'nueva',
+    ...(existente ? { venceConExistente: { clase: existente.clase, id: existente.id } } : {}),
   };
   if (i.clase === 'evento') return {
     ...comunes, clase: 'evento' as const, inicio: inicioDe(i)!, fin: finDe(i),
@@ -331,13 +390,18 @@ function itemParaEnvio(i: ItemRevision, indice: number) {
 }
 
 export function construirConfirmacion(interpretacionId: string, items: ItemRevision[], fueCorregida: boolean) {
+  items = sincronizarFechasVinculadas(items);
   const incluidos = items.filter((i) => !i.excluido);
   if (!incluidos.length || incluidos.length > 20) throw new Error('Incluye entre 1 y 20 actividades para confirmar.');
   const errores = [...incluidos.flatMap(problemasItem), ...problemasVinculos(items)];
   if (errores.length) throw new Error(errores.join('\n'));
   return {
     interpretacionId, fueCorregida,
-    items: items.flatMap((item, indice) => (item.excluido ? [] : [itemParaEnvio(item, indice)])),
+    items: items.flatMap((item, indice) => {
+      if (item.excluido) return [];
+      const destino = item.original.venceCon == null ? null : items[item.original.venceCon];
+      return [itemParaEnvio(item, indice, destino ? referenciaElegida(destino) : null)];
+    }),
   };
 }
 
@@ -365,17 +429,7 @@ export function leerRevisionCalculada(valor: unknown, cantidad: number): Resulta
     }
     vistos.add(indice);
     if ('error' in resultado) return { indice, error: texto(resultado.error) };
-    const d = resultado.duplicado === null ? null : objeto(resultado.duplicado);
-    const duplicado: ItemExtraido['duplicado'] = d ? {
-      tipoDuplicado: texto(d.tipoDuplicado), pregunta: texto(d.pregunta),
-      sugerenciasDiferencia: d.sugerenciasDiferencia === undefined ? undefined : textos(d.sugerenciasDiferencia),
-      diasExistentes: d.diasExistentes === undefined ? undefined : lista(d.diasExistentes).map(numero),
-      tarea: d.tarea ? { id: texto(objeto(d.tarea).id), titulo: texto(objeto(d.tarea).titulo) } : undefined,
-      evento: d.evento ? {
-        id: texto(objeto(d.evento).id), titulo: texto(objeto(d.evento).titulo), inicio: fecha(objeto(d.evento).inicio),
-      } : undefined,
-      similitud: d.similitud === undefined ? undefined : numero(d.similitud),
-    } : null;
+    const duplicado = leerDuplicado(resultado.duplicado);
     const choques = lista(resultado.choques).map((valor) => {
       const choque = objeto(valor);
       return { titulo: texto(choque.titulo), cuando: texto(choque.cuando) };

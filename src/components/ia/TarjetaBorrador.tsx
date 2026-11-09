@@ -3,7 +3,7 @@
 import { useId } from 'react';
 import IndicadorEstimacion from '../estimacion/IndicadorEstimacion';
 import {
-  diaISO, horaISO, problemasItem, tiposTarea,
+  diaISO, horaISO, problemasItem, referenciaDuplicado, tiposTarea,
   type ClaseItem, type ItemRevision, type MateriaUsuario,
 } from './borradorCaptura';
 
@@ -27,6 +27,8 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
   const id = useId();
   const original = item.original;
   const propuesta = original.materiaPropuesta;
+  const existente = referenciaDuplicado(item);
+  const nombreExistente = existente?.clase === 'tarea' ? original.duplicado?.tarea?.titulo : original.duplicado?.evento?.titulo;
   const problemas = problemasItem(item);
   const elegida = item.materia;
   const materiaVinculada = elegida.accion === 'vincular'
@@ -61,7 +63,10 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
           Omitir
         </label>
       </header>
-      {item.excluido ? <p className="text-xs text-[#657360]">Esta actividad no se enviará a guardar.</p> : <>
+      {item.excluido ? <p className="text-xs text-[#657360]">{item.existenteElegido && existente &&
+        item.existenteElegido.clase === existente.clase && item.existenteElegido.id === existente.id
+        ? <>Se usará la actividad existente «{nombreExistente}» como destino de las tareas vinculadas. No se creará otra.</>
+        : 'Esta actividad no se enviará a guardar.'}</p> : <>
         {original.confianza <= 0.6 && <p className="rounded-lg bg-[#FAEBDD] p-2 text-sm font-semibold text-[#914421]">Revisa este ítem</p>}
         <Campo principal etiqueta="Título" valor={item.titulo} maxLength={200} cambiar={(titulo) => cambiar({ titulo })} />
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
@@ -188,11 +193,15 @@ export default function TarjetaBorrador({ item, indice, materias, cambiar }: {
         {original.duplicado && <section className="space-y-2 rounded-xl border border-[#E8D8AF] bg-[#FCF2DE] p-3">
           <h4 className="text-xs font-semibold text-[#916820]">Posible duplicado</h4>
           <p className="whitespace-pre-wrap text-sm text-[#806020]">{original.duplicado.pregunta}</p>
-          {item.clase === 'tarea' ? <>
+          {(item.clase === 'tarea' || item.clase === 'evento') ? <>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={botonCaptura} onClick={() => cambiar({ excluido: true, decisionDuplicado: 'existente' })}>Usar la existente y omitir</button>
-              <button type="button" className={botonCaptura} aria-pressed={item.decisionDuplicado === 'nueva'} onClick={() => cambiar({ decisionDuplicado: 'nueva' })}>Es otra actividad: guardar nueva</button>
+              <button type="button" className={botonCaptura} disabled={!existente} onClick={() => {
+                if (existente) cambiar({ excluido: true, decisionDuplicado: 'existente', existenteElegido: existente });
+              }}>Usar la existente y omitir</button>
+              {item.clase === 'tarea' && <button type="button" className={botonCaptura} aria-pressed={item.decisionDuplicado === 'nueva'} onClick={() => cambiar({ decisionDuplicado: 'nueva' })}>Es otra actividad: guardar nueva</button>}
             </div>
+            {existente ? <p className="text-xs text-[#806020]">Destino existente: «{nombreExistente}» ({existente.clase === 'tarea' ? 'tarea' : 'evento'}).</p>
+              : <p className="text-xs text-[#806020]">Este aviso no identifica una actividad existente válida para vincular.</p>}
             {original.duplicado.sugerenciasDiferencia?.length ? <p className="text-xs text-[#806020]">Puedes distinguirla en el título: {original.duplicado.sugerenciasDiferencia.join(', ')}.</p> : null}
           </> : null}
         </section>}
