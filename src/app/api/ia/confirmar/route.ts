@@ -305,7 +305,16 @@ export async function POST(req: NextRequest) {
         if (item.clase !== 'tarea' || item.indice === null) continue;
         const propia = guardadoPorIndice.get(item.indice);
         const destinoIndice = leidos[item.indice]?.venceCon;
-        const destino = destinoIndice != null ? guardadoPorIndice.get(destinoIndice) : undefined;
+        let destino = destinoIndice != null ? guardadoPorIndice.get(destinoIndice) : undefined;
+        // El destino del borrador no se guardó (el usuario lo omitió por duplicado): el front puede indicar el
+        // registro existente. Se verifica que sea del usuario antes de vincular.
+        if (!destino && item.venceConExistente) {
+          const { clase, id } = item.venceConExistente;
+          const existe = clase === 'tarea'
+            ? await tx.tarea.findFirst({ where: { id, usuarioId: user.id, eliminadoEn: null }, select: { id: true } })
+            : await tx.evento.findFirst({ where: { id, usuarioId: user.id, eliminadoEn: null }, select: { id: true } });
+          if (existe) destino = { clase, id };
+        }
         if (propia?.clase === 'tarea' && tareas.includes(propia.id) && destino && destino.id !== propia.id) {
           await tx.tarea.update({ where: { id: propia.id }, data: { venceConId: destino.id, venceConClase: destino.clase } });
         }

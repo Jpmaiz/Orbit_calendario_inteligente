@@ -12,9 +12,12 @@ export type MateriaElegida =
 /** "indice": posición del ítem en el borrador (= en lo que leyó la IA). Con él se recupera la estimación
  *  y el vínculo "vence con"; nunca se confía en horas que mande el front. null = front antiguo. */
 type Comunes = { titulo: string; materia: MateriaElegida; materiaDetectada: string | null; indice: number | null };
+/** Tarea que vence con un examen o evento que YA existe (el destino del borrador se omitió por duplicado). */
+export type VenceConExistente = { clase: 'tarea' | 'evento'; id: string };
 
 export type ItemConfirmado =
-  | (Comunes & { clase: 'tarea'; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null; confirmarNueva: boolean })
+  | (Comunes & { clase: 'tarea'; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null; confirmarNueva: boolean;
+      venceConExistente: VenceConExistente | null })
   | (Comunes & { clase: 'evento'; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null })
   | (Comunes & { clase: 'evento_fijo'; diasSemana: number[]; hora: string; horaFin: string; ubicacion: string | null;
       vigencia: { desde: Date; hasta: Date } | null });
@@ -63,6 +66,7 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
         clase: 'tarea', ...comunes, tipo: x.tipo as string, inicio,
         horaDefinida: x.horaDefinida !== false, descripcion: texto(x.descripcion, 2000),
         confirmarNueva: x.confirmarNueva === true,
+        venceConExistente: venceConExistente(x.venceConExistente),
       },
     };
   }
@@ -99,4 +103,13 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
   }
 
   return { ok: false, error: pre + 'clase inválida (tarea, evento o evento_fijo)' };
-}
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** { clase: 'tarea' | 'evento', id } — la pertenencia al usuario se revisa en confirmar. */
+function venceConExistente(v: unknown): VenceConExistente | null {
+  if (!v || typeof v !== 'object') return null;
+  const r = v as Record<string, unknown>;
+  if ((r.clase !== 'tarea' && r.clase !== 'evento') || typeof r.id !== 'string' || !UUID.test(r.id)) return null;
+  return { clase: r.clase, id: r.id };
+}

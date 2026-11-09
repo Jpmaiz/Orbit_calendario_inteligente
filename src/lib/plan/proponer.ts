@@ -23,10 +23,11 @@ export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, hora
     cargarAprendizaje(usuarioId, ahora),
   ]);
   const limite = limiteDePlan(tarea, usuario?.zonaHoraria ?? 'America/La_Paz');
+  // Solo se cargan los días que se pueden planificar (últimos 28 antes del límite): así una fecha lejana
+  // no queda fuera del rango de días. Los bloques propios se traen todos aparte (ver cargarContextoPlan).
   const desde = inicioDePlan(limite, ahora);
-  // Los bloques guardados se miran desde hoy hasta la fecha REAL (pueden haber quedado después del límite)
-  const hasta = new Date(Math.max(limite.getTime(), tarea.fechaLimite.getTime()));
-  const ctx = await cargarContextoPlan(usuarioId, ahora, hasta, ahora, tarea.id, tarea.materiaId);
+  const hasta = limite > desde ? limite : desde;
+  const ctx = await cargarContextoPlan(usuarioId, desde, hasta, ahora, tarea.id, tarea.materiaId);
   const preferencia = franjaPreferida(aprendido.franjas, ahora);
 
   const plan = limite > ahora

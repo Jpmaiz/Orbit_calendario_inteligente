@@ -46,6 +46,8 @@ export async function registrarHoras(
 
 /** Guarda votos de franja (bloques que el usuario puso o sacó respecto de lo que Orbit propuso). */
 export async function registrarFranjas(usuarioId: string, tareaId: string, votos: { franja: Franja; voto: number }[]) {
+  // Por actividad cuenta solo el último plan guardado: reintentar o guardar de nuevo no duplica votos
+  await prisma.senalAprendizaje.deleteMany({ where: { usuarioId, tareaId, clase: 'franja' } });
   if (!votos.length) return;
   await prisma.senalAprendizaje.createMany({
     data: votos.map((v) => ({ usuarioId, tareaId, clase: 'franja', fuente: 'plan', franja: v.franja, voto: v.voto, peso: FUENTES.plan })),

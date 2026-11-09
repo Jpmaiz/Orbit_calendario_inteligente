@@ -48,14 +48,27 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     }
 
     const data: Prisma.TareaUncheckedUpdateInput = { ...v.datos };
-    // Horas que fija el usuario: mandan sobre la estimación (null = vuelve a la estimación)
-    if (v.datos.duracionEstMin !== undefined) data.horasDelUsuario = v.datos.duracionEstMin !== null;
+    // Horas: un número = las fija el usuario y mandan. null = vuelve a la estimación automática (la guardada).
+    if (v.datos.duracionEstMin !== undefined) {
+      data.horasDelUsuario = v.datos.duracionEstMin !== null;
+      if (v.datos.duracionEstMin === null) {
+        const horas = (existente.estimacion as { horas?: unknown } | null)?.horas;
+        data.duracionEstMin = typeof horas === 'number' && horas > 0 ? Math.round(horas * 60) : null;
+      }
+    }
 
     // completadaEn se maneja solo según el estado
     if (v.datos.estado !== undefined) {
       data.completadaEn =
         v.datos.estado === 'completada' ? existente.completadaEn ?? new Date() : null;
     }
+
+    // Cierre automático: reabrir una tarea (cerrada sola o a mano) impide que se vuelva a cerrar sola.
+    // Si cambia la fecha, se limpia: la nueva fecha vuelve a seguir la regla normal.
+    const cerrada = existente.estado === 'completada' || existente.estado === 'no_realizada';
+    const reabre = cerrada && (v.datos.estado === 'pendiente' || v.datos.estado === 'en_proceso');
+    if (v.datos.fechaLimite !== undefined && +new Date(v.datos.fechaLimite) !== +existente.fechaLimite) data.cerradaSolaEn = null;
+    else if (reabre) data.cerradaSolaEn = existente.cerradaSolaEn ?? new Date();
 
     const tarea = await prisma.tarea.update({ where: { id }, data });
 

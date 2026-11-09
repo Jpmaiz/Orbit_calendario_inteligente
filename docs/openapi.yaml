@@ -595,6 +595,10 @@ components:
         materia: { $ref: "#/components/schemas/MateriaElegida" }
         materiaDetectada: { type: [string, "null"], description: "Lo que leyó la IA; sirve para aprender alias" }
         confirmarNueva: { type: boolean, description: "Tarea: el usuario dijo que no es duplicado" }
+        venceConExistente:
+          type: [object, "null"]
+          description: "Solo tareas. Si el destino de venceCon se omitió por duplicado: el registro existente (se verifica que sea del usuario)"
+          properties: { clase: { type: string, enum: [tarea, evento] }, id: { type: string, format: uuid } }
         indice: { type: [integer, "null"], description: "Posición del ítem en el borrador. Con ella el servidor recupera la estimación y el vínculo venceCon. Las horas nunca se toman del front." }
 
     ResultadoConfirmacion:

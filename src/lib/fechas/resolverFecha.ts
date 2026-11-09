@@ -100,7 +100,7 @@ export function resolverFecha(
   if (dicha.tipo === 'exacta') {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dicha.fecha);
     if (!m) return { estado: 'falta' };
-    let dia: Dia = { y: +m[1], m: +m[2], d: +m[3] };
+    const dia: Dia = { y: +m[1], m: +m[2], d: +m[3] };
     const enDias = (x: Dia) => Date.UTC(x.y, x.m - 1, x.d);
     if (Number.isNaN(enDias(dia))) return { estado: 'falta' };
     // "15 de marzo" dicho en octubre → el próximo marzo

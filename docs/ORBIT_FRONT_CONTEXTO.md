@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.6 · 08/11/2026)
+# Orbit — Contexto del backend para el front (v2.7 · 08/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.7 (08/11) — correcciones pedidas en el informe del front](#novedades-27)
 ★ [Guía de experiencia de usuario — Fases 1 a 3 (leer antes de diseñar)](#guia-ux)
 ★ [Novedades de la v2.6 (08/11) — Orbit aprende sin pedir nada](#novedades-26)
 ★ [Novedades de la v2.5 (08/11) — plan de estudio](#novedades-25)
@@ -25,6 +26,33 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-27"></a>
+## ★ Novedades de la v2.7 (08/11/2026) — respuesta al informe del front
+
+**Altos (corregidos)**
+1. **Cierre automático sin hora definida.** Si `horaDefinida = false`, la hora guardada (08:00, 23:59) es interna y ya no cuenta:
+   la tarea se cierra recién cuando terminó ese día en la zona del usuario. Con hora definida, 1 h después de esa hora.
+2. **Reabrir.** Al pasar una tarea de `completada` o `no_realizada` a `pendiente` o `en_proceso` (cerrada sola o a mano), ya no se
+   vuelve a cerrar sola. Si además se cambia `fechaLimite`, la nueva fecha sigue la regla normal.
+3. **`GET /api/plan/{tareaId}` devuelve TODOS los bloques futuros** de la tarea en `guardado`, aunque hayan quedado después de un
+   nuevo vencimiento. Esos salen también en `conflictos` con el motivo "Termina después de la fecha de la actividad", para
+   quitarlos o reemplazarlos.
+4. **Lint global** corregido (`prefer-const` en `resolverFecha.ts`).
+
+**Medios (resueltos)**
+- **`venceCon` hacia un existente.** Si el destino del borrador se omitió por duplicado, la tarea dependiente puede enviar
+  `venceConExistente: { clase: "tarea", id: duplicado.tarea.id }` (o `clase: "evento"`). El backend verifica que sea del usuario y
+  vincula. Si no es válido, se guarda sin vínculo (no falla). Ya no hace falta bloquear la confirmación.
+- **Duración `null`.** Borrar las horas (`PATCH { duracionEstMin: null }`) = **volver a la estimación automática**: el backend
+  restaura las horas estimadas guardadas (o deja `null` si nunca hubo estimación) y `horasDelUsuario` pasa a `false`.
+- **Señales.** Los votos de franja ya no se duplican al reintentar (cuenta el último plan guardado de cada tarea) y la pregunta
+  semanal se elige y registra en una transacción: dos pedidos a la vez no muestran dos preguntas.
+- **Planes lejanos.** El planificador carga solo los últimos 28 días antes de la fecha: un vencimiento lejano ya no devuelve cero bloques.
+
+**Para repetir:** las 10 pruebas de la sección 10 del informe del front.
 
 ---
 
