@@ -16,7 +16,14 @@ const HORA_MS = 3_600_000;
  *
  * Se llama al leer tareas o agenda (barato: dos updateMany).
  */
+/** Último cierre por usuario en este proceso: agenda y tareas lo piden en cada carga; basta cada 5 min. */
+const ultimoCierre = new Map<string, number>();
+const CADA_MS = 5 * 60_000;
+
 export async function cerrarVencidas(usuarioId: string, ahora: Date = new Date()) {
+  const ultimo = ultimoCierre.get(usuarioId);
+  if (ultimo && ahora.getTime() - ultimo < CADA_MS) return { count: 0 };
+  ultimoCierre.set(usuarioId, ahora.getTime());
   const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { zonaHoraria: true } });
   const zona = usuario?.zonaHoraria ?? 'America/La_Paz';
   const inicioDeHoy = instanteEnZona(diaLocal(ahora, zona), '00:00', zona);
