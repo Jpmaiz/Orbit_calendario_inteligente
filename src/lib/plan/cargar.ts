@@ -3,6 +3,7 @@
  * El cálculo vive en huecos.ts y planificador.ts (código puro).
  */
 import { prisma } from '@/lib/prisma/cliente';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 import { huecosLibres, ocupacionesDeClases, diaLocal, claveDia, type Ocupacion, type HuecosDelDia } from './huecos';
 
 const HORA_MS = 3_600_000;
@@ -28,8 +29,8 @@ export type ContextoDeUsuario = {
 export async function cargarContextoPlan(
   usuarioId: string, desde: Date, hasta: Date, ahora: Date, tareaId?: string, materiaId?: string | null,
 ): Promise<ContextoDeUsuario> {
-  const [usuario, clases, eventos, bloques, propiosFuturos] = await Promise.all([
-    prisma.usuario.findUnique({ where: { id: usuarioId }, select: { zonaHoraria: true } }),
+  const [zona, clases, eventos, bloques, propiosFuturos] = await Promise.all([
+    zonaDeUsuario(usuarioId),
     prisma.eventoFijo.findMany({
       where: {
         usuarioId, eliminadoEn: null,
@@ -65,7 +66,6 @@ export async function cargarContextoPlan(
         })
       : Promise.resolve([]),
   ]);
-  const zona: string = usuario?.zonaHoraria ?? 'America/La_Paz';
 
   const ajenos = bloques.filter((b) => b.tareaId !== tareaId);
   const ocupaciones: Ocupacion[] = [

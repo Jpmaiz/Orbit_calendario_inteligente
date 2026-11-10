@@ -38,7 +38,9 @@ export type UsuarioSesion = {
  */
 export async function obtenerUsuario(): Promise<UsuarioSesion | null> {
   const supabase = await crearClienteServidor();
+  const t0 = Date.now();
   const { data, error } = await supabase.auth.getClaims();
+  if (process.env.ORBIT_TIEMPOS === '1') console.log(`[auth] ${Date.now() - t0} ms · getClaims`);
   const c = data?.claims;
   if (error || !c?.sub) return null;
   return {

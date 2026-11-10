@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { diaEnZona } from '@/lib/periodos/periodos';
 import { cerrarVencidas } from '@/lib/tareas/cierre';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 
 const DIA_MS = 86_400_000;
 const MAX_DIAS = 62;
@@ -26,8 +27,8 @@ export async function GET(req: NextRequest) {
   const hastaTxt = params.get('hasta');
 
   try {
-    const usuario = await prisma.usuario.findUnique({ where: { id: user.id }, select: { zonaHoraria: true } });
-    const zona: string = usuario?.zonaHoraria ?? 'America/La_Paz';
+    const zonaHoraria = await zonaDeUsuario(user.id);
+    const zona: string = zonaHoraria;
 
     const desde = desdeTxt ? diaEnZona(desdeTxt, '00:00', zona) : null;
     const hastaInicio = hastaTxt ? diaEnZona(hastaTxt, '00:00', zona) : null;

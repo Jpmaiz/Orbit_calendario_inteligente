@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma/cliente';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 import { diaLocal } from '@/lib/plan/huecos';
 import { instanteEnZona } from '@/lib/fechas/resolverFecha';
 
@@ -24,8 +25,7 @@ export async function cerrarVencidas(usuarioId: string, ahora: Date = new Date()
   const ultimo = ultimoCierre.get(usuarioId);
   if (ultimo && ahora.getTime() - ultimo < CADA_MS) return { count: 0 };
   ultimoCierre.set(usuarioId, ahora.getTime());
-  const usuario = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { zonaHoraria: true } });
-  const zona = usuario?.zonaHoraria ?? 'America/La_Paz';
+  const zona = await zonaDeUsuario(usuarioId);
   const inicioDeHoy = instanteEnZona(diaLocal(ahora, zona), '00:00', zona);
   const abiertas = {
     usuarioId, eliminadoEn: null, cerradaSolaEn: null,

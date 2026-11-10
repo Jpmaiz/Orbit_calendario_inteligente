@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { FACTOR_RESPUESTA, type Respuesta } from '@/lib/estimacion/personal';
@@ -10,6 +11,18 @@ const DIA_MS = 86_400_000;
 const CADA_DIAS = 7;
 const RECIENTE_DIAS = 14;
 const MINUTOS_MINIMOS = 240;
+/** Si no hay actividad candidata, no se vuelve a buscar hasta dentro de 30 min (por proceso). */
+const ESPERA_SIN_CANDIDATA_MS = 30 * 60_000;
+const sinPregunta = new Map<string, number>();
+
+/** Actividad grande que terminó hace poco y de la que Orbit no aprendió nada por otro lado. */
+const filtroCandidata = (usuarioId: string, ahora: Date): Prisma.TareaWhereInput => ({
+  usuarioId, eliminadoEn: null, estado: 'completada',
+  duracionEstMin: { gte: MINUTOS_MINIMOS },
+  fechaLimite: { gte: new Date(ahora.getTime() - RECIENTE_DIAS * DIA_MS), lte: ahora },
+  horasReales: null,
+  senales: { none: { clase: { in: ['horas', 'pregunta'] } } }, // ya se aprendió de ella o ya se preguntó
+});
 
 /**
  * GET /api/aprendizaje/pregunta → la pregunta de la semana, o null (Fase 3).
@@ -24,6 +37,25 @@ export async function GET() {
 
   try {
     const ahora = new Date();
+    // Atajo sin transacción: casi siempre no hay pregunta, y eso se recuerda un rato para no consultar en cada carga
+    const libreDesde = sinPregunta.get(user.id);
+    if (libreDesde && libreDesde > ahora.getTime()) return NextResponse.json({ pregunta: null });
+    const [ultimaVista, posible] = await Promise.all([
+      prisma.senalAprendizaje.findFirst({
+        where: { usuarioId: user.id, clase: 'pregunta', creadoEn: { gte: new Date(ahora.getTime() - CADA_DIAS * DIA_MS) } },
+        orderBy: { creadoEn: 'desc' },
+        select: { creadoEn: true },
+      }),
+      prisma.tarea.findFirst({ where: filtroCandidata(user.id, ahora), select: { id: true } }),
+    ]);
+    if (ultimaVista) {
+      sinPregunta.set(user.id, ultimaVista.creadoEn.getTime() + CADA_DIAS * DIA_MS);
+      return NextResponse.json({ pregunta: null });
+    }
+    if (!posible) {
+      sinPregunta.set(user.id, ahora.getTime() + ESPERA_SIN_CANDIDATA_MS);
+      return NextResponse.json({ pregunta: null });
+    }
     // Elegir y registrar en una sola transacción serializable: dos pedidos a la vez no muestran dos preguntas
     const candidata = await prisma.$transaction(async (tx) => {
       const ultima = await tx.senalAprendizaje.findFirst({
@@ -32,13 +64,7 @@ export async function GET() {
       });
       if (ultima) return null;
       const t = await tx.tarea.findFirst({
-        where: {
-          usuarioId: user.id, eliminadoEn: null, estado: 'completada',
-          duracionEstMin: { gte: MINUTOS_MINIMOS },
-          fechaLimite: { gte: new Date(ahora.getTime() - RECIENTE_DIAS * DIA_MS), lte: ahora },
-          horasReales: null,
-          senales: { none: { clase: { in: ['horas', 'pregunta'] } } }, // ya se aprendió de ella o ya se preguntó
-        },
+        where: filtroCandidata(user.id, ahora),
         orderBy: { fechaLimite: 'desc' },
         select: { id: true, titulo: true, duracionEstMin: true },
       });
@@ -50,6 +76,7 @@ export async function GET() {
       throw e;
     });
     if (!candidata) return NextResponse.json({ pregunta: null });
+    sinPregunta.set(user.id, ahora.getTime() + CADA_DIAS * DIA_MS);
 
     const sugeridas = (candidata.duracionEstMin ?? 0) / 60;
     return NextResponse.json({

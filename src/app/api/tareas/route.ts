@@ -11,6 +11,26 @@ import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 
 // GET /api/tareas → tareas del usuario logueado, con prioridad calculada
+/**
+ * Horas de estudio por día: las reales (huecos de las próximas 2 semanas, con tope de 4 h), no un 3 fijo.
+ * En caché 10 min por usuario: son 4 consultas y la capacidad casi no cambia de un minuto a otro.
+ */
+const capacidades = new Map<string, { horas: number; hasta: number }>();
+async function capacidadDe(usuarioId: string): Promise<number> {
+  const c = capacidades.get(usuarioId);
+  if (c && c.hasta > Date.now()) return c.horas;
+  try {
+    const ahora = new Date();
+    const ctx = await cargarContextoPlan(usuarioId, ahora, new Date(ahora.getTime() + 14 * 86_400_000), ahora);
+    const horas = Math.max(0.5, horasLibresPorDia(ctx.dias, CONFIG_PLAN.maxEstudioDiaMin / 60));
+    capacidades.set(usuarioId, { horas, hasta: Date.now() + 10 * 60_000 });
+    return horas;
+  } catch (error) {
+    console.error('Capacidad de estudio: se usa el valor por defecto', error);
+    return CONFIG_PRIORIDAD.horasEstudioPorDia;
+  }
+}
+
 export async function GET() {
   const user = await obtenerUsuario();
   if (!user) {
@@ -20,20 +40,15 @@ export async function GET() {
   try {
     // Lo que ya pasó se da por hecho (Fase 3): el usuario no tiene que marcar nada
     await cerrarVencidas(user.id);
-    const tareas = await prisma.tarea.findMany({
-      where: { usuarioId: user.id, eliminadoEn: null },
-      orderBy: { fechaLimite: 'asc' },
-      include: { materia: { select: { id: true, nombre: true, color: true } } },
-    });
-    // Horas de estudio por día: las reales (huecos de las próximas 2 semanas, con tope de 4 h), no un 3 fijo
-    let horasEstudioPorDia = CONFIG_PRIORIDAD.horasEstudioPorDia;
-    try {
-      const ahora = new Date();
-      const ctx = await cargarContextoPlan(user.id, ahora, new Date(ahora.getTime() + 14 * 86_400_000), ahora);
-      horasEstudioPorDia = Math.max(0.5, horasLibresPorDia(ctx.dias, CONFIG_PLAN.maxEstudioDiaMin / 60));
-    } catch (error) {
-      console.error('Capacidad de estudio: se usa el valor por defecto', error);
-    }
+    // La lista y la capacidad diaria van en paralelo (la base está lejos: cada ronda de consultas pesa)
+    const [tareas, horasEstudioPorDia] = await Promise.all([
+      prisma.tarea.findMany({
+        where: { usuarioId: user.id, eliminadoEn: null },
+        orderBy: { fechaLimite: 'asc' },
+        include: { materia: { select: { id: true, nombre: true, color: true } } },
+      }),
+      capacidadDe(user.id),
+    ]);
     return NextResponse.json({
       tareas: priorizarTareas(tareas, new Date(), { ...CONFIG_PRIORIDAD, horasEstudioPorDia }),
       horasEstudioPorDia,

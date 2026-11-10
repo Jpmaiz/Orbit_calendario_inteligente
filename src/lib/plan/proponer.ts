@@ -2,7 +2,7 @@
  * Propuesta de plan para una actividad, con lo que hay en la base y lo aprendido del usuario.
  * La usan GET /api/plan (para mostrarla) y POST /api/plan (para comparar con lo que guardó el usuario).
  */
-import { prisma } from '@/lib/prisma/cliente';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 import { horasPorDefecto } from '@/lib/estimacion/rubrica';
 import { franjaPreferida } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
@@ -18,11 +18,8 @@ export type Propuesta = { plan: Plan | null; horas: number; limite: Date; ctx: C
 
 export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, horasPedidas: number | null, ahora: Date = new Date()): Promise<Propuesta> {
   const horas = horasPedidas ?? (tarea.duracionEstMin ? tarea.duracionEstMin / 60 : horasPorDefecto(tarea.tipo));
-  const [usuario, aprendido] = await Promise.all([
-    prisma.usuario.findUnique({ where: { id: usuarioId }, select: { zonaHoraria: true } }),
-    cargarAprendizaje(usuarioId, ahora),
-  ]);
-  const limite = limiteDePlan(tarea, usuario?.zonaHoraria ?? 'America/La_Paz');
+  const [zona, aprendido] = await Promise.all([zonaDeUsuario(usuarioId), cargarAprendizaje(usuarioId, ahora)]);
+  const limite = limiteDePlan(tarea, zona);
   // Solo se cargan los días que se pueden planificar (últimos 28 antes del límite): así una fecha lejana
   // no queda fuera del rango de días. Los bloques propios se traen todos aparte (ver cargarContextoPlan).
   const desde = inicioDePlan(limite, ahora);
