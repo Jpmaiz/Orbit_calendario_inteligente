@@ -1,7 +1,11 @@
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
 
+export type OrigenBloque = 'orbit' | 'usuario';
 export type BloquePlan = { inicio: string; fin: string; tipo: 'estudio' | 'repaso' };
-export type BloqueGuardado = BloquePlan & { id: string; estado: string };
+/** Lo que se manda al guardar (v2.10): cuartos de hora, de 30 min a 4 h, con su origen. */
+export type BloqueAGuardar = BloquePlan & { origen: OrigenBloque };
+/** enCurso: empezó y no terminó; el back lo conserva y no se edita. */
+export type BloqueGuardado = BloquePlan & { id: string; estado: string; origen: OrigenBloque; enCurso: boolean };
 export type DatosPlan = {
   tarea: { id: string; titulo: string; tipo: string; fechaLimite: string; horas: number };
   propuesta: {
@@ -48,7 +52,10 @@ function bloque(v: unknown): BloquePlan {
 }
 function guardado(v: unknown): BloqueGuardado {
   const b = objeto(v);
-  return { ...bloque(b), id: texto(b.id), estado: texto(b.estado) };
+  return {
+    ...bloque(b), id: texto(b.id), estado: texto(b.estado),
+    origen: b.origen === 'orbit' ? 'orbit' : 'usuario', enCurso: b.enCurso === true,
+  };
 }
 export function leerPlan(v: unknown): DatosPlan {
   const d = objeto(v), t = objeto(d.tarea), p = objeto(d.propuesta);
@@ -63,14 +70,15 @@ export function leerPlan(v: unknown): DatosPlan {
     conflictos: lista(d.conflictos).map((v) => { const c = objeto(v); return { id: texto(c.id), motivo: texto(c.motivo) }; }),
   };
 }
-export function construirBodyPlan(bloques: readonly BloquePlan[]) {
-  return { bloques: bloques.map((b) => bloque(b)) };
+export function construirBodyPlan(bloques: readonly BloqueAGuardar[]) {
+  return { bloques: bloques.map((b) => ({ ...bloque(b), origen: b.origen })) };
 }
 function leerGuardado(v: unknown): ResultadoPlan {
   const d = objeto(v);
   return {
-    bloques: lista(d.bloques).map(guardado), minutosPlanificados: numero(d.minutosPlanificados), resumen: texto(d.resumen),
-    choques: lista(d.choques).map((v) => { const c = objeto(v); return { inicio: instante(c.inicio), titulo: texto(c.titulo) }; }),
+    bloques: lista(d.bloques).map(guardado), minutosPlanificados: numero(d.minutosPlanificados),
+    resumen: typeof d.resumen === 'string' ? d.resumen : 'Plan guardado',
+    choques: (d.choques === undefined ? [] : lista(d.choques)).map((v) => { const c = objeto(v); return { inicio: instante(c.inicio), titulo: texto(c.titulo) }; }),
   };
 }
 async function solicitar(tareaId: string, method: 'GET' | 'POST' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<unknown> {
@@ -96,7 +104,7 @@ async function solicitar(tareaId: string, method: 'GET' | 'POST' | 'DELETE', bod
 export async function cargarPlan(tareaId: string, signal?: AbortSignal): Promise<DatosPlan> {
   return leerPlan(await solicitar(tareaId, 'GET', undefined, signal));
 }
-export async function guardarPlan(tareaId: string, bloques: readonly BloquePlan[]): Promise<ResultadoPlan> {
+export async function guardarPlan(tareaId: string, bloques: readonly BloqueAGuardar[]): Promise<ResultadoPlan> {
   const datos = await solicitar(tareaId, 'POST', construirBodyPlan(bloques));
   try { return leerGuardado(datos); }
   catch { throw new ErrorPlan(200, 'El plan se guardó, pero no pude leer el resultado. Vuelve a consultar antes de guardar otra vez.'); }
