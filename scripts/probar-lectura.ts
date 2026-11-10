@@ -9,6 +9,7 @@ import { leerCasilla, grillaACeldas, type GrillaLeida } from '@/lib/horario/gril
 import { agruparClases, type MateriaLeida } from '@/lib/horario/celdas';
 import { quitarDatosPersonales } from '@/lib/privacidad';
 import { prepararItems } from '@/lib/borrador/prepararItems';
+import { notasDeItem } from '@/lib/borrador/notas';
 import { CAMPOS_VACIOS, type ItemExtraido } from '@/lib/ia/extraccion';
 
 let fallas = 0;
@@ -130,7 +131,9 @@ prueba('Evento con preparación → tarea "Preparación" que vence al empezar el
   assert.equal(lista[1].titulo, 'Preparación: Cirugía de Apéndice');
   assert.equal(lista[1].venceCon, 0);
   assert.equal(lista[1].hora, '09:00');
-  assert.equal(lista[1].descripcion, 'Temas: Semiología de apéndice, Nudos');
+  // Los temas ya no van a la descripción: salen como notas (src/lib/borrador/notas.ts)
+  assert.equal(lista[1].descripcion, null);
+  assert.deepEqual(notasDeItem(lista[1]).map((n) => n.texto), ['Semiología de apéndice', 'Nudos']);
 });
 prueba('"Entregar al ingresar al examen": toma la fecha y hora del examen; índices se reacomodan', () => {
   const lista = prepararItems([
@@ -140,7 +143,8 @@ prueba('"Entregar al ingresar al examen": toma la fecha y hora del examen; índi
   assert.deepEqual(lista[0].fechaDicha, { tipo: 'exacta', fecha: '2026-11-10' });
   assert.equal(lista[0].venceCon, 1);
   assert.equal(lista[0].hora, null);
-  assert.equal(lista[0].descripcion, 'Llevar: Llevar el cuadro en físico');
+  assert.equal(lista[0].descripcion, null);
+  assert.deepEqual(notasDeItem(lista[0]), [{ categoria: 'llevar', texto: 'Llevar el cuadro en físico' }]);
 });
 
 console.log(fallas ? `\n${fallas} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

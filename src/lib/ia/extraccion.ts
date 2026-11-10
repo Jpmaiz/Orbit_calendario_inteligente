@@ -13,6 +13,7 @@ export type ItemExtraido = {
   clase: ClaseItem;
   titulo: string;
   tipo: (typeof TIPOS_TAREA)[number] | null; // solo tareas
+  tipoSeguro: boolean;                       // el texto dice qué es (false = deducido: el front pregunta)
   fechaDicha: FechaDicha | null;             // tarea y evento
   fechaFinDicha: FechaDicha | null;          // evento de varios días ("del 20 al 29"): último día
   hora: string | null;                       // "HH:mm" (tarea: hora límite o del examen; evento: inicio)
@@ -32,6 +33,7 @@ export type ItemExtraido = {
   preparacion: { titulo: string | null; estimacion: LecturaEstimacion | null } | null; // evento que hay que llevar estudiado
   preparativos: string[];                    // lo que hay que llevar o tener listo
   referencias: string[];                     // libros o fuentes
+  duracion: string | null;                   // cuánto dura la actividad al hacerla ("15 min por grupo")
 };
 
 export type ContextoExtraccion = {
@@ -57,6 +59,7 @@ export const REGLAS_ITEMS = `Cada ítem:
   "clase": "tarea" | "evento" | "evento_fijo",
   "titulo": string,
   "tipo": "examen" | "tarea" | "entrega" | "proyecto" | "exposicion" | null,
+  "tipoSeguro": true | false,
   "fechaDicha": FECHA o null,
   "fechaFinDicha": FECHA o null,
   "fechaInferida": true | false,
@@ -73,6 +76,7 @@ export const REGLAS_ITEMS = `Cada ítem:
   "preparacion": { "titulo": string, "estimacion": ESTIMACION } o null,
   "preparativos": [string],
   "referencias": [string],
+  "duracion": string o null,
   "confianza": número de 0 a 1,
   "evidencia": "fragmento exacto del texto de donde salió este ítem"
 }
@@ -87,6 +91,7 @@ CLASE:
     Si es un solo día, "fechaFinDicha" = null.
     Si para el evento hay que llevar estudiado algo ("estudiar semiología de apéndice y nudos"), ponlo en "preparacion"
     con su ESTIMACION (los temas a estudiar). No crees otro ítem para eso: el sistema lo crea.
+- "tipoSeguro": true si el texto dice qué es ("examen", "entrega", "exposición", "proyecto"); false si lo dedujiste.
 - "evento_fijo": se repite cada semana (una clase). Usa "diasSemana" (1 = lunes … 7 = domingo), "hora" de inicio y "horaFin". "fechaDicha" = null.
 
 TITULO: nombre formal y corto, SIN verbo al inicio (el tipo ya dice la acción), con mayúscula inicial y abreviaturas expandidas.
@@ -113,6 +118,9 @@ DESCRIPCION: detalles útiles que no van en otro campo. Si no hay, null.
 PREPARATIVOS: cosas físicas que hay que llevar o entregar ("entregar en físico" → "Llevar el trabajo impreso", "llevar bata").
 Una parte del trabajo ("preparar la demo") NO es un preparativo: es parte de la tarea (ver "partes"). Si no hay, [].
 REFERENCIAS: libros o fuentes que nombra ("Argente-Álvarez, última edición"). Si no hay, [].
+DURACION: cuánto dura la actividad cuando se hace, si el texto lo dice ("15 min por grupo", "2 horas de examen").
+No es el tiempo de preparación. Si no lo dice, null.
+DESCRIPCION no repite lo que ya va en temas, preparativos, referencias o duracion.
 
 ESTIMACION (solo tareas y "preparacion"). Califica la actividad para un estudiante promedio que asistió a clases.
 NO calcules horas: el sistema las calcula con lo que califiques.
@@ -213,6 +221,8 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       clase,
       titulo,
       tipo,
+      // Tipo inválido o ausente (se usó "tarea" por defecto) = no es seguro
+      tipoSeguro: clase !== 'tarea' || ((TIPOS_TAREA as readonly string[]).includes(r.tipo as string) && r.tipoSeguro !== false),
       fechaDicha: clase === 'evento_fijo' ? null : normalizarFecha(r.fechaDicha),
       fechaFinDicha: clase === 'evento' ? normalizarFecha(r.fechaFinDicha) : null,
       hora: esHora(r.hora) ? r.hora : null,
@@ -232,6 +242,7 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       preparacion: clase === 'evento' ? normalizarPreparacion(r.preparacion) : null,
       preparativos: textos(r.preparativos, 5, 120),
       referencias: textos(r.referencias, 5, 120),
+      duracion: texto(r.duracion, 80),
     });
   }
   // "venceCon" tiene que apuntar a OTRO ítem que exista
@@ -250,7 +261,7 @@ function normalizarPreparacion(v: unknown): ItemExtraido['preparacion'] {
 /** Campos nuevos con su valor vacío: para ítems que arma el sistema (clases de un horario). */
 export const CAMPOS_VACIOS = {
   fechaInferida: false, venceCon: null, materiaSugerida: null, estimacion: null,
-  preparacion: null, preparativos: [], referencias: [],
+  preparacion: null, preparativos: [], referencias: [], tipoSeguro: true, duracion: null,
 } satisfies Partial<ItemExtraido>;
 
 export const NOMBRE_DIA = (d: number) => DIAS[d - 1] ?? '';

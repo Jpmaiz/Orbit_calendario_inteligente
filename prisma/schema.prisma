@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -112,6 +113,8 @@ model Tarea {
   // Fase 3: se cierra sola al pasar la fecha (el usuario puede reabrirla y ya no se vuelve a cerrar)
   cerradaSolaEn       DateTime? @map("cerrada_sola_en")
   horasReales         Float?    @map("horas_reales")                 // si respondió la pregunta semanal
+  // Notas por categoría: [{ categoria: llevar | temas | bibliografia | duracion | otros, texto }] (ver src/lib/borrador/notas.ts)
+  notas               Json?
 
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
@@ -218,6 +221,7 @@ model Evento {
   ubicacion   String?
   origen      String    @default("manual")   // manual | texto | foto | google
   uidExterno  String?   @map("uid_externo")  // UID del .ics, para no duplicar al reimportar
+  notas       Json?                          // igual que Tarea.notas ("Llevar bata")
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")

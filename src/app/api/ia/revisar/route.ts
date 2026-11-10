@@ -6,9 +6,10 @@ import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 import { revisarEvento } from '@/lib/eventos/revisarEvento';
 import {
-  choquesDeEvento, revisarClase, nombreDia,
-  type ClaseFija, type EventoPuntual, type Choque,
+  choquesDeEvento, revisarClase, nombreDia, proponerHoraDesdeHorario, diasDeClase, normalizarNombre,
+  type ClaseFija, type EventoPuntual, type Choque, type HoraPropuesta,
 } from '@/lib/borrador/enriquecer';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 
 const HORA_MS = 3_600_000;
 
@@ -20,7 +21,11 @@ const HORA_MS = 3_600_000;
  * es instantáneo y se puede llamar cada vez que el usuario cambia fecha, hora o materia.
  * También revisa los ítems ENTRE SÍ (dos eventos del mismo borrador que se cruzan).
  *
- * 200 { items: [{ indice, duplicado, choques } | { indice, error }] }  ← un resultado por ítem, en el mismo orden
+ * Tareas: "horaClase" = la clase de esa materia el día de la fecha (guardada o del mismo borrador), o null;
+ *   "diasClase" = días de la semana con clase de esa materia (puntos del calendario), [] si no tiene materia.
+ *   Con clase → "¿Es en horario de clase, 16:00 – 17:30?"; null con materia → "¿A qué hora? No tienes X este día".
+ *
+ * 200 { items: [{ indice, duplicado, choques, horaClase?, diasClase? } | { indice, error }] }  ← un resultado por ítem, en el mismo orden
  */
 export async function POST(req: NextRequest) {
   const user = await obtenerUsuario();
@@ -43,14 +48,13 @@ export async function POST(req: NextRequest) {
 
   try {
     const ahora = new Date();
-    const [usuario, clasesGuardadas] = await Promise.all([
-      prisma.usuario.findUnique({ where: { id: user.id }, select: { zonaHoraria: true } }),
+    const [zona, clasesGuardadas] = await Promise.all([
+      zonaDeUsuario(user.id),
       prisma.eventoFijo.findMany({
         where: { usuarioId: user.id, eliminadoEn: null },
         select: { id: true, titulo: true, materiaId: true, diaSemana: true, horaInicio: true, horaFin: true, vigenteDesde: true, vigenteHasta: true },
       }),
     ]);
-    const zona: string = usuario?.zonaHoraria ?? 'America/La_Paz';
     const materiaIdDe = (it: ItemConfirmado) => (it.materia.accion === 'vincular' ? it.materia.materiaId : null);
 
     // Ítems válidos del mismo borrador, para revisarlos entre sí
@@ -69,6 +73,26 @@ export async function POST(req: NextRequest) {
         : [],
     );
 
+    // Clases del borrador con materia nueva (aún sin id): se comparan por nombre normalizado
+    const clasesDelTexto = ok.flatMap(({ item }) =>
+      item.clase === 'evento_fijo' && item.materia.accion === 'crear'
+        ? [{ materiaClave: normalizarNombre(item.materia.nombre), diasSemana: item.diasSemana, hora: item.hora, horaFin: item.horaFin, titulo: item.titulo }]
+        : [],
+    );
+    const todasLasClases = [...(clasesGuardadas as ClaseFija[]), ...clasesDelBorrador];
+    const claseDe = (item: ItemConfirmado & { clase: 'tarea' }): { horaClase: HoraPropuesta; diasClase: number[] } => {
+      const m = item.materia;
+      if (m.accion === 'ninguna') return { horaClase: null, diasClase: [] };
+      const propuesta = m.accion === 'vincular'
+        ? { accion: 'vincular' as const, materiaId: m.materiaId, nombre: '', seguro: true, alternativas: [] }
+        : { accion: 'ninguna' as const };
+      const clave = m.accion === 'crear' ? normalizarNombre(m.nombre) : null;
+      return {
+        horaClase: proponerHoraDesdeHorario(item.inicio, zona, propuesta, todasLasClases, clasesDelTexto, clave),
+        diasClase: diasDeClase(propuesta, todasLasClases, clasesDelTexto, clave, ahora),
+      };
+    };
+
     const resultados = [];
     for (const { i, v } of validados) {
       if (!v.ok) {
@@ -78,8 +102,10 @@ export async function POST(req: NextRequest) {
       const item = v.valor;
       let duplicado: Record<string, unknown> | null = null;
       let choques: Choque[] = [];
+      let clase: { horaClase: HoraPropuesta; diasClase: number[] } | undefined;
 
       if (item.clase === 'tarea') {
+        clase = claseDe(item);
         const dup = await buscarDuplicada(user.id, {
           titulo: item.titulo, fechaLimite: item.inicio, materiaId: materiaIdDe(item),
         });
@@ -136,7 +162,7 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      resultados.push({ indice: i, duplicado, choques });
+      resultados.push({ indice: i, duplicado, choques, ...(clase ?? {}) });
     }
 
     return NextResponse.json({ items: resultados });

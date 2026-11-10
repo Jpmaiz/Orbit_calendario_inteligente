@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4) El sistema decide (igual que con texto)
-    const borrador = await construirBorrador(user.id, items, ctx, { ahora, referencia, vigencia, vigenciaPorCodigo });
+    const borrador = await construirBorrador(user.id, items, ctx, { ahora, referencia, vigencia, vigenciaPorCodigo, limpiarOrigen: true });
     advertencias.push(...avisosFechasPasadas(borrador, ahora, ctx.zona));
 
     // Se guarda lo LEÍDO (sin la imagen ni el texto del PDF, que pueden tener datos personales)

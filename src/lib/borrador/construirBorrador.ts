@@ -10,14 +10,16 @@
 import { prisma } from '@/lib/prisma/cliente';
 import { resolverFecha, HORA_POR_TIPO } from '@/lib/fechas/resolverFecha';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
-import { cargaDe, estimar } from '@/lib/estimacion/rubrica';
+import { cargaDe, estimar, razonesParaUsuario } from '@/lib/estimacion/rubrica';
+import { notasDeItem } from '@/lib/borrador/notas';
+import { quitarDatosPersonales } from '@/lib/privacidad';
 import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { periodoVigente, diaEnZona } from '@/lib/periodos/periodos';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 import {
-  proponerMateria, proponerHoraDesdeHorario, choquesDeEvento, revisarClase, nombreDia, normalizarNombre, normalizarCodigo,
+  proponerMateria, proponerHoraDesdeHorario, diasDeClase, choquesDeEvento, revisarClase, nombreDia, normalizarNombre, normalizarCodigo,
   type ClaseFija, type EventoPuntual,
 } from '@/lib/borrador/enriquecer';
 
@@ -59,6 +61,8 @@ export type OpcionesBorrador = {
   vigencia?: { desde: string; hasta: string; periodo: string } | null;
   /** Documento con varios periodos (anual y semestral): vigencia por sigla normalizada ("sme223"). */
   vigenciaPorCodigo?: Map<string, { desde: string; hasta: string; periodo: string }>;
+  /** Foto o PDF: el fragmento de origen pasa por quitarDatosPersonales (puede traer nombre o CI). */
+  limpiarOrigen?: boolean;
 };
 
 export async function construirBorrador(
@@ -163,8 +167,18 @@ export async function construirBorrador(
       }
     }
 
+    const evidencia = item.evidencia?.trim() ?? '';
+    const origen = evidencia ? (opciones.limpiarOrigen ? quitarDatosPersonales(evidencia) : evidencia) : null;
     borrador.push({
       ...base, materiaPropuesta, horaPropuesta, vigencia, duplicado, choques,
+      // La lectura de la rúbrica es interna (D18): no viaja al front
+      estimacion: undefined, preparacion: undefined, evidencia: origen ?? '',
+      // Tarjeta del borrador: tipo seguro o se pregunta; notas por categoría; fragmento del mensaje ("Tu mensaje")
+      tipoSeguro: item.clase === 'tarea' ? item.tipoSeguro ?? true : true,
+      notas: notasDeItem(item),
+      // Puntos del calendario de la tarjeta: días con clase de esa materia (1 = lunes … 7 = domingo)
+      diasClase: item.clase === 'tarea' ? diasDeClase(materiaPropuesta, clases, clasesDelTexto, materiaClave, ahora) : [],
+      origen,
       // Al usuario solo le llegan las horas ("~6 h") y una carga para pintar con color.
       // Dificultad, razones y supuestos se quedan en el backend (Tarea.estimacion, motor de prioridad).
       estimado: estimado && {
@@ -174,6 +188,8 @@ export async function construirBorrador(
           item.tipo ?? 'tarea', opciones.ahora,
         ).factor),
         carga: cargaDe(estimado.dificultad),
+        // Solo para la burbuja "Por qué ~5 h" (si el usuario la abre): frases simples, sin números de la rúbrica
+        razones: razonesParaUsuario(item.tipo ?? 'tarea', item.estimacion),
       },
     });
   }

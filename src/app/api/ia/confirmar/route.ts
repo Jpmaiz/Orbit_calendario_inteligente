@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
@@ -9,6 +10,7 @@ import { validarItem, ItemConfirmado } from '@/lib/borrador/validarConfirmacion'
 import { estimar } from '@/lib/estimacion/rubrica';
 import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
+import { notasDeItem, type Nota } from '@/lib/borrador/notas';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
@@ -169,6 +171,8 @@ export async function POST(req: NextRequest) {
       // 1) Materias nuevas: una sola vez por nombre normalizado (y reusar si ya existe con ese nombre)
       const idPorClave = new Map<string, string>();
       const materiasCreadas: { id: string; nombre: string }[] = [];
+      const materiasNuevas: Prisma.MateriaCreateManyInput[] = [];
+      const clasesNuevas: Prisma.EventoFijoCreateManyInput[] = [];
       const existentes = await tx.materia.findMany({
         where: { usuarioId: user.id, eliminadoEn: null }, select: { id: true, nombre: true },
       });
@@ -181,19 +185,20 @@ export async function POST(req: NextRequest) {
           idPorClave.set(clave, ya.id);
           continue;
         }
-        const nueva = await tx.materia.create({
-          data: {
-            usuarioId: user.id,
-            nombre: item.materia.nombre,
-            // Se guarda como se lee ("SIS-233"); al comparar se normaliza
-            codigo: item.materia.codigo ? item.materia.codigo.trim().toUpperCase().slice(0, 30) : null,
-            semestre,
-          },
-          select: { id: true, nombre: true },
-        });
+        const nueva = {
+          id: randomUUID(),
+          usuarioId: user.id,
+          nombre: item.materia.nombre,
+          // Se guarda como se lee ("SIS-233"); al comparar se normaliza
+          codigo: item.materia.codigo ? item.materia.codigo.trim().toUpperCase().slice(0, 30) : null,
+          semestre,
+        };
+        materiasNuevas.push(nueva);
         idPorClave.set(clave, nueva.id);
-        materiasCreadas.push(nueva);
+        materiasCreadas.push({ id: nueva.id, nombre: nueva.nombre });
       }
+      // Todas en un solo viaje a la base (antes era una consulta por materia)
+      if (materiasNuevas.length) await tx.materia.createMany({ data: materiasNuevas });
       const materiaIdDe = (it: ItemConfirmado) =>
         it.materia.accion === 'vincular' ? it.materia.materiaId
         : it.materia.accion === 'crear' ? idPorClave.get(normalizarNombre(it.materia.nombre)) ?? null
@@ -206,6 +211,22 @@ export async function POST(req: NextRequest) {
         select: { id: true, titulo: true, materiaId: true, diaSemana: true, horaInicio: true, horaFin: true, vigenteDesde: true, vigenteHasta: true },
       });
       const ahora = new Date();
+      // Notas: las que mandó el front (el usuario pudo quitar o agregar); si no mandó, las que leyó la IA
+      const notasDe = (it: ItemConfirmado & { notas: Nota[] | undefined }): Nota[] | undefined => {
+        const notas = it.notas ?? (leidoDe(it) ? notasDeItem(leidoDe(it)!) : []);
+        return notas.length ? notas : undefined;
+      };
+      // La descripción que escribió la IA ya va como nota "otros": no se guarda dos veces.
+      // Tampoco vuelve si el usuario quitó esa nota (el front nuevo manda "notas"). Un texto propio del usuario sí se guarda.
+      const mismoTexto = (a: string, b: string) => a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+      const descripcionDe = (it: ItemConfirmado & { descripcion: string | null; notas: Nota[] | undefined }, notas: Nota[] | undefined) => {
+        const d = it.descripcion;
+        if (!d) return null;
+        if (notas?.some((n) => mismoTexto(n.texto, d))) return null;
+        const deLaIA = leidoDe(it)?.descripcion;
+        if (it.notas !== undefined && deLaIA && mismoTexto(deLaIA, d)) return null;
+        return d;
+      };
       for (const { item, indice } of aGuardar) {
         const materiaId = materiaIdDe(item);
 
@@ -219,7 +240,7 @@ export async function POST(req: NextRequest) {
           const t = await tx.tarea.create({
             data: {
               usuarioId: user.id, materiaId, titulo: item.titulo, tipo: item.tipo, fechaLimite: item.inicio,
-              horaDefinida: item.horaDefinida, descripcion: item.descripcion,
+              horaDefinida: item.horaDefinida, descripcion: descripcionDe(item, notasDe(item)), notas: notasDe(item),
               prioridad: est.importancia, estado: 'pendiente', origen: 'texto',
               duracionEstMin: Math.round(horas * 60), dificultad: est.dificultad,
               estimacion: {
@@ -251,7 +272,7 @@ export async function POST(req: NextRequest) {
           const e = await tx.evento.create({
             data: {
               usuarioId: user.id, materiaId, titulo: item.titulo, inicio: item.inicio, fin: item.fin,
-              ubicacion: item.ubicacion, descripcion: item.descripcion, origen: 'texto',
+              ubicacion: item.ubicacion, descripcion: descripcionDe(item, notasDe(item)), origen: 'texto', notas: notasDe(item),
             },
             select: { id: true },
           });
@@ -267,16 +288,14 @@ export async function POST(req: NextRequest) {
               repetidos.push(dia);
               continue;
             }
-            const c = await tx.eventoFijo.create({
-              data: {
-                usuarioId: user.id, materiaId, titulo: item.titulo, diaSemana: dia,
-                horaInicio: item.hora, horaFin: item.horaFin, ubicacion: item.ubicacion, origen: 'texto',
-                vigenteDesde: item.vigencia?.desde ?? periodo?.inicio ?? null,
-                vigenteHasta: item.vigencia?.hasta ?? periodo?.fin ?? null,
-              },
-              select: { id: true },
+            const id = randomUUID();
+            clasesNuevas.push({
+              id, usuarioId: user.id, materiaId, titulo: item.titulo, diaSemana: dia,
+              horaInicio: item.hora, horaFin: item.horaFin, ubicacion: item.ubicacion, origen: 'texto',
+              vigenteDesde: item.vigencia?.desde ?? periodo?.inicio ?? null,
+              vigenteHasta: item.vigencia?.hasta ?? periodo?.fin ?? null,
             });
-            clases.push(c.id);
+            clases.push(id);
           }
           if (repetidos.length > 0) {
             omitidos.push({
@@ -299,6 +318,9 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+
+      // Las clases se guardan juntas en un solo viaje (un horario trae 10–20)
+      if (clasesNuevas.length) await tx.eventoFijo.createMany({ data: clasesNuevas });
 
       // 3.5) "Vence con": la entrega queda atada al examen o evento (guardado ahora o ya existente)
       for (const { item } of aGuardar) {

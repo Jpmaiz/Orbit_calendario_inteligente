@@ -3,6 +3,7 @@
  * El usuario pudo editar el borrador: nada de lo que llega se da por bueno.
  */
 import { TIPOS_TAREA } from '@/lib/ia/extraccion';
+import { normalizarNotas, type Nota } from '@/lib/borrador/notas';
 
 export type MateriaElegida =
   | { accion: 'vincular'; materiaId: string }
@@ -17,8 +18,9 @@ export type VenceConExistente = { clase: 'tarea' | 'evento'; id: string };
 
 export type ItemConfirmado =
   | (Comunes & { clase: 'tarea'; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null; confirmarNueva: boolean;
-      venceConExistente: VenceConExistente | null })
-  | (Comunes & { clase: 'evento'; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null })
+      venceConExistente: VenceConExistente | null; notas: Nota[] | undefined })
+  | (Comunes & { clase: 'evento'; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null;
+      notas: Nota[] | undefined })
   | (Comunes & { clase: 'evento_fijo'; diasSemana: number[]; hora: string; horaFin: string; ubicacion: string | null;
       vigencia: { desde: Date; hasta: Date } | null });
 
@@ -55,6 +57,9 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
   if (!materia.ok) return { ok: false, error: pre + materia.error };
   const indice = Number.isInteger(x.indice) && (x.indice as number) >= 0 && (x.indice as number) < 50 ? (x.indice as number) : null;
   const comunes = { titulo, materia: materia.valor, materiaDetectada: texto(x.materiaDetectada, 100), indice };
+  // undefined = el front no las mandó: confirmar usa las que leyó la IA
+  const notas = normalizarNotas(x.notas);
+  if (notas === null) return { ok: false, error: pre + 'notas inválidas: [{ categoria, texto }]' };
 
   if (x.clase === 'tarea') {
     if (!(TIPOS_TAREA as readonly string[]).includes(x.tipo as string)) return { ok: false, error: pre + 'tipo inválido' };
@@ -67,6 +72,7 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
         horaDefinida: x.horaDefinida !== false, descripcion: texto(x.descripcion, 2000),
         confirmarNueva: x.confirmarNueva === true,
         venceConExistente: venceConExistente(x.venceConExistente),
+        notas,
       },
     };
   }
@@ -78,7 +84,7 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
     if (x.fin != null && (!fin || fin <= inicio)) return { ok: false, error: pre + 'la hora de fin debe ser posterior al inicio' };
     return {
       ok: true,
-      valor: { clase: 'evento', ...comunes, inicio, fin, ubicacion: texto(x.ubicacion, 100), descripcion: texto(x.descripcion, 2000) },
+      valor: { clase: 'evento', ...comunes, inicio, fin, ubicacion: texto(x.ubicacion, 100), descripcion: texto(x.descripcion, 2000), notas },
     };
   }
 

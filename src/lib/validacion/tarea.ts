@@ -1,3 +1,4 @@
+import { normalizarNotas, type Nota } from '@/lib/borrador/notas';
 export const TIPOS = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'];
 export const PRIORIDADES = ['alta', 'media', 'baja'];
 export const ESTADOS = ['pendiente', 'en_proceso', 'completada', 'no_realizada'];
@@ -9,6 +10,7 @@ const DURACION_MAX_MIN = 6000;
 export interface DatosTarea {
   titulo?: string;
   descripcion?: string | null;
+  notas?: Nota[]; // lista completa: reemplaza la guardada ([] = sin notas)
   tipo?: string;
   fechaLimite?: Date;
   horaDefinida?: boolean;         // false = "hora por definir"
@@ -43,6 +45,13 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
     datos.titulo = b.titulo.trim();
   } else if (crear) {
     return { ok: false, error: 'Falta el título' };
+  }
+
+  // notas: [{ categoria, texto }] (src/lib/borrador/notas.ts)
+  if (b.notas !== undefined) {
+    const notas = normalizarNotas(b.notas);
+    if (!notas) return { ok: false, error: 'notas debe ser una lista de { categoria, texto } ([] para quitarlas todas)' };
+    datos.notas = notas;
   }
 
   // descripcion

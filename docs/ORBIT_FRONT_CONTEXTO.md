@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.7 · 08/11/2026)
+# Orbit — Contexto del backend para el front (v2.8 · 10/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.8 (10/11) — tarjeta del borrador: razones, notas, tipo seguro, origen](#novedades-28)
 ★ [Novedades de la v2.7 (08/11) — correcciones pedidas en el informe del front](#novedades-27)
 ★ [Guía de experiencia de usuario — Fases 1 a 3 (leer antes de diseñar)](#guia-ux)
 ★ [Novedades de la v2.6 (08/11) — Orbit aprende sin pedir nada](#novedades-26)
@@ -26,6 +27,59 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-28"></a>
+## ★ Novedades de la v2.8 (10/11/2026) — tarjeta del borrador ("Revisa antes de guardar")
+
+Respuesta al traspaso del chat de front (`claude/traspaso-tarjeta-borrador.md`). Requiere migración: `npx prisma migrate deploy`
+y `npx prisma generate` (con el servidor apagado).
+
+**Campos nuevos por ítem del borrador** (`/api/ia/extraer` y `/api/ia/extraer-imagen`):
+```ts
+{
+  estimado: { horas, carga, razones: string[] },   // tareas. razones: máx. 3, ≤ 60 caracteres, para la burbuja "Por qué ~5 h"
+  tipoSeguro: boolean,                              // false → abrir Detalles con "¿Qué tipo de actividad es?" (eventos/clases: true)
+  notas: { categoria: "llevar" | "temas" | "bibliografia" | "duracion" | "otros"; texto: string }[],
+  origen: string | null,                            // trozo del mensaje del que salió el ítem ("Tu mensaje"); foto/PDF sin datos personales
+  diasClase: number[]                               // tareas: días con clase de su materia (1 = lun … 7 = dom) → puntos del calendario
+}
+```
+- **Razones**: frases simples ("Temas: OSPF, EIGRP y 3 más", "Tiene varias partes y es en grupo"). Sin rangos, posiciones ni factor
+  personal. **Solo se muestran si el usuario toca el chip** (ver guía, regla 3).
+- **`clase`** viene siempre resuelta (tarea, evento o evento_fijo): el front no la pregunta.
+- **Notas**: una nota por tema, por cosa que llevar y por fuente; ya vienen sin repetidas y ordenadas por categoría. Lo que antes
+  llegaba pegado en `descripcion` ("Llevar: …", "Bibliografía: …", "Temas: …") **ya no se pega**: ahora va solo en `notas`.
+  La `descripcion` de la IA sale también como nota `otros`.
+- Ya no viajan al front `estimacion` (la lectura de la rúbrica) ni `preparacion`. `evidencia` sigue por compatibilidad (= `origen`).
+
+**Guardar notas**
+- `POST /api/ia/confirmar`: cada ítem de tarea o evento acepta `notas` (la lista completa, como quedó en la tarjeta). Si no se manda,
+  se guardan las que leyó la IA. Formato inválido → 400.
+- **`descripcion`: ya no hace falta mandarla** (mándala `null`). La descripción de la IA vive como nota `otros`. Si igual llega, el back
+  no la guarda dos veces: la descarta si es igual a una nota o a la descripción original de la IA (así, si el usuario quitó esa nota,
+  no vuelve). Solo se guarda un texto distinto, escrito por el usuario.
+- `PATCH /api/tareas/{id}` y `PATCH /api/eventos-puntuales/{id}` aceptan `notas` (lista completa; `[]` = sin notas).
+- `GET` de tareas, eventos y agenda devuelven `notas` (o `null` si nunca tuvo).
+
+**"Añade algo más" → `POST /api/ia/notas`** (decisión de JP: la IA lo reparte en las mismas categorías)
+```
+Body: { texto: string (1–500), titulo?: string }
+200 { notas: [{ categoria, texto }], ia: boolean }
+```
+- **No guarda nada**: el front agrega las notas a la tarjeta y se guardan al confirmar (o con `PATCH { notas }`).
+- Tarda ~1–3 s. Si la IA falla o pasa de 6 s, devuelve el texto tal cual como una nota `otros` con `ia: false` (nunca error).
+- Mientras espera: mostrar el texto escrito como nota "pendiente" (atenuada) y reemplazarla con lo que llegue.
+
+**Hora de clase al cambiar la fecha → `POST /api/ia/revisar`**
+- Cada tarea trae ahora `horaClase: { inicio, fin, motivo } | null`: la clase de esa materia el día de la fecha, buscada en las
+  clases guardadas **y en las del mismo borrador** (por eso conviene esto y no calcularlo con `/api/eventos`).
+  - Con `horaClase` → "¿Es en horario de clase, 16:00 – 17:30?" · **Sí** / **Otra hora**.
+  - `null` y la tarea tiene materia → "¿A qué hora? No tienes X este día."
+  - Sin materia → no viene `horaClase` útil (`null`): preguntar la hora directamente.
+- También trae `diasClase` (días con clase de esa materia): al cambiar la materia en la tarjeta, actualiza los puntos del calendario.
+- En el borrador inicial sigue `horaPropuesta` (exámenes y exposiciones sin hora), con el mismo formato.
 
 ---
 
@@ -69,7 +123,8 @@
 2. **Cero mantenimiento.** No pedir marcar tareas ni bloques, no confirmar dos veces, nada de notificaciones insistentes.
    Si el usuario no hace nada, todo está bien.
 3. **Solo horas.** Se muestra "~6 h". La dificultad nunca aparece como número ni texto: solo como color (`carga`).
-   Nada de explicaciones del cálculo.
+   Las razones (`estimado.razones`) solo se muestran si el usuario las pide (burbuja al tocar el chip). Nunca el factor
+   personal, rangos ni supuestos de la estimación (v2.8).
 4. **Una acción principal por pantalla.** Lo secundario va como enlace de texto ("Ahora no", "Cancelar").
 5. **Calma.** Animaciones de 400 ms o menos con las clases `orbit-*` existentes; respetar `prefers-reduced-motion`.
 
@@ -138,7 +193,7 @@ La carga se pinta como **punto o borde izquierdo de 3 px**, nunca como etiqueta.
 
 ### Lo que NO hacer
 
-- Mostrar dificultad, razones, supuestos de la estimación o el factor personal.
+- Mostrar dificultad, supuestos de la estimación o el factor personal, o las razones sin que el usuario las pida.
 - Pedir marcar tareas o bloques como hechos, o mostrar rachas o porcentajes de cumplimiento.
 - Mandar notificaciones para la pregunta semanal o para el plan.
 - Abrir la vista del plan sin que el usuario la pida.
