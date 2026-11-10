@@ -141,6 +141,7 @@ model Sugerencia {
   fechaFin      DateTime  @map("fecha_fin")
   motivo        String
   estado        String    @default("propuesta")
+  origen        String?                          // orbit = la sugerencia sin tocar · usuario = puesto o ajustado a mano (null: antes de v2.10)
   respondidaEn  DateTime? @map("respondida_en")
 
   creadoEn     DateTime  @default(now()) @map("creado_en")

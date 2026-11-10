@@ -67,8 +67,15 @@ export type ResultadoPrioridad = {
   horasPorDia: number;
   /** Último día recomendado para empezar. */
   fechaInicioSugerida: string | null;
-  /** Horas de trabajo que no caben antes de la fecha límite. 0 = alcanza el tiempo. */
+  /** Horas de trabajo que no caben antes de la fecha límite (con colchón y carga acumulada). Solo para ordenar. */
   sobrecargaHoras: number;
+  /**
+   * Para el texto "Hasta mañana a las 09:00 te queda ~1 h libre. Te faltarían ~4 h 30" (misma base que el chip de horas,
+   * sin colchón): horas libres para esta tarea hasta su fecha (descontando lo que vence antes y sumando sus bloques ya
+   * planificados) y lo que no alcanza a cubrir. 0 si está cerrada o vencida.
+   */
+  horasLibres?: number;
+  faltanHoras?: number;
   mensaje: string;
   /** De dónde sale el número, para mostrarlo o defenderlo. */
   desglose: {
@@ -131,6 +138,8 @@ export function calcularPrioridad(
     horasPorDia: 0,
     fechaInicioSugerida: null,
     sobrecargaHoras: 0,
+    horasLibres: 0,
+    faltanHoras: 0,
     mensaje,
     desglose: { ...desgloseBase, urgencia: 0, importancia: 0 },
   });
@@ -205,6 +214,9 @@ export function calcularPrioridad(
     horasPorDia: redondear(horasPorDia),
     fechaInicioSugerida: inicio.toISOString(),
     sobrecargaHoras: redondear(sobrecargaHoras),
+    // Sin disponibilidad real: promedio por día (priorizarTareas los reemplaza con los huecos reales)
+    horasLibres: redondear(Math.max(0, horasDisponibles - horasOtrasTareas / factorColchon)),
+    faltanHoras: redondear(Math.max(0, horasBase - Math.max(0, horasDisponibles - horasOtrasTareas / factorColchon))),
     mensaje,
     desglose: {
       ...desgloseBase,
@@ -223,10 +235,17 @@ export function calcularPrioridad(
  *
  * Orden: activas por puntaje (empate → la que vence antes), luego vencidas, luego cerradas.
  */
+/** Tiempo libre real (src/lib/plan/disponibilidad.ts). Sin esto, horasLibres usa el promedio por día. */
+export type TiempoLibre<T> = {
+  libresHasta: (fin: Date) => number;
+  planificadas: (t: T) => number;
+};
+
 export function priorizarTareas<T extends TareaParaPriorizar>(
   tareas: T[],
   ahora: Date = new Date(),
   config: ConfigPrioridad = CONFIG_PRIORIDAD,
+  tiempo?: TiempoLibre<T>,
 ): (T & { prioridadCalculada: ResultadoPrioridad })[] {
   const activas = tareas
     .filter((t) => !estaCerrada(t) && new Date(t.fechaLimite).getTime() >= ahora.getTime())
@@ -239,12 +258,25 @@ export function priorizarTareas<T extends TareaParaPriorizar>(
     horasOtrasDe.set(a.t, carga);
   }
 
+  // Horas libres y faltantes con los huecos reales, en la misma base que el chip (horas netas, sin colchón)
+  const libresDe = new Map<T, { horasLibres: number; faltanHoras: number }>();
+  if (tiempo) {
+    const base = (t: T) => (t.duracionEstMin != null && t.duracionEstMin > 0 ? t.duracionEstMin / 60 : HORAS_POR_TIPO[t.tipo] ?? 3);
+    const plan = new Map(activas.map((a) => [a.t, Math.min(base(a.t), tiempo.planificadas(a.t))]));
+    for (const a of activas) {
+      const otras = activas.reduce(
+        (s, b) => (b !== a && b.fin <= a.fin ? s + Math.max(0, base(b.t) - (plan.get(b.t) ?? 0)) : s), 0);
+      const libres = Math.max(0, tiempo.libresHasta(new Date(a.t.fechaLimite)) - otras) + (plan.get(a.t) ?? 0);
+      libresDe.set(a.t, { horasLibres: redondear(libres), faltanHoras: redondear(Math.max(0, base(a.t) - libres)) });
+    }
+  }
+
   const grupo = (r: ResultadoPrioridad) => (r.nivel === "vencida" ? 1 : r.nivel === "ninguna" ? 2 : 0);
 
   return tareas
     .map((t) => ({
       ...t,
-      prioridadCalculada: calcularPrioridad(t, ahora, config, horasOtrasDe.get(t) ?? 0),
+      prioridadCalculada: { ...calcularPrioridad(t, ahora, config, horasOtrasDe.get(t) ?? 0), ...libresDe.get(t) },
     }))
     .sort(
       (a, b) =>

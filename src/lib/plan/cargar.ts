@@ -11,7 +11,7 @@ const HORA_MS = 3_600_000;
 /** Estados de un bloque de estudio (tabla Sugerencia). "aceptada" = está en el calendario. */
 export const ESTADOS_BLOQUE = ['aceptada', 'cumplida', 'omitida'] as const;
 
-export type BloqueGuardado = { id: string; inicio: Date; fin: Date; tipo: string; estado: string };
+export type BloqueGuardado = { id: string; inicio: Date; fin: Date; tipo: string; estado: string; origen: string | null };
 
 export type ContextoDeUsuario = {
   zona: string;
@@ -20,6 +20,8 @@ export type ContextoDeUsuario = {
   minutosMateriaPorDia: Map<string, number>;
   minutosEstudioPorDia: Map<string, number>;
   propios: BloqueGuardado[];                 // TODOS los bloques futuros aceptados de esta actividad
+  /** Bloques aceptados del rango, de todas las actividades (para descontar lo ya planificado). */
+  bloquesAceptados?: { tareaId: string; inicio: Date; fin: Date }[];
 };
 
 /**
@@ -61,7 +63,7 @@ export async function cargarContextoPlan(
     tareaId
       ? prisma.sugerencia.findMany({
           where: { usuarioId, tareaId, estado: 'aceptada', fechaFin: { gt: ahora } },
-          select: { id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true },
+          select: { id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true, origen: true },
           orderBy: { fechaInicio: 'asc' },
         })
       : Promise.resolve([]),
@@ -89,7 +91,8 @@ export async function cargarContextoPlan(
     dias: huecosLibres(desde, hasta, ocupaciones, zona, ahora),
     minutosMateriaPorDia,
     minutosEstudioPorDia,
-    propios: propiosFuturos.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado })),
+    propios: propiosFuturos.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, origen: b.origen })),
+    bloquesAceptados: bloques.map((b) => ({ tareaId: b.tareaId, inicio: b.fechaInicio, fin: b.fechaFin })),
   };
 }
 

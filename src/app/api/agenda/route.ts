@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { tareaPublica } from '@/lib/estimacion/publico';
 import { diaEnZona } from '@/lib/periodos/periodos';
 import { cerrarVencidas } from '@/lib/tareas/cierre';
 import { zonaDeUsuario } from '@/lib/usuarios/zona';
@@ -89,7 +90,9 @@ export async function GET(req: NextRequest) {
     ]);
 
     return NextResponse.json({
-      desde, hasta, zonaHoraria: zona, clases, eventos, tareas,
+      desde, hasta, zonaHoraria: zona, clases, eventos,
+      // Sin la estimación interna; con estimado { horas, carga, razones } (D21)
+      tareas: tareas.map(tareaPublica),
       bloques: bloques.map((b) => ({
         id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, tarea: b.tarea,
       })),

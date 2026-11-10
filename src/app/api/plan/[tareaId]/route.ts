@@ -4,13 +4,15 @@ import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { textoHoras } from '@/lib/plan/planificador';
 import { bloquesEnConflicto, cargarContextoPlan } from '@/lib/plan/cargar';
 import { proponerPlan } from '@/lib/plan/proponer';
+import { olvidarDisponibilidad } from '@/lib/plan/disponibilidad';
+import { enCurso, limiteParaGuardar, validarPlan, type BloqueAGuardar } from '@/lib/plan/validarPlan';
+import { zonaDeUsuario } from '@/lib/usuarios/zona';
 import { franjaDe } from '@/lib/estimacion/personal';
 import { registrarFranjas, registrarHoras } from '@/lib/aprendizaje/senales';
 
 type Contexto = { params: Promise<{ tareaId: string }> };
 
 const MIN_MS = 60_000;
-const MAX_BLOQUES = 40;
 
 /** La actividad, si es del usuario y todavía se puede planificar. */
 async function tareaPropia(id: string, usuarioId: string) {
@@ -33,7 +35,7 @@ const iso = (b: { inicio: Date; fin: Date }) => ({ inicio: b.inicio.toISOString(
  * 200 {
  *   tarea: { id, titulo, tipo, fechaLimite, horas },
  *   propuesta: { bloques: [{ inicio, fin, minutos, tipo: estudio|repaso }], minutosNecesarios, minutosPlanificados, faltanMin, aviso },
- *   guardado: [{ id, inicio, fin, tipo, estado }],   ← el plan que ya aceptó, si existe
+ *   guardado: [{ id, inicio, fin, tipo, estado, origen, enCurso }],   ← el plan que ya aceptó, si existe
  *   conflictos: [{ id, motivo }],                    ← bloques guardados que ahora pisan algo
  *   huecos: [{ dia, diaSemana, huecos: [{ inicio, fin, minutos }] }]   ← para tocar un hueco y agregar un bloque
  * }
@@ -64,7 +66,10 @@ export async function GET(req: NextRequest, { params }: Contexto) {
             aviso: plan.aviso,
           }
         : { bloques: [], minutosNecesarios: Math.round(horas * 60), minutosPlanificados: 0, faltanMin: Math.round(horas * 60), aviso: 'Ya no queda tiempo antes de la fecha.' },
-      guardado: ctx.propios.map((b) => ({ id: b.id, ...iso(b), tipo: b.tipo, estado: b.estado })),
+      guardado: ctx.propios.map((b) => ({
+        id: b.id, ...iso(b), tipo: b.tipo, estado: b.estado, origen: b.origen ?? 'usuario',
+        enCurso: b.inicio < new Date() && b.fin > new Date(), // empezó y no terminó: se conserva, no se edita
+      })),
       conflictos: bloquesEnConflicto(ctx.propios, ctx.ocupaciones, tarea.fechaLimite),
       huecos: ctx.dias
         .filter((d) => d.huecos.length)
@@ -76,36 +81,13 @@ export async function GET(req: NextRequest, { params }: Contexto) {
   }
 }
 
-type BloqueValido = { inicio: Date; fin: Date; tipo: 'estudio' | 'repaso' };
-
-function validarBloques(body: unknown, fechaLimite: Date, ahora: Date): { ok: true; bloques: BloqueValido[] } | { ok: false; error: string } {
-  const lista = (body as { bloques?: unknown })?.bloques;
-  if (!Array.isArray(lista)) return { ok: false, error: 'Falta "bloques" (lista)' };
-  if (lista.length > MAX_BLOQUES) return { ok: false, error: `Máximo ${MAX_BLOQUES} bloques` };
-  const bloques: BloqueValido[] = [];
-  for (const [i, x] of lista.entries()) {
-    const r = (x ?? {}) as Record<string, unknown>;
-    const inicio = typeof r.inicio === 'string' ? new Date(r.inicio) : null;
-    const fin = typeof r.fin === 'string' ? new Date(r.fin) : null;
-    if (!inicio || !fin || isNaN(+inicio) || isNaN(+fin)) return { ok: false, error: `Bloque ${i + 1}: fechas inválidas` };
-    const minutos = (fin.getTime() - inicio.getTime()) / MIN_MS;
-    if (minutos < 15 || minutos > 240) return { ok: false, error: `Bloque ${i + 1}: debe durar de 15 min a 4 h` };
-    if (fin > fechaLimite) return { ok: false, error: `Bloque ${i + 1}: termina después de la fecha de la actividad` };
-    if (fin.getTime() < ahora.getTime() - 5 * MIN_MS) return { ok: false, error: `Bloque ${i + 1}: ya pasó` };
-    bloques.push({ inicio, fin, tipo: r.tipo === 'repaso' ? 'repaso' : 'estudio' });
-  }
-  bloques.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
-  for (let i = 1; i < bloques.length; i++) {
-    if (bloques[i].inicio < bloques[i - 1].fin) return { ok: false, error: 'Dos bloques se cruzan entre sí' };
-  }
-  return { ok: true, bloques };
-}
-
 /**
- * POST /api/plan/[tareaId]  Body: { bloques: [{ inicio, fin, tipo? }] }
- * Guarda el plan que eligió el usuario ("Guardar plan"): reemplaza sus bloques futuros de esta actividad.
- * Los cruces con clases, eventos u otros bloques se avisan (no bloquean).
- * 200 { bloques: [{ id, inicio, fin, tipo, estado }], minutosPlanificados, choques: [{ inicio, titulo }] }
+ * POST /api/plan/[tareaId]  Body: { bloques: [{ inicio, fin, tipo?: estudio|repaso, origen?: orbit|usuario }] }
+ * Guarda el plan que eligió el usuario ("Guardar plan"): reemplaza sus bloques que todavía no empezaron.
+ * Reglas (src/lib/plan/validarPlan.ts): cuartos de hora, 30 min a 4 h, desde ahora, hasta la fecha de la actividad
+ * (sin hora definida: fin de ese día) y sin cruzarse con clases, eventos ni bloques de otras actividades → si no, 400.
+ * El bloque en curso se conserva. El tope de 4 h por día no se valida (lo decide el usuario).
+ * 200 { bloques: [{ id, inicio, fin, tipo, estado, origen }], minutosPlanificados, choques: [] }
  */
 export async function POST(req: NextRequest, { params }: Contexto) {
   const user = await obtenerUsuario();
@@ -125,38 +107,38 @@ export async function POST(req: NextRequest, { params }: Contexto) {
     if (!abierta(tarea.estado)) return NextResponse.json({ error: 'La actividad ya está cerrada' }, { status: 409 });
 
     const ahora = new Date();
-    const v = validarBloques(body, tarea.fechaLimite, ahora);
+    const zona = await zonaDeUsuario(user.id);
+    // Ocupaciones (clases, eventos y bloques de otras actividades) en el rango de los bloques que llegan
+    const fechas = (Array.isArray((body as { bloques?: unknown })?.bloques) ? (body as { bloques: unknown[] }).bloques : [])
+      .flatMap((b) => [(b as { inicio?: unknown })?.inicio, (b as { fin?: unknown })?.fin])
+      .map((f) => (typeof f === 'string' ? new Date(f).getTime() : NaN))
+      .filter((n) => Number.isFinite(n));
+    const desde = new Date(Math.min(ahora.getTime(), ...fechas));
+    const hasta = new Date(Math.max(ahora.getTime() + MIN_MS, ...fechas));
+    const ctx = await cargarContextoPlan(user.id, desde, hasta, ahora, tarea.id, tarea.materiaId);
+    const v = validarPlan(body, {
+      limite: limiteParaGuardar(tarea, zona), ahora, zona, ocupaciones: ctx.ocupaciones, enCurso: enCurso(ctx.propios, ahora),
+    });
     if (!v.ok) return NextResponse.json({ error: v.error }, { status: 400 });
 
     const creados = await prisma.$transaction(async (tx) => {
-      // Reemplaza el plan futuro de esta actividad; lo que ya pasó (cumplido u omitido) se conserva
-      await tx.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: tarea.id, estado: 'aceptada', fechaFin: { gt: ahora } } });
+      // Reemplaza los bloques que todavía no empezaron; lo que ya pasó y el bloque en curso se conservan
+      await tx.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: tarea.id, estado: 'aceptada', fechaInicio: { gte: ahora } } });
       if (v.bloques.length) {
         await tx.sugerencia.createMany({
           data: v.bloques.map((b) => ({
             usuarioId: user.id, tareaId: tarea.id, fechaInicio: b.inicio, fechaFin: b.fin,
-            motivo: b.tipo, estado: 'aceptada', respondidaEn: ahora,
+            motivo: b.tipo, estado: 'aceptada', respondidaEn: ahora, origen: b.origen,
           })),
         });
       }
       return tx.sugerencia.findMany({
         where: { usuarioId: user.id, tareaId: tarea.id, estado: 'aceptada', fechaFin: { gt: ahora } },
         orderBy: { fechaInicio: 'asc' },
-        select: { id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true },
+        select: { id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true, origen: true },
       });
     });
-
-    // Avisar cruces (otra clase, evento o el plan de otra actividad)
-    let choques: { inicio: string; titulo: string }[] = [];
-    if (v.bloques.length) {
-      const desde = v.bloques[0].inicio;
-      const hasta = v.bloques[v.bloques.length - 1].fin;
-      const ctx = await cargarContextoPlan(user.id, desde, hasta, desde, tarea.id, tarea.materiaId);
-      choques = v.bloques.flatMap((b) => {
-        const o = ctx.ocupaciones.find((x) => b.inicio < x.fin && x.inicio < b.fin);
-        return o ? [{ inicio: b.inicio.toISOString(), titulo: o.titulo }] : [];
-      });
-    }
+    const choques: { inicio: string; titulo: string }[] = []; // los cruces ahora se rechazan (400); se deja por compatibilidad
 
     const minutos = creados.reduce((s, b) => s + Math.round((b.fechaFin.getTime() - b.fechaInicio.getTime()) / MIN_MS), 0);
 
@@ -167,8 +149,9 @@ export async function POST(req: NextRequest, { params }: Contexto) {
       console.error('Aprendizaje del plan (no bloquea):', error);
     }
 
+    olvidarDisponibilidad(user.id); // "te faltarían ~X h" cambia con el plan nuevo
     return NextResponse.json({
-      bloques: creados.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado })),
+      bloques: creados.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, origen: b.origen ?? 'usuario' })),
       minutosPlanificados: minutos,
       resumen: minutos ? `Plan guardado: ${textoHoras(minutos)} de estudio` : 'Plan quitado',
       choques,
@@ -188,7 +171,7 @@ export async function POST(req: NextRequest, { params }: Contexto) {
 async function aprenderDelPlan(
   usuarioId: string,
   tarea: NonNullable<Awaited<ReturnType<typeof tareaPropia>>>,
-  guardados: BloqueValido[],
+  guardados: BloqueAGuardar[],
   ahora: Date,
 ) {
   const pasados = await prisma.sugerencia.findMany({
@@ -206,7 +189,8 @@ async function aprenderDelPlan(
   const { plan, ctx } = await proponerPlan(usuarioId, tarea, total > 0 ? total / 60 : null, ahora);
   if (!plan || !guardados.length) return;
   const cruza = (a: { inicio: Date; fin: Date }, b: { inicio: Date; fin: Date }) => a.inicio < b.fin && b.inicio < a.fin;
-  const puestos = guardados.filter((g) => !plan.bloques.some((p) => cruza(g, p)));
+  // Votan a favor los que puso o movió el usuario (origen "usuario") fuera de lo que Orbit propuso
+  const puestos = guardados.filter((g) => g.origen === 'usuario' && !plan.bloques.some((p) => cruza(g, p)));
   const sacados = plan.bloques.filter((p) => !guardados.some((g) => cruza(g, p)));
   await registrarFranjas(usuarioId, tarea.id, [
     ...puestos.map((b) => ({ franja: franjaDe(b.inicio, ctx.zona), voto: 1 })),
@@ -225,6 +209,7 @@ export async function DELETE(_req: NextRequest, { params }: Contexto) {
     const r = await prisma.sugerencia.deleteMany({
       where: { usuarioId: user.id, tareaId: tarea.id, estado: 'aceptada', fechaFin: { gt: new Date() } },
     });
+    olvidarDisponibilidad(user.id);
     return NextResponse.json({ eliminados: r.count });
   } catch (error) {
     console.error('Error DELETE /api/plan/[tareaId]:', error);

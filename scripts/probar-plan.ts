@@ -96,5 +96,30 @@ prueba('Capacidad para el motor de prioridad (promedio con tope de 4 h)', () => 
   assert.ok(h > 2 && h <= 4, `${h}`);
 });
 
+
+// v2.10: reglas de la sugerencia para la pantalla "Planificar estudio"
+const todos = [p1, p2, p3, p4];
+prueba('Ningún bloque sugerido dura menos de 1 h', () => {
+  for (const p of todos) for (const b of p.bloques) assert.ok(b.minutos >= 60, `${hora(b.inicio)}: ${b.minutos} min`);
+});
+prueba('Todos empiezan en :00 o :30', () => {
+  for (const p of todos) for (const b of p.bloques) assert.ok(['00', '30'].includes(hora(b.inicio).slice(-2)), hora(b.inicio));
+});
+prueba('Margen de 15 min: clase 09:00–10:00 y reunión 10:45 → ese hueco no se sugiere', () => {
+  const ocup = [
+    { inicio: en(12, '09:00'), fin: en(12, '10:00'), titulo: 'Clase' },
+    { inicio: en(12, '10:45'), fin: en(12, '22:30'), titulo: 'Reunión' },
+  ];
+  const t: TareaAPlanificar = { titulo: 'Tarea', tipo: 'tarea', fechaLimite: en(12, '23:00'), horaDefinida: true, horas: 1 };
+  const desde = en(12, '00:00');
+  const dias = huecosLibres(desde, en(12, '23:59'), ocup, ZONA, desde);
+  const p = planificar(t, { dias, zona: ZONA }, desde);
+  assert.ok(p.bloques.every((b) => b.fin <= en(12, '08:45') || b.inicio >= en(12, '10:15')));
+  assert.ok(!p.bloques.some((b) => b.inicio >= en(12, '10:00') && b.inicio < en(12, '10:45')), ver(p));
+});
+prueba('minutosNecesarios es exacto (misma base que el chip): 5 h 15 → 315', () => {
+  assert.equal(plan({ ...entrega, horas: 5.25 }).minutosNecesarios, 315);
+});
+
 console.log(fallas ? `\n${fallas} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallas ? 1 : 0);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { tareaPublica } from '@/lib/estimacion/publico';
 import { validarTarea } from '@/lib/validacion/tarea';
 import { moverVinculadas } from '@/lib/tareas/vinculos';
 import { registrarHoras } from '@/lib/aprendizaje/senales';
@@ -89,7 +90,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
       await prisma.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: id, estado: 'aceptada', fechaInicio: { gt: new Date() } } });
     }
-    return NextResponse.json({ tarea });
+    return NextResponse.json({ tarea: tareaPublica(tarea) });
   } catch (error) {
     console.error('Error PATCH /api/tareas/[id]:', error);
     return NextResponse.json({ error: 'Error al actualizar la tarea' }, { status: 500 });

@@ -11,6 +11,7 @@ import { estimar } from '@/lib/estimacion/rubrica';
 import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { notasDeItem, type Nota } from '@/lib/borrador/notas';
+import { olvidarDisponibilidad } from '@/lib/plan/disponibilidad';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
@@ -348,6 +349,7 @@ export async function POST(req: NextRequest) {
       return final;
     }, { timeout: 15_000 }); // varios ítems + la latencia a Supabase: más que los 5 s por defecto
 
+    olvidarDisponibilidad(user.id); // clases o eventos nuevos cambian las horas libres
     return NextResponse.json(resultado, { status: 201 });
   } catch (error) {
     if (error instanceof YaConfirmada) {

@@ -123,6 +123,13 @@ implícitas pesan 0,5; la respuesta y la edición, 1. El factor se aplica en sil
 **Ajustes (8/11):** sin hora definida, la tarea se cierra al terminar su día (la hora guardada es interna); reabrir una tarea,
 cerrada sola o a mano, impide que se vuelva a cerrar sola hasta que cambie su fecha. Borrar las horas vuelve a la estimación.
 
+### D22. Sugerencia limpia, edición libre (10/11)
+**Qué:** la sugerencia de Orbit usa solo bloques de 1 h o más que empiezan en :00 o :30, con 15 min de margen alrededor de
+clases y eventos (el repaso previo al examen pasa a 1 h). A mano el usuario puede usar cuartos de hora y bloques desde 30 min,
+sin margen; el back rechaza solo lo imposible (pasado, después de la fecha, encima de otra cosa). Cada bloque guarda su `origen`.
+**Por qué:** una propuesta fácil de leer y aceptar de un toque; el control fino es del usuario. El origen permite que la Fase 3
+aprenda qué cambia de la sugerencia sin pedirle nada.
+
 ### D21. Razones a pedido y notas por categoría (10/11)
 **Qué:** cambia D18 en un punto: el borrador trae `estimado.razones` (máx. 3 frases de ≤ 60 caracteres, sin números de la rúbrica
 ni factor personal), que el front muestra **solo si el usuario toca el chip de horas**. Lo que la IA saca del mensaje (temas,

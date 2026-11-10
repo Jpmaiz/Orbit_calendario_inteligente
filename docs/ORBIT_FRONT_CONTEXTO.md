@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.8 · 10/11/2026)
+# Orbit — Contexto del backend para el front (v2.10 · 10/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,8 @@
 
 ## Índice
 
+★ [Novedades de la v2.10 (10/11) — Planificar estudio: sugerencia, guardar, origen](#novedades-210)
+★ [Novedades de la v2.9 (10/11) — tarjeta de tarea en Tu día: estimado, horas libres](#novedades-29)
 ★ [Novedades de la v2.8 (10/11) — tarjeta del borrador: razones, notas, tipo seguro, origen](#novedades-28)
 ★ [Novedades de la v2.7 (08/11) — correcciones pedidas en el informe del front](#novedades-27)
 ★ [Guía de experiencia de usuario — Fases 1 a 3 (leer antes de diseñar)](#guia-ux)
@@ -27,6 +29,75 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-210"></a>
+## ★ Novedades de la v2.10 (10/11/2026) — pantalla "Planificar estudio"
+
+Respuesta a `claude/traspaso-plan-estudio.md`. **Migración:** `20261110010000_origen_bloques` (`npx prisma migrate deploy` + `generate`).
+
+**A. La sugerencia (`GET /api/plan/{tareaId}` → `propuesta`)**
+- Bloques de **1 h o más** (60, 90, 120 min), que **empiezan en :00 o :30**. Los huecos de menos de 1 h no se sugieren.
+- 15 min de margen antes y después de cada clase, evento o bloque de otra actividad (ya existía).
+- Máx. 4 h de estudio y 2 h de la misma materia por día; repartido en varios días.
+- El repaso del día antes del examen dura **1 h** (antes 30 min).
+- Si no alcanza, la propuesta viene incompleta con `faltanMin`. `aviso` sigue llegando; el front puede ignorarlo.
+- **`minutosNecesarios` es exacto**, en la misma base que el chip (`estimado.horas × 60`); antes se redondeaba a la media hora.
+
+**B. Guardar (`POST /api/plan/{tareaId}`)**
+```
+Body: { bloques: [{ inicio, fin, tipo?: "estudio" | "repaso", origen?: "orbit" | "usuario" }] }
+```
+- Inicio y fin en cuartos de hora (:00, :15, :30, :45), de 30 min a 4 h.
+- **400** si un bloque:
+  - empieza antes del cuarto de hora actual;
+  - termina después de la fecha (sin hora definida: fin de ese día);
+  - se cruza con una clase, un evento o un bloque de otra actividad (sin margen: pegado a una clase vale);
+  - se cruza con otro bloque del plan.
+
+  El mensaje dice cuál y con qué, por ejemplo: "Bloque 2 (mié 09:30): se cruza con «Redes II»".
+- El tope de 4 h por día **no** se valida.
+- **Manda `tipo`** para que el repaso no se guarde como estudio. El back usa `tipo`, no `motivo`.
+- **Bloque en curso** (empezó y no terminó): se conserva tal cual y no se edita. Si el front lo reenvía igual, se ignora; si otro bloque lo pisa, 400.
+- Un bloque guardado que ahora está en `conflictos` (cayó encima una clase nueva) da 400 si se reenvía: el usuario tiene que quitarlo o moverlo.
+- `choques` sigue llegando, siempre vacío.
+
+**C. Origen.** Cada bloque guarda `origen` (`orbit` = la sugerencia sin tocar; `usuario` = puesto o ajustado a mano; sin dato = `usuario`).
+Se devuelve en `guardado` y en la respuesta del POST. La Fase 3 lo usa para los votos de franja.
+
+**D. Grilla.** `GET /api/agenda` trae `clases`, `eventos` y `bloques` de todas las actividades (con `tarea.id`: separa los de esta tarea), hasta 62 días.
+Orbit sugiere solo hasta las 22:30; a mano se acepta hasta el final de la grilla.
+
+**E. Plan guardado.** `guardado` y `propuesta` vienen por separado. Cada bloque de `guardado` trae ahora `origen` y `enCurso`.
+El POST reemplaza todos los bloques que todavía no empezaron.
+
+---
+
+<a id="novedades-29"></a>
+## ★ Novedades de la v2.9 (10/11/2026) — tarjeta de tarea en "Tu día"
+
+Respuesta a `claude/traspaso-tarea-dia.md`. Sin migración.
+
+**A. `estimado` en las tareas guardadas.** `GET /api/tareas`, `GET /api/agenda` (sus `tareas`) y las respuestas de
+`POST /api/tareas` y `PATCH /api/tareas/{id}` traen `estimado: { horas, carga, razones }`, igual que el borrador
+(`null` si la tarea no tiene horas).
+- `razones: []` si las horas las puso el usuario (`horasDelUsuario: true`) o si la tarea se creó a mano.
+- Las tareas guardadas desde la v2.4 también traen razones: se calculan con la lectura guardada.
+- **Ya no se devuelve `estimacion`** (interna: dificultad, lectura de la rúbrica, factor personal). No existe `GET /api/tareas/{id}`.
+
+**B. "No te alcanza el tiempo".** `prioridadCalculada` trae dos campos nuevos, en la misma base que el chip (horas netas, sin colchón):
+- `horasLibres`: horas libres reales para esta tarea hasta su fecha y hora. Se calcula con los huecos del horario (tope de 4 h
+  de estudio por día), restando lo que vence antes y sumando los bloques ya planificados de esta tarea.
+- `faltanHoras = max(0, estimado.horas − horasLibres)`.
+- Texto: "Hasta mañana a las 09:00 te queda ~`horasLibres` libre. Te faltarían ~`faltanHoras`".
+  **Borde ámbar si `faltanHoras > 0`** (no usar `sobrecargaHoras`, que lleva colchón y solo sirve para ordenar).
+- Guardar o borrar un plan, o confirmar un borrador, actualiza estos números en la siguiente carga de `/api/tareas`.
+
+**C. Lo que ya pasó (sin cambios, verificado).**
+- Cierre automático: a la hora + 1 h, o al terminar el día si no tiene hora. Queda `estado: "completada"` con `cerradaSolaEn`.
+- `PATCH { estado: "pendiente" }` = **Reabrir**: no se vuelve a cerrar sola.
+- `GET /api/agenda` devuelve las tareas del rango en cualquier estado (máx. 62 días): los últimos 7 días sirven para "Ya pasaron".
 
 ---
 
