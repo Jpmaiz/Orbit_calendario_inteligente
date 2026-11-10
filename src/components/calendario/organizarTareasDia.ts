@@ -22,6 +22,12 @@ export function diaEnBolivia(fecha: Date): string {
   return valor('year') + '-' + valor('month') + '-' + valor('day');
 }
 
+/** "2026-11-10" + 7 → "2026-11-17" (días de calendario, sin zona). */
+export function sumarDias(dia: string, dias: number): string {
+  const [anio, mes, d] = dia.split('-').map(Number);
+  return new Date(Date.UTC(anio, mes - 1, d + dias)).toISOString().slice(0, 10);
+}
+
 export function organizarTareasDia<T extends TareaConFechas>(
   tareas: readonly T[],
   fechaActual: Date,
@@ -35,15 +41,16 @@ export function organizarTareasDia<T extends TareaConFechas>(
   const sinHora: T[] = [];
   const paraHoy: T[] = [];
   const proximas: T[] = [];
-  const completadasHoy: T[] = [];
+  // Cero mantenimiento: las cerradas (solas o a mano) de los últimos 7 días, con "Reabrir".
+  const pasaron: T[] = [];
+  const desdePasaron = sumarDias(hoy, -7);
   const ordenadas = [...tareas].sort(
     (a, b) => a.fechaLimite.getTime() - b.fechaLimite.getTime(),
   );
   for (const tarea of ordenadas) {
-    if (tarea.estado === 'completada') {
-      if (tarea.completadaEn && diaEnBolivia(tarea.completadaEn) === hoy) {
-        completadasHoy.push(tarea);
-      }
+    if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
+      const dia = diaEnBolivia(tarea.completadaEn ?? tarea.fechaLimite);
+      if (dia >= desdePasaron && dia <= hoy) pasaron.push(tarea);
       continue;
     }
     if (tarea.estado !== 'pendiente' && tarea.estado !== 'en_proceso') continue;
@@ -64,6 +71,6 @@ export function organizarTareasDia<T extends TareaConFechas>(
     { id: 'sin-hora', titulo: 'Sin hora', tareas: sinHora },
     { id: 'hoy', titulo: 'Hoy', tareas: paraHoy },
     { id: 'proximas', titulo: 'Próximos 7 días', tareas: proximas },
-    { id: 'completadas-hoy', titulo: 'Completadas hoy', tareas: completadasHoy },
+    { id: 'pasaron', titulo: 'Ya pasaron', tareas: pasaron.reverse() },
   ];
 }

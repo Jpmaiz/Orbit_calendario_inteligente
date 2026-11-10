@@ -1,12 +1,14 @@
 import { leerEstimacionTarea } from '../estimacion/estimacionFrontend';
 import type { EstimacionTarea, PrioridadCalculada } from '@/tipos/tarea';
 import { diaEnBolivia } from './organizarTareasDia';
+import { CATEGORIAS_NOTA, type CategoriaNota, type Nota } from '../ia/borradorCaptura';
 
 type MateriaAgenda = { nombre: string; color: string } | null;
 export type TareaAgenda = EstimacionTarea & {
   id: string; titulo: string; tipo: string; prioridad: string; estado: string;
   fechaLimite: Date; completadaEn: Date | null; horaDefinida: boolean;
   materia: MateriaAgenda;
+  notas: Nota[];
 };
 export type TareaDia = TareaAgenda & { prioridadCalculada: PrioridadCalculada };
 export type ClaseAgenda = {
@@ -56,6 +58,15 @@ function materia(valor: unknown): MateriaAgenda {
   const datos = registro(valor);
   return { nombre: texto(datos.nombre), color: texto(datos.color) };
 }
+/** Tolerante: null (nunca tuvo notas) o lo que no sea válido → lista vacía. */
+function leerNotas(valor: unknown): Nota[] {
+  if (!Array.isArray(valor)) return [];
+  return valor.flatMap((v) => {
+    const n = (v ?? {}) as Record<string, unknown>;
+    return (CATEGORIAS_NOTA as readonly string[]).includes(n.categoria as string) && typeof n.texto === 'string' && n.texto.trim()
+      ? [{ categoria: n.categoria as CategoriaNota, texto: n.texto.trim() }] : [];
+  });
+}
 function leerTarea(valor: unknown): TareaAgenda {
   const datos = registro(valor);
   if (typeof datos.horaDefinida !== 'boolean') throw new Error('La tarea no indica si su hora está definida.');
@@ -64,7 +75,7 @@ function leerTarea(valor: unknown): TareaAgenda {
     id: texto(datos.id), titulo: texto(datos.titulo), tipo: texto(datos.tipo),
     prioridad: texto(datos.prioridad), estado: texto(datos.estado),
     fechaLimite: fecha(datos.fechaLimite), completadaEn: fechaOpcional(datos.completadaEn),
-    horaDefinida: datos.horaDefinida, materia: materia(datos.materia),
+    horaDefinida: datos.horaDefinida, materia: materia(datos.materia), notas: leerNotas(datos.notas),
   };
 }
 function leerPrioridad(valor: unknown): PrioridadCalculada {
@@ -84,6 +95,9 @@ function leerPrioridad(valor: unknown): PrioridadCalculada {
     holguraDias: numero(datos.holguraDias), horasPorDia: numero(datos.horasPorDia),
     fechaInicioSugerida: textoOpcional(datos.fechaInicioSugerida),
     sobrecargaHoras: numero(datos.sobrecargaHoras), mensaje: texto(datos.mensaje),
+    // Misma base que el chip de horas: "te queda ~X libre, te faltarían ~Y" (v2.9).
+    ...(typeof datos.horasLibres === 'number' && Number.isFinite(datos.horasLibres) ? { horasLibres: datos.horasLibres } : {}),
+    ...(typeof datos.faltanHoras === 'number' && Number.isFinite(datos.faltanHoras) ? { faltanHoras: datos.faltanHoras } : {}),
     desglose: {
       origenHoras, urgencia: numero(desglose.urgencia), importancia: numero(desglose.importancia),
       horasBase: numero(desglose.horasBase), factorColchon: numero(desglose.factorColchon),
@@ -150,7 +164,8 @@ export function combinarTareas(agenda: readonly TareaAgenda[], priorizadas: read
   let sinPrioridad = 0;
   for (const tarea of agenda) {
     const prioridadCalculada = porId.get(tarea.id)?.prioridadCalculada;
-    if (!prioridadCalculada) sinPrioridad++;
+    // Las cerradas ("Ya pasaron") no llevan prioridad: no cuentan como faltantes.
+    if (!prioridadCalculada && (tarea.estado === 'pendiente' || tarea.estado === 'en_proceso')) sinPrioridad++;
     // Los datos de agenda prevalecen; la prioridad solo se adjunta si se obtuvo.
     porId.set(tarea.id, { ...tarea, prioridadCalculada });
   }

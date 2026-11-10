@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
 import { materiaAportaContexto, TarjetaEstudio } from './presentacionCalendario';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
-import { diaEnBolivia, organizarTareasDia } from './organizarTareasDia';
+import { diaEnBolivia, organizarTareasDia, sumarDias } from './organizarTareasDia';
 import {
   combinarTareas, horarioDelDia, leerAgenda, leerTareasConPrioridad,
   type AgendaDia, type TareaDia,
@@ -62,7 +62,8 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
     const controlador = new AbortController();
     async function cargar() {
       const [agenda, tareas] = await Promise.allSettled([
-        consultar('/api/agenda?desde=' + hoy + '&hasta=' + hoy, leerAgenda, controlador.signal),
+        // Desde hace 7 días: las tareas que ya pasaron (cerradas solas) van en "Ya pasaron".
+        consultar('/api/agenda?desde=' + sumarDias(hoy, -7) + '&hasta=' + hoy, leerAgenda, controlador.signal),
         consultar('/api/tareas', leerTareasConPrioridad, controlador.signal),
       ]);
       if (controlador.signal.aborted) return;
@@ -101,20 +102,19 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
       <section aria-labelledby="titulo-tareas" className="min-w-0 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="titulo-tareas" className="text-lg font-semibold tracking-[-0.02em]">Tus tareas</h2>
-          {tareasDisponibles && <span className="text-xs text-[#788174]">{combinadas.tareas.length} {combinadas.tareas.length === 1 ? 'tarea' : 'tareas'} en total</span>}
         </div>
         {tareasDisponibles && secciones.length === 0 && (
           <p className="text-xs leading-5 text-[#657360]">
-            {combinadas.tareas.length === 0 ? 'Aún no tienes tareas.' : 'No hay tareas vencidas, para hoy, para los próximos 7 días ni completadas hoy.'}
+            {combinadas.tareas.length === 0 ? 'Aún no tienes tareas.' : 'Nada pendiente para hoy ni para los próximos 7 días.'}
           </p>
         )}
         {secciones.map((seccion) => (
           <section key={seccion.id} aria-labelledby={'titulo-' + seccion.id} className="min-w-0 space-y-3 md:space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 id={'titulo-' + seccion.id} className="text-base font-semibold tracking-[-0.02em] text-[#233E33]">{seccion.titulo}</h3>
-              <span className="text-xs text-[#788174]">{seccion.tareas.length} {seccion.tareas.length === 1 ? 'tarea' : 'tareas'}</span>
+              <h3 id={'titulo-' + seccion.id} className={'text-base font-semibold tracking-[-0.02em] ' + (seccion.id === 'pasaron' ? 'text-[#647168]' : 'text-[#233E33]')}>{seccion.titulo}</h3>
+              {seccion.id !== 'pasaron' && <span className="text-xs text-[#788174]">{seccion.tareas.length} {seccion.tareas.length === 1 ? 'tarea' : 'tareas'}</span>}
             </div>
-            <ul className="min-w-0 space-y-3 md:space-y-4">
+            <ul className={'min-w-0 ' + (seccion.id === 'pasaron' ? 'space-y-2' : 'space-y-3 md:space-y-4')}>
               {seccion.tareas.map((tarea) => (
                 <li key={tarea.id}><TarjetaTarea tarea={{ ...tarea, fechaLimite: tarea.fechaLimite.toISOString() }} contexto={seccion.id === 'hoy' ? 'hoy' : seccion.id === 'sin-hora' ? 'sin-hora' : undefined} /></li>
               ))}
