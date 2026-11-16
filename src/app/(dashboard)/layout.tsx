@@ -1,4 +1,3 @@
-import { cerrarSesion } from '../(auth)/acciones';
 import ProveedorPeriodos from '@/components/periodos/ProveedorPeriodos';
 import ConfiguracionPeriodo from '@/components/periodos/ConfiguracionPeriodo';
 import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
@@ -23,7 +22,7 @@ export default async function LayoutDashboard({
           </div>
           {children}
         </main>
-        <ControlesDashboard ubicacion="navegacion" cerrarSesionAction={cerrarSesion} />
+        <ControlesDashboard ubicacion="navegacion" />
       </div>
     </ProveedorPeriodos>
   );
