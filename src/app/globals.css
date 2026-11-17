@@ -41,11 +41,12 @@ body {
 .orbit-planeta { transform-origin: 12px 12px; animation: orbit-orbita 9s linear infinite; }
 .orbit-boton[aria-expanded="true"] .orbit-planeta { animation-duration: 1.4s; }
 .orbit-boton { position: relative; }
-.orbit-boton::after {
-  content: ""; position: absolute; left: 50%; top: 10px; width: 34px; height: 34px; margin-left: -17px; border-radius: 9999px;
+/* Anillo que late desde el centro del logo (el span que envuelve al dodecaedro). */
+.orbit-anillo::after {
+  content: ""; position: absolute; inset: -1px; border-radius: 9999px;
   border: 2px solid #35695D; opacity: 0; pointer-events: none; animation: orbit-latido 3.4s ease-out 1.5s infinite;
 }
-.orbit-boton[aria-expanded="true"]::after { animation: none; }
+.orbit-boton[aria-expanded="true"] .orbit-anillo::after { animation: none; }
 dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1.05); }
 .orbit-aparece { animation: orbit-aparece .35s ease-out both; animation-delay: calc(var(--i, 0) * 60ms); }
 .orbit-pop { animation: orbit-pop .35s cubic-bezier(.2, 1.5, .4, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
@@ -65,10 +66,12 @@ dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1
 .orbit-dia-aparece { animation: orbit-dia-aparece .4s ease-out both; animation-delay: var(--t, 0ms); }
 .orbit-dia-tramo { stroke-dasharray: 1 1; animation: orbit-dia-dibuja .32s cubic-bezier(.3, .7, .2, 1) both; animation-delay: var(--t, 0ms); }
 .orbit-dia-halo { transform-box: fill-box; transform-origin: center; animation: orbit-dia-halo 2.8s ease-out 1s infinite; }
+@keyframes orbit-dia-llena { from { height: 0; } }
+.orbit-dia-llena { animation: orbit-dia-llena .4s cubic-bezier(.3, .7, .2, 1) .3s both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .orbit-dia-sube, .orbit-dia-aparece, .orbit-dia-tramo, .orbit-dia-halo { animation: none; }
-  .orbit-planeta, .orbit-boton::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
+  .orbit-dia-sube, .orbit-dia-aparece, .orbit-dia-tramo, .orbit-dia-halo, .orbit-dia-llena { animation: none; }
+  .orbit-planeta, .orbit-anillo::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
   dialog.orbit-hoja[open], .orbit-aparece, .orbit-pop, .orbit-bloque, .orbit-papel { animation: none; }
   .orbit-traza { animation: none; stroke-dashoffset: 0; }
 }

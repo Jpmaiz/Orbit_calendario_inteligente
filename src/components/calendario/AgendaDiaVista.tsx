@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
 import OrbitaDelDia from './OrbitaDelDia';
-import { materiaAportaContexto, TarjetaEstudio } from './presentacionCalendario';
+import LineaHoy from './LineaHoy';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia, sumarDias } from './organizarTareasDia';
 import {
-  combinarTareas, horarioDelDia, leerAgenda, leerTareasConPrioridad,
+  combinarTareas, leerAgenda, leerTareasConPrioridad,
   type AgendaDia, type TareaDia,
 } from './agendaDia';
 
@@ -28,23 +28,6 @@ async function consultar<T>(url: string, leer: (valor: unknown) => T, signal: Ab
     throw new Error(mensaje);
   }
   return leer(datos);
-}
-
-const estiloTarjeta = 'relative min-w-0 overflow-hidden rounded-[20px] border border-[#EBEEE6] bg-white p-4 shadow-[0_3px_14px_rgba(38,61,52,0.035)] [overflow-wrap:anywhere] md:p-6';
-const formatoEvento = new Intl.DateTimeFormat('es-BO', {
-  timeZone: 'America/La_Paz', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-});
-
-function DatosHorario({ titulo, materia, ubicacion }: {
-  titulo: string;
-  materia: { nombre: string; color: string } | null; ubicacion: string | null;
-}) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-[#75816F]">
-      {materia && materiaAportaContexto(titulo, materia.nombre) && <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: materia.color }} />{materia.nombre}</span>}
-      {ubicacion && <span>Ubicación: {ubicacion}</span>}
-    </div>
-  );
 }
 
 export default function AgendaDiaVista({ fechaActual }: { fechaActual: string }) {
@@ -92,7 +75,6 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
   const tareasDisponibles = carga.agenda !== null || carga.tareas !== null;
   const secciones = organizarTareasDia(combinadas.tareas, new Date(fechaActual))
     .filter((seccion) => seccion.tareas.length > 0);
-  const horario = carga.agenda ? horarioDelDia(carga.agenda, new Date(fechaActual)) : null;
 
   return (
     <div className="min-w-0 space-y-6 md:space-y-8">
@@ -104,6 +86,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
           <button type="button" onClick={() => router.refresh()} className="min-h-11 rounded-lg px-2 font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">Volver a cargar</button>
         </div>
       )}
+      {carga.agenda && <LineaHoy agenda={carga.agenda} />}
       <section aria-labelledby="titulo-tareas" className="min-w-0 space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="titulo-tareas" className="text-lg font-semibold tracking-[-0.02em]">Tus tareas</h2>
@@ -127,51 +110,6 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
           </section>
         ))}
       </section>
-      {horario && (
-        <>
-          {horario.clases.length === 0 && horario.eventos.length === 0 && horario.bloques.length === 0 && <p className="text-sm text-[#657360]">No tienes clases, eventos ni bloques de estudio hoy.</p>}
-          {horario.bloques.length > 0 && <section aria-labelledby="titulo-estudio" className="min-w-0 space-y-4">
-            <h2 id="titulo-estudio" className="text-lg font-semibold tracking-[-0.02em]">Estudio de hoy</h2>
-            <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
-              {horario.bloques.map((bloque) => <li key={bloque.id}><TarjetaEstudio bloque={bloque} fecha={hoy} /></li>)}
-            </ul>
-          </section>}
-          {horario.clases.length > 0 && <section aria-labelledby="titulo-clases" className="min-w-0 space-y-4">
-            <h2 id="titulo-clases" className="text-lg font-semibold tracking-[-0.02em]">Clases de hoy</h2>
-            <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
-              {horario.clases.map((clase) => (
-                <li key={clase.id}>
-                  <article className={estiloTarjeta}>
-                    <p className="mb-2 text-xs font-semibold text-[#346D8B]">Clase</p>
-                    <h3 className="text-[15px] font-semibold leading-6 text-[#2C4236]">{clase.titulo}</h3>
-                    <p className="mt-1 text-sm text-[#526A5A]">{clase.horaInicio} – {clase.horaFin}</p>
-                    <DatosHorario titulo={clase.titulo} materia={clase.materia} ubicacion={clase.ubicacion} />
-                  </article>
-                </li>
-              ))}
-            </ul>
-          </section>}
-          {horario.eventos.length > 0 && <section aria-labelledby="titulo-eventos" className="min-w-0 space-y-4">
-            <h2 id="titulo-eventos" className="text-lg font-semibold tracking-[-0.02em]">Eventos de hoy</h2>
-            <ul className="grid min-w-0 gap-3 md:grid-cols-2 md:gap-4">
-              {horario.eventos.map((evento) => (
-                <li key={evento.id}>
-                  <article className={estiloTarjeta}>
-                    <p className="mb-2 text-xs font-semibold text-[#916820]">Evento</p>
-                    <h3 className="text-[15px] font-semibold leading-6 text-[#2C4236]">{evento.titulo}</h3>
-                    <p className="mt-1 text-xs leading-5 text-[#526A5A]">
-                      <time dateTime={evento.inicio.toISOString()}>{formatoEvento.format(evento.inicio)}</time>
-                      {evento.fin && <> – <time dateTime={evento.fin.toISOString()}>{formatoEvento.format(evento.fin)}</time></>}
-                    </p>
-                    <DatosHorario titulo={evento.titulo} materia={evento.materia} ubicacion={evento.ubicacion} />
-                    {evento.descripcion && <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-[#657360]">{evento.descripcion}</p>}
-                  </article>
-                </li>
-              ))}
-            </ul>
-          </section>}
-        </>
-      )}
     </div>
   );
 }

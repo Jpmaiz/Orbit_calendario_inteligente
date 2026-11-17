@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type CSSProperties } from 'react';
 import type { AgendaDia } from './agendaDia';
+import { useAhora } from './useAhora';
 import { ARCO, arcoEntre, calcularOrbita, puntoDel, RUTA_ARCO, INICIO_DIA, FIN_DIA, type TemaOrbita } from './orbitaDia';
 
 type Paleta = {
@@ -28,14 +29,10 @@ const suavizar = (k: number) => 1 - Math.pow(1 - k, 3);
 
 /** Cabecera de "Tu día": qué pasa ahora sobre el arco del día (07:00–23:00). Se actualiza cada 30 s. */
 export default function OrbitaDelDia({ agenda }: { agenda: AgendaDia }) {
-  const [ahora, establecerAhora] = useState(() => new Date());
+  const ahora = useAhora();
   // 0…1 mientras el planeta viaja desde las 07:00 hasta ahora; null cuando ya llegó.
   const [viaje, establecerViaje] = useState<number | null>(0);
 
-  useEffect(() => {
-    const reloj = setInterval(() => establecerAhora(new Date()), 30_000);
-    return () => clearInterval(reloj);
-  }, []);
   useEffect(() => {
     let cuadro = 0;
     let inicio: number | null = null;
