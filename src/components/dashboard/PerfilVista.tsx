@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import AvatarPerfil from './AvatarPerfil';
 import IconoDashboard from './IconoDashboard';
 import EditarPerfil from './EditarPerfil';
+import ConfirmarCerrarSesion from './ConfirmarCerrarSesion';
 import { useAgendaRango } from '../calendario/useAgendaRango';
 import { lunesDeSemana, sumarDias } from '../calendario/agendaSemana';
 import { leerTareasConPrioridad } from '../calendario/agendaDia';
@@ -58,6 +59,7 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
   const router = useRouter();
   const [nombreGuardado, establecerNombreGuardado] = useState<string | null>(null);
   const [editor, establecerEditor] = useState<'nombre' | 'foto' | null>(null);
+  const [confirmandoSalida, establecerConfirmandoSalida] = useState(false);
   const nombreActual = nombreGuardado ?? nombre;
   const nombreVisible = nombreActual?.trim() || correo;
 
@@ -77,12 +79,12 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
           <span className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/50" />
         </div>
         <div className="hidden md:flex md:justify-end md:px-6 md:pt-3 md:pb-0">
-          <form action={cerrarSesionAction}>
-            <button type="submit" className={'inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
+          <div>
+            <button type="button" onClick={() => establecerConfirmandoSalida(true)} aria-haspopup="dialog" className={'inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
               <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M9 4H5v16h4m0-8h12m-4-4 4 4-4 4" /></svg>
               Cerrar sesión
             </button>
-          </form>
+          </div>
         </div>
         <div className="order-1 flex min-w-0 flex-col items-center gap-4 px-5 pt-6 pb-6 text-center md:order-none md:flex-row md:gap-5 md:px-7 md:pt-5 md:pb-7 md:text-left">
           <div className="relative shrink-0 rounded-full bg-white p-1.5 shadow-[0_5px_18px_rgba(38,61,52,0.08)]">
@@ -148,12 +150,14 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
         </section>
       </div>
 
-      <form action={cerrarSesionAction} className="flex justify-center pt-2 pb-6 md:hidden">
-        <button type="submit" className={'inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
+      <div className="flex justify-center pt-2 pb-6 md:hidden">
+        <button type="button" onClick={() => establecerConfirmandoSalida(true)} aria-haspopup="dialog" className={'inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M9 4H5v16h4m0-8h12m-4-4 4 4-4 4" /></svg>
           Cerrar sesión
         </button>
-      </form>
+      </div>
+
+      {confirmandoSalida && <ConfirmarCerrarSesion cerrarSesionAction={cerrarSesionAction} onCerrar={() => establecerConfirmandoSalida(false)} />}
 
       {editor && <EditarPerfil nombre={nombreActual} correo={correo} fotoUrl={fotoUrl} focoFoto={editor === 'foto'}
         onCerrar={() => establecerEditor(null)} onGuardado={(nuevoNombre) => { establecerNombreGuardado(nuevoNombre); router.refresh(); }} />}
