@@ -44,6 +44,10 @@
   así que el cambio se ve al instante.
 - "Editar perfil" ahora edita el **apodo**. Ya no llama a `supabase.auth.updateUser`.
 
+**Reabrir (cambia la regla de la v2.7):** reabrir una tarea la protege del cierre automático **solo el día en que se reabre**.
+Si su fecha ya pasó, al día siguiente se vuelve a cerrar sola. Para seguir con ella, el usuario le pone una fecha nueva
+(`PATCH { estado: "pendiente", fechaLimite }`). Así no se acumulan "Vencidas" viejas.
+
 ---
 
 <a id="novedades-210"></a>

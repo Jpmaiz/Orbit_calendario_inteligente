@@ -64,12 +64,12 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
         v.datos.estado === 'completada' ? existente.completadaEn ?? new Date() : null;
     }
 
-    // Cierre automático: reabrir una tarea (cerrada sola o a mano) impide que se vuelva a cerrar sola.
-    // Si cambia la fecha, se limpia: la nueva fecha vuelve a seguir la regla normal.
+    // Cierre automático: reabrir una tarea (cerrada sola o a mano) la protege solo ese día (cerradaSolaEn = ahora).
+    // Si su fecha ya pasó, al día siguiente se vuelve a cerrar sola. Si cambia la fecha, se limpia y sigue la regla normal.
     const cerrada = existente.estado === 'completada' || existente.estado === 'no_realizada';
     const reabre = cerrada && (v.datos.estado === 'pendiente' || v.datos.estado === 'en_proceso');
     if (v.datos.fechaLimite !== undefined && +new Date(v.datos.fechaLimite) !== +existente.fechaLimite) data.cerradaSolaEn = null;
-    else if (reabre) data.cerradaSolaEn = existente.cerradaSolaEn ?? new Date();
+    else if (reabre) data.cerradaSolaEn = new Date();
 
     const tarea = await prisma.tarea.update({ where: { id }, data });
 
