@@ -6,16 +6,15 @@ import { useEffect, useId, useRef, useState } from 'react';
 import IconoDashboard from './IconoDashboard';
 import CapturaRapida, { ORBIT_AGREGADO } from '@/components/ia/CapturaRapida';
 
-type Panel = 'Orbit' | 'Perfil';
+type Panel = 'Orbit';
 
 export default function ControlesDashboard({
   ubicacion,
-  cerrarSesionAction,
 }: {
   ubicacion: 'selector' | 'navegacion';
-  cerrarSesionAction?: () => Promise<void>;
 }) {
   const ruta = usePathname();
+  const esPerfil = ruta === '/perfil';
   const esSemana = ruta === '/semana';
   const esCalendario = esSemana || ruta === '/mes';
   const dialogo = useRef<HTMLDialogElement>(null);
@@ -57,7 +56,7 @@ export default function ControlesDashboard({
         <>
           <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
             <div className="mx-auto grid w-full grid-cols-4 px-4 py-2 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8">
-              <Link href="/dia" aria-current={!panelAbierto && !esCalendario ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && !esCalendario)}>
+              <Link href="/dia" aria-current={!panelAbierto && !esCalendario && !esPerfil ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && !esCalendario && !esPerfil)}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="home" /></span>
                 Home
               </Link>
@@ -70,10 +69,10 @@ export default function ControlesDashboard({
                 <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
                 Orbit
               </button>
-              <button type="button" onClick={() => abrirPanel('Perfil')} aria-expanded={panelAbierto && panel === 'Perfil'} className={estiloNavegacion(panelAbierto && panel === 'Perfil')}>
+              <Link href="/perfil" aria-current={!panelAbierto && esPerfil ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && esPerfil)}>
                 <span className="flex h-8 items-center"><IconoDashboard nombre="perfil" /></span>
                 Perfil
-              </button>
+              </Link>
             </div>
           </nav>
         </>
@@ -82,26 +81,7 @@ export default function ControlesDashboard({
       <dialog ref={dialogo} onClose={() => establecerPanelAbierto(false)}
         // Tocar fuera de la hoja la cierra (salvo mientras guarda)
         onClick={(evento) => { if (evento.target === dialogo.current && !orbitOcupado) dialogo.current?.close(); }} onCancel={(evento) => { if (orbitOcupado) evento.preventDefault(); }} aria-labelledby={tituloId} className="orbit-hoja fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%_-_2rem)] max-w-sm overflow-y-auto [overflow-wrap:anywhere] md:max-w-md rounded-3xl border border-[#E4E8DF] bg-[#FAFBF7] p-6 text-[#263D34] shadow-xl backdrop:bg-[#142E27]/35 max-md:mb-2 max-md:mt-auto max-md:max-h-[calc(100dvh-3.5rem)] max-md:w-[calc(100%_-_1rem)] max-md:max-w-none max-md:p-5">
-        {panel === 'Orbit' ? (
-          <CapturaRapida tituloId={tituloId} ocupado={orbitOcupado} onOcupadoChange={establecerOrbitOcupado} onCerrar={() => dialogo.current?.close()} />
-        ) : panel === 'Perfil' ? (
-          <div className="space-y-5">
-            <div className="flex items-center justify-between gap-4">
-              <h2 id={tituloId} className="min-w-0 text-xl font-semibold">Perfil</h2>
-              <button type="button" onClick={() => dialogo.current?.close()} className={'inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl px-3 text-sm font-medium text-[#35695D] hover:bg-[#E9EEE5] ' + foco}>
-                Cerrar
-              </button>
-            </div>
-            <p className="text-xs leading-5 text-[#647168]">Edición de perfil próximamente.</p>
-            {cerrarSesionAction && (
-              <form action={cerrarSesionAction}>
-                <button type="submit" className={'min-h-11 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] ' + foco}>
-                  Cerrar sesión
-                </button>
-              </form>
-            )}
-          </div>
-        ) : null}
+        <CapturaRapida tituloId={tituloId} ocupado={orbitOcupado} onOcupadoChange={establecerOrbitOcupado} onCerrar={() => dialogo.current?.close()} />
       </dialog>
     </>
   );
