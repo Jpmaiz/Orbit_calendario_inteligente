@@ -1,7 +1,7 @@
 import type { BloqueSemana } from './agendaSemana';
 import { formatoHoraBolivia, inicioDiaBolivia, sumarDias } from './agendaSemana';
 import type { BloqueEstudioAgenda, TareaAgenda } from './agendaDia';
-import { diaEnBolivia } from './organizarTareasDia';
+import { diaEnBolivia, yaPaso } from './organizarTareasDia';
 
 export const botonCalendario = 'min-h-11 rounded-xl border border-[#DEE8E1] bg-white px-4 text-sm font-medium text-[#35695D] transition-colors hover:bg-[#EDF3EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
 export const fechaCompleta = new Intl.DateTimeFormat('es-BO', {
@@ -28,16 +28,26 @@ export function LeyendaCalendario() {
   </ul>;
 }
 
-const estados: Record<string, string> = {
-  pendiente: 'Pendiente', en_proceso: 'En proceso', completada: 'Completada', no_realizada: 'No realizada',
-};
+/** Toda la tarjeta se puede tocar para ver la tarea (sin anidar contenido dentro de un botón). */
+function AbrirTarea({ tarea, alAbrir }: { tarea: TareaAgenda; alAbrir: (tarea: TareaAgenda) => void }) {
+  return <button type="button" aria-label={'Ver tarea: ' + tarea.titulo} onClick={() => alAbrir(tarea)}
+    className="absolute inset-0 rounded-[20px] hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]" />;
+}
 
-export function TareaSinHora({ tarea, mostrarTipo = true, mostrarHora = true }: { tarea: TareaAgenda; mostrarTipo?: boolean; mostrarHora?: boolean }) {
-  return <article className="rounded-[20px] border border-[#DCE9DE] bg-[#F2F7F1] p-4 [overflow-wrap:anywhere]">
+/** Cero mantenimiento: sin estados; lo pasado solo dice "Ya pasó". */
+function MarcaPaso({ tarea }: { tarea: TareaAgenda }) {
+  return yaPaso(tarea, new Date()) ? <p className="mt-2 text-xs text-[#657B70]">Ya pasó</p> : null;
+}
+
+export function TareaSinHora({ tarea, mostrarTipo = true, mostrarHora = true, alAbrir }: {
+  tarea: TareaAgenda; mostrarTipo?: boolean; mostrarHora?: boolean; alAbrir?: (tarea: TareaAgenda) => void;
+}) {
+  return <article className="relative rounded-[20px] border border-[#DCE9DE] bg-[#F2F7F1] p-4 [overflow-wrap:anywhere]">
     <p className="text-xs font-semibold uppercase tracking-wider text-[#537663]">{mostrarTipo ? (mostrarHora ? 'Tarea · Hora por definir' : 'Tarea') : (mostrarHora ? 'Hora por definir' : '')}</p>
     <h4 className="mt-1 text-sm font-semibold">{tarea.titulo}</h4>
     {tarea.materia && <p className="mt-1 text-xs text-[#5C7466]">{tarea.materia.nombre}</p>}
-    <p className="mt-2 text-xs text-[#657B70]">{estados[tarea.estado] ?? tarea.estado}</p>
+    <MarcaPaso tarea={tarea} />
+    {alAbrir && <AbrirTarea tarea={tarea} alAbrir={alAbrir} />}
   </article>;
 }
 
@@ -60,11 +70,13 @@ export function TarjetaEstudio({ bloque, fecha }: { bloque: BloqueEstudioAgenda;
   </article>;
 }
 
-export function TarjetaActividad({ bloque, mostrarTipo = true, fecha }: { bloque: BloqueSemana; mostrarTipo?: boolean; fecha?: string }) {
+export function TarjetaActividad({ bloque, mostrarTipo = true, fecha, alAbrirTarea }: {
+  bloque: BloqueSemana; mostrarTipo?: boolean; fecha?: string; alAbrirTarea?: (tarea: TareaAgenda) => void;
+}) {
   if (bloque.tipo === 'estudio') return <TarjetaEstudio bloque={bloque.datos} fecha={fecha} />;
   const estilo = tiposActividad.find(({ tipo }) => tipo === bloque.tipo)!;
   const datos = bloque.datos;
-  return <article className="h-full min-w-0 overflow-auto rounded-[20px] border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
+  return <article className="relative h-full min-w-0 overflow-auto rounded-[20px] border border-white/80 border-l-[3px] p-3 text-[#294F44] [overflow-wrap:anywhere]"
     style={{ backgroundColor: estilo.fondo, borderLeftColor: datos.materia?.color ?? estilo.color }}>
     {mostrarTipo && <p className="text-xs font-semibold uppercase tracking-wider opacity-75">{bloque.tipo === 'clase' ? 'Clase' : bloque.tipo === 'evento' ? 'Evento' : 'Tarea'}</p>}
     <h4 className="mt-0.5 text-sm font-semibold leading-snug">{datos.titulo}</h4>
@@ -79,7 +91,8 @@ export function TarjetaActividad({ bloque, mostrarTipo = true, fecha }: { bloque
     </p>
     {datos.materia && (bloque.tipo === 'tarea' || materiaAportaContexto(datos.titulo, datos.materia.nombre)) && <p className="mt-1 text-xs opacity-80">{datos.materia.nombre}</p>}
     {'ubicacion' in datos && datos.ubicacion && <p className="mt-1 text-xs opacity-75">{datos.ubicacion}</p>}
-    {bloque.tipo === 'tarea' && <p className="mt-1 text-xs opacity-75">{estados[bloque.datos.estado] ?? bloque.datos.estado}</p>}
+    {bloque.tipo === 'tarea' && yaPaso(bloque.datos, new Date()) && <p className="mt-1 text-xs opacity-75">Ya pasó</p>}
+    {bloque.tipo === 'tarea' && alAbrirTarea && <AbrirTarea tarea={bloque.datos} alAbrir={alAbrirTarea} />}
   </article>;
 }
 

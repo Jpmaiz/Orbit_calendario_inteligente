@@ -28,49 +28,45 @@ export function sumarDias(dia: string, dias: number): string {
   return new Date(Date.UTC(anio, mes - 1, d + dias)).toISOString().slice(0, 10);
 }
 
+/** Ya pasó: cerrada, o su fecha ya llegó (sin hora, al terminar el día). Lo pasado no se reabre: solo se cambia la fecha. */
+export function yaPaso(tarea: TareaConFechas, fechaActual: Date): boolean {
+  if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') return true;
+  const dia = diaEnBolivia(tarea.fechaLimite), hoy = diaEnBolivia(fechaActual);
+  return dia < hoy || (dia === hoy && tarea.horaDefinida && tarea.fechaLimite <= fechaActual);
+}
+
 export function organizarTareasDia<T extends TareaConFechas>(
   tareas: readonly T[],
   fechaActual: Date,
 ) {
   const hoy = diaEnBolivia(fechaActual);
-  const [anio, mes, dia] = hoy.split('-').map(Number);
-  // UTC se usa solo para sumar dias al calendario, nunca como zona del usuario.
-  const finProximosDias = new Date(Date.UTC(anio, mes - 1, dia + 8))
-    .toISOString().slice(0, 10);
-  const vencidas: T[] = [];
+  const ayer = sumarDias(hoy, -1);
+  const finProximosDias = sumarDias(hoy, 8);
   const sinHora: T[] = [];
   const paraHoy: T[] = [];
   const proximas: T[] = [];
-  // Cero mantenimiento: las cerradas (solas o a mano) de los últimos 7 días, con "Reabrir".
+  // Cero mantenimiento: lo que pasó ayer y hoy se ve como hecho; lo anterior, solo en el calendario.
   const pasaron: T[] = [];
-  const desdePasaron = sumarDias(hoy, -7);
-  const ordenadas = [...tareas].sort(
-    (a, b) => a.fechaLimite.getTime() - b.fechaLimite.getTime(),
-  );
-  for (const tarea of ordenadas) {
-    if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
-      const dia = diaEnBolivia(tarea.completadaEn ?? tarea.fechaLimite);
-      if (dia >= desdePasaron && dia <= hoy) pasaron.push(tarea);
-      continue;
-    }
-    if (tarea.estado !== 'pendiente' && tarea.estado !== 'en_proceso') continue;
+  for (const tarea of tareas) {
+    if (!['pendiente', 'en_proceso', 'completada', 'no_realizada'].includes(tarea.estado)) continue;
     const diaLimite = diaEnBolivia(tarea.fechaLimite);
-    if (diaLimite < hoy) vencidas.push(tarea);
-    else if (diaLimite === hoy && tarea.horaDefinida === false) sinHora.push(tarea);
-    else if (diaLimite === hoy && tarea.horaDefinida === true) paraHoy.push(tarea);
+    if (yaPaso(tarea, fechaActual)) {
+      if (diaLimite >= ayer && diaLimite <= hoy) pasaron.push(tarea);
+    } else if (diaLimite === hoy && !tarea.horaDefinida) sinHora.push(tarea);
+    else if (diaLimite === hoy) paraHoy.push(tarea);
     else if (diaLimite < finProximosDias) proximas.push(tarea);
   }
   // Ordenar los puntajes recibidos sin calcular prioridades.
-  for (const seccion of [vencidas, sinHora, paraHoy, proximas]) {
+  for (const seccion of [sinHora, paraHoy, proximas]) {
     seccion.sort((a, b) =>
       (b.prioridadCalculada?.puntaje ?? 0) - (a.prioridadCalculada?.puntaje ?? 0) ||
       a.fechaLimite.getTime() - b.fechaLimite.getTime());
   }
+  pasaron.sort((a, b) => b.fechaLimite.getTime() - a.fechaLimite.getTime());
   return [
-    { id: 'vencidas', titulo: 'Vencidas', tareas: vencidas },
     { id: 'sin-hora', titulo: 'Sin hora', tareas: sinHora },
     { id: 'hoy', titulo: 'Hoy', tareas: paraHoy },
     { id: 'proximas', titulo: 'Próximos 7 días', tareas: proximas },
-    { id: 'pasaron', titulo: 'Ya pasaron', tareas: pasaron.reverse() },
+    { id: 'pasaron', titulo: 'Ya pasaron', tareas: pasaron },
   ];
 }

@@ -5,6 +5,8 @@ import { diaEnBolivia } from './organizarTareasDia';
 import { inicioDiaBolivia, lunesDeSemana, organizarSemana, sumarDias } from './agendaSemana';
 import { useAgendaRango } from './useAgendaRango';
 import SelectorCalendario from './SelectorCalendario';
+import DetalleTarea from './DetalleTarea';
+import type { TareaAgenda } from './agendaDia';
 import {
   botonCalendario, diasCortos, distribuirHorario, EstadoAgenda, fechaCompleta,
   TarjetaActividad, TareaSinHora,
@@ -21,6 +23,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
   }));
   const domingo = sumarDias(seleccion.lunes, 6);
   const carga = useAgendaRango(seleccion.lunes, domingo);
+  const [tareaAbierta, establecerTareaAbierta] = useState<TareaAgenda | null>(null);
   const dias = carga.agenda ? organizarSemana(carga.agenda, seleccion.lunes) : null;
   const dia = dias?.find(({ fecha }) => fecha === seleccion.dia);
   const horario = dia ? distribuirHorario(dia.bloques, dia.fecha) : null;
@@ -81,7 +84,7 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
     {dia && horario && <>
       {dia.sinHora.length > 0 && <section aria-labelledby="sin-hora" className="space-y-3 rounded-[20px] border border-[#E2EAE3] bg-white p-4 sm:p-5">
         <h3 id="sin-hora" className="text-sm font-semibold text-[#426757]">Sin hora <span className="ml-1 text-xs font-normal text-[#7B8D81]">{dia.sinHora.length}</span></h3>
-        <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarHora={false} /></li>)}</ul>
+        <ul className="grid gap-3 sm:grid-cols-2">{dia.sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarHora={false} alAbrir={establecerTareaAbierta} /></li>)}</ul>
       </section>}
       <section aria-label="Horario del día seleccionado" className="rounded-[20px] border border-[#E2EAE3] bg-white p-3 sm:p-5">
         <p aria-live="polite" className="mb-3 rounded-2xl bg-[#F3F7F1] px-4 py-2.5 text-xs leading-5 text-[#5E7767]">{avisoHorario}</p>
@@ -95,12 +98,13 @@ export default function AgendaSemanaVista({ fechaActual }: { fechaActual: string
               {horario.bloques.map(({ bloque, top, height, carril, hasta }) => <li key={bloque.id}
                 className={'absolute pr-2 ' + (hasta === null ? 'border-t-2 border-dotted border-[#84A897]' : '')}
                 style={{ top, height, left: `${carril / horario.carriles * 100}%`, width: `${100 / horario.carriles}%` }}>
-                <TarjetaActividad bloque={bloque} fecha={dia.fecha} />
+                <TarjetaActividad bloque={bloque} fecha={dia.fecha} alAbrirTarea={establecerTareaAbierta} />
               </li>)}
             </ol>
           </div>
         </div>
       </section>
     </>}
+    {tareaAbierta && <DetalleTarea tarea={tareaAbierta} onCerrar={() => establecerTareaAbierta(null)} />}
   </section>;
 }

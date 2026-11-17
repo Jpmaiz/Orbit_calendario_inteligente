@@ -62,8 +62,8 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
     const controlador = new AbortController();
     async function cargar() {
       const [agenda, tareas] = await Promise.allSettled([
-        // Desde hace 7 días: las tareas que ya pasaron (cerradas solas) van en "Ya pasaron".
-        consultar('/api/agenda?desde=' + sumarDias(hoy, -7) + '&hasta=' + hoy, leerAgenda, controlador.signal),
+        // Desde ayer: lo que pasó ayer y hoy va en "Ya pasaron" (lo anterior se ve en el calendario).
+        consultar('/api/agenda?desde=' + sumarDias(hoy, -1) + '&hasta=' + hoy, leerAgenda, controlador.signal),
         consultar('/api/tareas', leerTareasConPrioridad, controlador.signal),
       ]);
       if (controlador.signal.aborted) return;
@@ -116,7 +116,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
             </div>
             <ul className={'min-w-0 ' + (seccion.id === 'pasaron' ? 'space-y-2' : 'space-y-3 md:space-y-4')}>
               {seccion.tareas.map((tarea) => (
-                <li key={tarea.id}><TarjetaTarea tarea={{ ...tarea, fechaLimite: tarea.fechaLimite.toISOString() }} contexto={seccion.id === 'hoy' ? 'hoy' : seccion.id === 'sin-hora' ? 'sin-hora' : undefined} /></li>
+                <li key={tarea.id}><TarjetaTarea tarea={{ ...tarea, fechaLimite: tarea.fechaLimite.toISOString() }} contexto={seccion.id === 'hoy' ? 'hoy' : seccion.id === 'sin-hora' ? 'sin-hora' : seccion.id === 'pasaron' ? 'pasaron' : undefined} /></li>
               ))}
             </ul>
           </section>

@@ -157,15 +157,15 @@ export function leerAgenda(valor: unknown): AgendaDia {
   };
 }
 export function combinarTareas(agenda: readonly TareaAgenda[], priorizadas: readonly TareaDia[]) {
-  // Conservar las adicionales para las secciones de vencidas y próximas.
+  // Conservar las adicionales para las secciones de próximas y "Ya pasaron".
   const porId = new Map<string, TareaAgenda & { prioridadCalculada?: PrioridadCalculada }>(
     priorizadas.map((tarea) => [tarea.id, tarea]),
   );
   let sinPrioridad = 0;
   for (const tarea of agenda) {
     const prioridadCalculada = porId.get(tarea.id)?.prioridadCalculada;
-    // Las cerradas ("Ya pasaron") no llevan prioridad: no cuentan como faltantes.
-    if (!prioridadCalculada && (tarea.estado === 'pendiente' || tarea.estado === 'en_proceso')) sinPrioridad++;
+    // Lo que ya pasó ("Ya pasaron") no lleva prioridad: no cuenta como faltante.
+    if (!prioridadCalculada && (tarea.estado === 'pendiente' || tarea.estado === 'en_proceso') && tarea.fechaLimite > new Date()) sinPrioridad++;
     // Los datos de agenda prevalecen; la prioridad solo se adjunta si se obtuvo.
     porId.set(tarea.id, { ...tarea, prioridadCalculada });
   }

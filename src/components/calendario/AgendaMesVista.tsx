@@ -5,6 +5,8 @@ import { diaEnBolivia } from './organizarTareasDia';
 import { inicioDiaBolivia, lunesDeSemana, organizarSemana, sumarDias } from './agendaSemana';
 import { useAgendaRango } from './useAgendaRango';
 import SelectorCalendario from './SelectorCalendario';
+import DetalleTarea from './DetalleTarea';
+import type { TareaAgenda } from './agendaDia';
 import {
   botonCalendario, diasCortos, EstadoAgenda, fechaCompleta, LeyendaCalendario,
   TarjetaActividad, TareaSinHora, tiposActividad,
@@ -30,6 +32,7 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
   const hasta = sumarDias(lunesDeSemana(inicioDiaBolivia(ultimoDia)), 6);
   const semanas = Math.round((inicioDiaBolivia(hasta).getTime() - inicioDiaBolivia(desde).getTime()) / 86400000 + 1) / 7;
   const carga = useAgendaRango(desde, hasta);
+  const [tareaAbierta, establecerTareaAbierta] = useState<TareaAgenda | null>(null);
   const dias = carga.agenda ? Array.from({ length: semanas }, (_, indice) =>
     organizarSemana(carga.agenda!, sumarDias(desde, indice * 7))).flat() : null;
   const diaSeleccionado = dias?.find(({ fecha }) => fecha === seleccion.dia);
@@ -99,11 +102,12 @@ export default function AgendaMesVista({ fechaActual }: { fechaActual: string })
         return <section key={tipo} aria-label={nombre} className="space-y-2">
           <h3 className="text-xs font-semibold text-[#6B8072]">{nombre}</h3>
           <ul className="grid gap-3 sm:grid-cols-2">
-            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} mostrarTipo={false} fecha={seleccion.dia} /></li>)}
-            {sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarTipo={false} /></li>)}
+            {bloques.map((bloque) => <li key={bloque.id}><TarjetaActividad bloque={bloque} mostrarTipo={false} fecha={seleccion.dia} alAbrirTarea={establecerTareaAbierta} /></li>)}
+            {sinHora.map((tarea) => <li key={tarea.id}><TareaSinHora tarea={tarea} mostrarTipo={false} alAbrir={establecerTareaAbierta} /></li>)}
           </ul>
         </section>;
       })}
     </section>}
+    {tareaAbierta && <DetalleTarea tarea={tareaAbierta} onCerrar={() => establecerTareaAbierta(null)} />}
   </section>;
 }
