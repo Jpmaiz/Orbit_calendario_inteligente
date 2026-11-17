@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import AgendaDiaVista from '@/components/calendario/AgendaDiaVista';
 import PreguntaAprendizaje from '@/components/aprendizaje/PreguntaAprendizaje';
 import { diaEnBolivia } from '@/components/calendario/organizarTareasDia';
@@ -29,26 +30,36 @@ async function cargarDatosDia() {
   }
 }
 
+const zona = 'America/La_Paz';
+/** Buenos días (05–12), buenas tardes (12–19), buenas noches (19–05), en la hora de Bolivia. */
+function saludoDe(fecha: Date): string {
+  const hora = Number(new Intl.DateTimeFormat('en-GB', { timeZone: zona, hour: '2-digit', hourCycle: 'h23' }).format(fecha));
+  return hora >= 5 && hora < 12 ? 'Buenos días' : hora >= 12 && hora < 19 ? 'Buenas tardes' : 'Buenas noches';
+}
+
 export default async function PaginaDia() {
   const { nombre, fechaActual, usuarioId } = await cargarDatosDia();
-  const primerNombre = nombre.trim().split(/\s+/)[0] || 'estudiante';
-  const fechaFormateada = fechaActual.toLocaleDateString('es-BO', {
-    weekday: 'long', day: 'numeric', month: 'long',
-    timeZone: 'America/La_Paz',
-  });
+  const primero = nombre.trim().split(/\s+/)[0] || 'estudiante';
+  const primerNombre = primero.charAt(0).toLocaleUpperCase('es') + primero.slice(1);
+  const partes = new Intl.DateTimeFormat('es-BO', { weekday: 'long', day: 'numeric', month: 'short', timeZone: zona }).formatToParts(fechaActual);
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) => partes.find((p) => p.type === tipo)?.value.replace('.', '') ?? '';
+  const fechaCorta = `${parte('weekday')} ${parte('day')} ${parte('month')}`;
 
   return (
     <div className="min-w-0 space-y-6 md:space-y-8 lg:space-y-9">
-      <header className="flex items-start justify-between gap-4">
+      <header className="orbit-dia-sube flex items-end justify-between gap-4">
         <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#708070]">Tu día, en órbita</p>
-          <h1 className="text-[28px] font-semibold leading-tight tracking-[-0.04em] text-[#233E33] md:text-4xl">
-            Hola, <span className="break-words">{primerNombre}</span>
-          </h1>
-          <time dateTime={fechaActual.toISOString()} className="mt-2 block text-sm text-[#768075] first-letter:uppercase">
-            {fechaFormateada}
+          <time dateTime={fechaActual.toISOString()} className="block text-[13px] font-semibold uppercase tracking-[0.12em] text-[#8A958D]">
+            {fechaCorta}
           </time>
+          <h1 className="mt-1.5 text-[30px] font-semibold leading-[1.1] tracking-[-0.025em] text-[#1F3B31] md:text-4xl">
+            {saludoDe(fechaActual)},<br /><span className="break-words">{primerNombre}</span>
+          </h1>
         </div>
+        <Link href="/perfil" aria-label="Tu perfil"
+          className="grid h-[50px] w-[50px] shrink-0 place-items-center rounded-full bg-[#234F45] text-xl font-semibold text-white shadow-[0_0_0_3px_#F6F7F2,0_0_0_4.5px_#CFE2D6] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4 motion-reduce:transition-none">
+          {primerNombre.charAt(0)}
+        </Link>
       </header>
 
       {usuarioId && <PreguntaAprendizaje key={usuarioId + ':' + diaEnBolivia(fechaActual)} claveConsulta={usuarioId + ':' + diaEnBolivia(fechaActual)} />}

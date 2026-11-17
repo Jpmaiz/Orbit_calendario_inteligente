@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
+import OrbitaDelDia from './OrbitaDelDia';
 import { materiaAportaContexto, TarjetaEstudio } from './presentacionCalendario';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia, sumarDias } from './organizarTareasDia';
@@ -62,8 +63,8 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
     const controlador = new AbortController();
     async function cargar() {
       const [agenda, tareas] = await Promise.allSettled([
-        // Desde ayer: lo que pasó ayer y hoy va en "Ya pasaron" (lo anterior se ve en el calendario).
-        consultar('/api/agenda?desde=' + sumarDias(hoy, -1) + '&hasta=' + hoy, leerAgenda, controlador.signal),
+        // Desde ayer ("Ya pasaron") hasta mañana (lo primero de mañana en la órbita del día).
+        consultar('/api/agenda?desde=' + sumarDias(hoy, -1) + '&hasta=' + sumarDias(hoy, 1), leerAgenda, controlador.signal),
         consultar('/api/tareas', leerTareasConPrioridad, controlador.signal),
       ]);
       if (controlador.signal.aborted) return;
@@ -81,7 +82,10 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
   }, [fechaActual, hoy, revision]);
 
   if (!carga || carga.fechaActual !== fechaActual) {
-    return <p role="status" className="text-sm text-[#35695D]">Cargando tu agenda del día…</p>;
+    return <div className="space-y-4">
+      <div aria-hidden="true" className="h-64 animate-pulse rounded-[30px] bg-[#ECEFE7] motion-reduce:animate-none" />
+      <p role="status" className="text-sm text-[#647168]">Cargando tu día…</p>
+    </div>;
   }
 
   const combinadas = combinarTareas(carga.agenda?.tareas ?? [], carga.tareas ?? []);
@@ -92,6 +96,7 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
 
   return (
     <div className="min-w-0 space-y-6 md:space-y-8">
+      {carga.agenda && <OrbitaDelDia agenda={carga.agenda} />}
       {(carga.errores.length > 0 || combinadas.sinPrioridad > 0) && (
         <div role="alert" className="space-y-2 rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">
           {carga.errores.map((mensaje) => <p key={mensaje}>{mensaje}</p>)}

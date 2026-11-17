@@ -56,7 +56,18 @@ dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1
 .orbit-gira { animation: orbit-gira .8s linear infinite; }
 .orbit-traza { stroke-dasharray: 30; stroke-dashoffset: 30; animation: orbit-traza .4s .25s forwards; }
 
+/* ───────────── Orbit: "órbita del día" en /dia (arco de 07:00 a 23:00) ───────────── */
+@keyframes orbit-dia-sube { from { opacity: 0; transform: translateY(14px); } }
+@keyframes orbit-dia-aparece { from { opacity: 0; } }
+@keyframes orbit-dia-dibuja { from { stroke-dashoffset: 1; } }
+@keyframes orbit-dia-halo { 0% { opacity: .55; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(2.8); } }
+.orbit-dia-sube { animation: orbit-dia-sube .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: var(--t, 0ms); }
+.orbit-dia-aparece { animation: orbit-dia-aparece .4s ease-out both; animation-delay: var(--t, 0ms); }
+.orbit-dia-tramo { stroke-dasharray: 1 1; animation: orbit-dia-dibuja .32s cubic-bezier(.3, .7, .2, 1) both; animation-delay: var(--t, 0ms); }
+.orbit-dia-halo { transform-box: fill-box; transform-origin: center; animation: orbit-dia-halo 2.8s ease-out 1s infinite; }
+
 @media (prefers-reduced-motion: reduce) {
+  .orbit-dia-sube, .orbit-dia-aparece, .orbit-dia-tramo, .orbit-dia-halo { animation: none; }
   .orbit-planeta, .orbit-boton::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
   dialog.orbit-hoja[open], .orbit-aparece, .orbit-pop, .orbit-bloque, .orbit-papel { animation: none; }
   .orbit-traza { animation: none; stroke-dashoffset: 0; }
