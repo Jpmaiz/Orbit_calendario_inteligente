@@ -44,9 +44,10 @@
   así que el cambio se ve al instante.
 - "Editar perfil" ahora edita el **apodo**. Ya no llama a `supabase.auth.updateUser`.
 
-**Reabrir (cambia la regla de la v2.7):** reabrir una tarea la protege del cierre automático **solo el día en que se reabre**.
-Si su fecha ya pasó, al día siguiente se vuelve a cerrar sola. Para seguir con ella, el usuario le pone una fecha nueva
-(`PATCH { estado: "pendiente", fechaLimite }`). Así no se acumulan "Vencidas" viejas.
+**Sin "Reabrir" (decisión de JP, 17/11):** lo que pasa se cierra solo y no se reabre a mano.
+- `/dia` muestra en "Ya pasaron" solo lo que pasó **ayer y hoy**. Lo anterior se ve solo en el calendario (semana o mes), tocando la tarea.
+- Si el docente posterga, el usuario **cambia la fecha** (`PATCH { fechaLimite }` a una fecha futura) y la tarea vuelve sola a pendiente.
+- Si igual llega `PATCH { estado: "pendiente" }` sobre una tarea pasada, el back la protege solo ese día y al siguiente la vuelve a cerrar.
 
 ---
 

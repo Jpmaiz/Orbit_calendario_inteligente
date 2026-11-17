@@ -71,6 +71,14 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (v.datos.fechaLimite !== undefined && +new Date(v.datos.fechaLimite) !== +existente.fechaLimite) data.cerradaSolaEn = null;
     else if (reabre) data.cerradaSolaEn = new Date();
 
+    // Sin "Reabrir": si el docente posterga y el usuario mueve una tarea ya cerrada a una fecha futura,
+    // vuelve sola a pendiente (no hay que reabrirla a mano).
+    const nuevaFecha = v.datos.fechaLimite !== undefined ? new Date(v.datos.fechaLimite) : null;
+    if (cerrada && v.datos.estado === undefined && nuevaFecha && nuevaFecha > new Date() && +nuevaFecha !== +existente.fechaLimite) {
+      data.estado = 'pendiente';
+      data.completadaEn = null;
+    }
+
     const tarea = await prisma.tarea.update({ where: { id }, data });
 
     // "Vence con": si cambió la fecha de este examen, las entregas atadas a él se mueven con él
