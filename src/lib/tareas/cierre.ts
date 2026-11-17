@@ -18,14 +18,27 @@ const HORA_MS = 3_600_000;
  *
  * Se llama al leer tareas o agenda (barato: dos updateMany).
  */
-/** Último cierre por usuario en este proceso: agenda y tareas lo piden en cada carga; basta cada 5 min. */
-const ultimoCierre = new Map<string, number>();
+/**
+ * Último cierre por usuario en este proceso: agenda y tareas lo piden en cada carga; basta cada 5 min.
+ * Se guarda la PROMESA, no solo la hora: /api/agenda y /api/tareas llegan juntos, y el segundo tiene que
+ * esperar a que el primero termine de cerrar. Si no, lee las tareas antes del cierre y muestra como
+ * "Vencidas" lo que ya pasó (pasaba en la primera carga después de un rato sin abrir la app).
+ */
+const ultimoCierre = new Map<string, { desde: number; promesa: Promise<{ count: number }> }>();
 const CADA_MS = 5 * 60_000;
 
-export async function cerrarVencidas(usuarioId: string, ahora: Date = new Date()) {
+export function cerrarVencidas(usuarioId: string, ahora: Date = new Date()): Promise<{ count: number }> {
   const ultimo = ultimoCierre.get(usuarioId);
-  if (ultimo && ahora.getTime() - ultimo < CADA_MS) return { count: 0 };
-  ultimoCierre.set(usuarioId, ahora.getTime());
+  if (ultimo && ahora.getTime() - ultimo.desde < CADA_MS) return ultimo.promesa;
+  const promesa = cerrar(usuarioId, ahora).catch((error) => {
+    ultimoCierre.delete(usuarioId); // si falló, el próximo pedido lo vuelve a intentar
+    throw error;
+  });
+  ultimoCierre.set(usuarioId, { desde: ahora.getTime(), promesa });
+  return promesa;
+}
+
+async function cerrar(usuarioId: string, ahora: Date) {
   const zona = await zonaDeUsuario(usuarioId);
   const inicioDeHoy = instanteEnZona(diaLocal(ahora, zona), '00:00', zona);
   const abiertas = {
