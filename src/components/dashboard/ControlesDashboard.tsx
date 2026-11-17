@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import IconoDashboard from './IconoDashboard';
+import Dodecaedro from '../marca/Dodecaedro';
 import CapturaRapida, { ORBIT_AGREGADO } from '@/components/ia/CapturaRapida';
 
 type Panel = 'Orbit';
@@ -66,7 +67,8 @@ export default function ControlesDashboard({
                 {nuevos !== null && <span aria-label={`${nuevos} nuevos`} className="orbit-pop absolute right-[calc(50%-1.9rem)] top-1.5 rounded-full bg-[#234F45] px-1.5 py-px text-[10px] font-bold text-white">+{nuevos}</span>}
               </Link>
               <button type="button" onClick={() => abrirPanel('Orbit')} aria-expanded={panelAbierto && panel === 'Orbit'} aria-label="Orbit: agregar tareas, clases o eventos" className={'orbit-boton ' + (panelAbierto && panel === 'Orbit' ? estiloNavegacion(true) : estiloNavegacion(false).replace('text-[#78827B]', 'text-[#35695D]'))}>
-                <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
+                {/* Logo de Orbit: gira lento y acelera mientras el panel está abierto */}
+                <span className="orbit-anillo relative flex h-8 w-8 items-center justify-center"><Dodecaedro className="h-7 w-7" girando rapido={panelAbierto && panel === 'Orbit'} /></span>
                 Orbit
               </button>
               <Link href="/perfil" aria-current={!panelAbierto && esPerfil ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && esPerfil)}>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import estilos from './auth.module.css';
+import Dodecaedro from '@/components/marca/Dodecaedro';
 
 const slogan = <>Tus actividades, <span>en <em>órbita.</em></span></>;
 const textoApoyo = 'Organiza tareas, clases, estudio y más en un solo lugar.';
@@ -7,7 +8,7 @@ const textoApoyo = 'Organiza tareas, clases, estudio y más en un solo lugar.';
 export function MarcaOrbit() {
   return <div className={estilos.marca}>
     <span className={estilos.logo} aria-hidden="true">
-      <svg viewBox="0 0 32 32" fill="none"><ellipse cx="16" cy="16" rx="13" ry="6" transform="rotate(-35 16 16)" stroke="currentColor" strokeWidth="1.4" /><circle cx="16" cy="16" r="3" fill="currentColor" /><circle cx="25" cy="7" r="2" fill="currentColor" /></svg>
+      <Dodecaedro girando className="h-[29px] w-[29px]" />
     </span>
     <span>ORBIT</span>
   </div>;
