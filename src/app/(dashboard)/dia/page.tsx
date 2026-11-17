@@ -3,6 +3,7 @@ import PreguntaAprendizaje from '@/components/aprendizaje/PreguntaAprendizaje';
 import { diaEnBolivia } from '@/components/calendario/organizarTareasDia';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { nombreVisible } from '@/lib/usuarios/perfil';
 
 async function cargarDatosDia() {
   const user = await obtenerUsuario();
@@ -18,9 +19,10 @@ async function cargarDatosDia() {
   try {
     const perfil = await prisma.usuario.findUnique({
       where: { id: user.id },
-      select: { nombre: true },
+      select: { nombre: true, apodo: true },
     });
-    return { nombre: perfil?.nombre || nombreSesion, fechaActual, usuarioId: user.id };
+    // El apodo (si lo puso en el perfil) manda; si no, el nombre de registro
+    return { nombre: perfil ? nombreVisible(perfil) : nombreSesion, fechaActual, usuarioId: user.id };
   } catch {
     console.warn('No se pudo cargar el nombre del perfil.');
     return { nombre: nombreSesion, fechaActual, usuarioId: user.id };

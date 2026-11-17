@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.10 · 10/11/2026)
+# Orbit — Contexto del backend para el front (v2.11 · 17/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.11 (17/11) — apodo en el perfil](#novedades-211)
 ★ [Novedades de la v2.10 (10/11) — Planificar estudio: sugerencia, guardar, origen](#novedades-210)
 ★ [Novedades de la v2.9 (10/11) — tarjeta de tarea en Tu día: estimado, horas libres](#novedades-29)
 ★ [Novedades de la v2.8 (10/11) — tarjeta del borrador: razones, notas, tipo seguro, origen](#novedades-28)
@@ -29,6 +30,19 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-211"></a>
+## ★ Novedades de la v2.11 (17/11/2026) — apodo en el perfil
+
+**Migración:** `20261117000000_apodo` (`npx prisma migrate deploy` + `generate`).
+- `usuarios.nombre` es el nombre de registro y **no se edita**. `usuarios.apodo` es cómo quiere el usuario que Orbit lo llame.
+- En toda la app se muestra `apodo || nombre`: el saludo de `/dia` y la cabecera de `/perfil`. Las dos pantallas leen de la tabla `usuarios`.
+- `GET /api/perfil` → `{ nombre, apodo, nombreVisible, correo }`.
+- `PATCH /api/perfil { apodo: string | null }`: hasta 40 caracteres; `""` o `null` quita el apodo. Supabase Auth no se toca,
+  así que el cambio se ve al instante.
+- "Editar perfil" ahora edita el **apodo**. Ya no llama a `supabase.auth.updateUser`.
 
 ---
 

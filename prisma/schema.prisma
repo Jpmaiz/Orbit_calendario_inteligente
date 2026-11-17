@@ -14,7 +14,8 @@ datasource db {
 model Usuario {
   id                 String    @id @default(uuid())
   email              String    @unique
-  nombre             String
+  nombre             String                                        // el de registro: no se edita desde el perfil
+  apodo              String?                                       // cómo quiere que Orbit lo llame ("JP"); null = usar nombre
   zonaHoraria        String    @default("America/La_Paz") @map("zona_horaria")
   margenMinimoMin    Int       @default(30) @map("margen_minimo_min")
   nivelNotificacion  String    @default("importante") @map("nivel_notificacion")

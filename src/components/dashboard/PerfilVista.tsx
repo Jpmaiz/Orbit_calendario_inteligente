@@ -47,8 +47,9 @@ function leerPendientes(valor: unknown) {
   return contarPendientes(leerTareasConPrioridad(valor));
 }
 
-export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActual, cerrarSesionAction }: {
-  nombre: string | null; correo: string | null; fotoUrl?: string | null; fechaActual: string; cerrarSesionAction: () => Promise<void>;
+export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = null, fechaActual, cerrarSesionAction }: {
+  nombre: string | null; apodo?: string | null; correo: string | null; fotoUrl?: string | null; fechaActual: string;
+  cerrarSesionAction: () => Promise<void>;
 }) {
   const lunes = lunesDeSemana(new Date(fechaActual));
   const agenda = useAgendaRango(lunes, sumarDias(lunes, 6));
@@ -56,9 +57,11 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
   const pendientes = useConsultaPerfil('/api/tareas', leerPendientes);
   const resumen = agenda.agenda ? resumirSemana(agenda.agenda, lunes) : null;
   const router = useRouter();
-  const [nombreGuardado, establecerNombreGuardado] = useState<string | null>(null);
+  // undefined = no se editó en esta visita; null = se quitó el apodo
+  const [apodoGuardado, establecerApodoGuardado] = useState<string | null | undefined>(undefined);
   const [editor, establecerEditor] = useState<'nombre' | 'foto' | null>(null);
-  const nombreActual = nombreGuardado ?? nombre;
+  const apodoActual = apodoGuardado === undefined ? apodo : apodoGuardado;
+  const nombreActual = apodoActual?.trim() || nombre;
   const nombreVisible = nombreActual?.trim() || correo;
 
   const indicadores = [
@@ -93,7 +96,8 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
           </div>
           <div className="min-w-0 max-w-full md:flex-1">
             {nombreVisible ? <h2 className="text-2xl leading-tight font-semibold tracking-[-0.035em] text-[#234F45] md:text-3xl">{nombreVisible}</h2> : <p className="text-sm leading-6 text-[#647168]">No se pudieron obtener los datos de tu cuenta.</p>}
-            {nombreActual?.trim() && correo && <p className="mt-1.5 text-sm leading-6 text-[#718074]">{correo}</p>}
+            {nombreActual?.trim() && (correo || apodoActual) && <p className="mt-1.5 text-sm leading-6 text-[#718074]">
+              {[apodoActual?.trim() ? nombre : null, correo].filter(Boolean).join(' · ')}</p>}
           <button type="button" onClick={() => establecerEditor('nombre')} className={'mt-3 inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 rounded-xl border border-[#8AA99B] bg-white/40 px-3 py-1.5 text-xs font-medium text-[#234F45] transition-colors hover:border-[#527867] hover:bg-[#EDF5E8] ' + foco}>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6Z" /></svg>
             Editar perfil
@@ -155,8 +159,8 @@ export default function PerfilVista({ nombre, correo, fotoUrl = null, fechaActua
         </button>
       </form>
 
-      {editor && <EditarPerfil nombre={nombreActual} correo={correo} fotoUrl={fotoUrl} focoFoto={editor === 'foto'}
-        onCerrar={() => establecerEditor(null)} onGuardado={(nuevoNombre) => { establecerNombreGuardado(nuevoNombre); router.refresh(); }} />}
+      {editor && <EditarPerfil nombre={nombre} apodo={apodoActual} correo={correo} fotoUrl={fotoUrl} focoFoto={editor === 'foto'}
+        onCerrar={() => establecerEditor(null)} onGuardado={(nuevoApodo) => { establecerApodoGuardado(nuevoApodo); router.refresh(); }} />}
     </div>
   );
 }
