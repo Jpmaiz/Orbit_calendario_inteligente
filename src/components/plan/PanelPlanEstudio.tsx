@@ -256,7 +256,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
             }}>
             <div className={'grid gap-x-1.5 py-2 pr-2 ' + (visibles.length > 1 ? 'grid-cols-[46px_1fr_1fr]' : 'grid-cols-[46px_1fr]')}>
               <div className="relative" style={{ height: ALTO }} aria-hidden="true">
-                {Array.from({ length: 15 }, (_, i) => 8 + i).map((h) => <span key={h} className="absolute right-1 -translate-y-1/2 font-mono text-xs text-[#8A958D]" style={{ top: (h * 60 - H0) * PXM }}>{String(h).padStart(2, '0')}:00</span>)}
+                {Array.from({ length: 15 }, (_, i) => 8 + i).map((h) => <span key={h} className="absolute right-1 -translate-y-1/2 tabular-nums text-xs text-[#8A958D]" style={{ top: (h * 60 - H0) * PXM }}>{String(h).padStart(2, '0')}:00</span>)}
               </div>
               {visibles.map(({ d, indice }) => {
                 const n = nombreDia(d, indice);
@@ -267,7 +267,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
                   {d.ocupados.filter((o) => o.b > H0 && o.a < H1).map((o, i) => <div key={i} title={o.titulo}
                     className="pointer-events-none absolute inset-x-0.5 overflow-hidden rounded-lg bg-[#ECEFE9] px-1.5 py-1" style={pos(o.a, o.b)}>
                     <p className="truncate text-[12.5px] font-semibold text-[#6F7A72]">{o.etiqueta}</p>
-                    <p className="font-mono text-[11.5px] text-[#8A958D]">{hhmm(o.a)}–{hhmm(o.b)}</p>
+                    <p className="tabular-nums text-[11.5px] text-[#8A958D]">{hhmm(o.a)}–{hhmm(o.b)}</p>
                   </div>)}
 
                   {libres(dias, bloques, indice).filter(([a, b]) => b - a >= MIN_BLOQUE).map((tramo) => {
@@ -294,7 +294,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
                         onClick={() => { setSel(elegido ? null : b.clave); setPista(elegido ? null : { texto: 'Arrastra los bordes para ajustar o toca «Quitar».' }); }}
                         className={'absolute inset-0 flex flex-col items-start overflow-hidden rounded-[9px] px-2 pb-1.5 pt-2.5 text-left disabled:cursor-default ' + foco}>
                         <span className="text-[13px] font-semibold leading-tight">{b.enCurso ? 'En curso' : etiqueta}</span>
-                        <span className="font-mono text-xs opacity-90">{hhmm(b.ini)} – {hhmm(b.fin)}</span>
+                        <span className="tabular-nums text-xs opacity-90">{hhmm(b.ini)} – {hhmm(b.fin)}</span>
                       </button>
                       {!b.enCurso && !ocupada && (['ini', 'fin'] as const).map((borde) => <button type="button" key={borde}
                         aria-label={(borde === 'ini' ? 'Ajustar inicio, ' + hhmm(b.ini) : 'Ajustar fin, ' + hhmm(b.fin)) + '. Usa las flechas arriba y abajo'}

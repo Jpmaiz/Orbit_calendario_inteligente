@@ -79,7 +79,7 @@ export default function BorradorHorario({ items, materias, documento, cambiar }:
         <span />
         {dias.map((d) => <span key={d} className="pb-1 text-center text-xs font-semibold text-[#647168]">{DIAS[d]}</span>)}
         <div className="relative h-60">
-          {horas.map((m) => <span key={m} className="absolute right-1 -translate-y-1/2 font-mono text-[9px] text-[#768075]" style={{ top: `${pct(m)}%` }}>{m / 60}</span>)}
+          {horas.map((m) => <span key={m} className="absolute right-1 -translate-y-1/2 tabular-nums text-[9px] text-[#768075]" style={{ top: `${pct(m)}%` }}>{m / 60}</span>)}
         </div>
         {dias.map((d) => <div key={d} className="relative h-60 rounded-lg"
           style={{ backgroundImage: 'repeating-linear-gradient(to bottom, transparent 0, transparent calc(12.5% - 1px), #EEF1EB calc(12.5% - 1px), #EEF1EB 12.5%)' }}>
@@ -95,7 +95,7 @@ export default function BorradorHorario({ items, materias, documento, cambiar }:
                 background: `color-mix(in srgb, ${b.g.color} 30%, white)`, ['--i' as string]: bloques.indexOf(b),
               }}>
               <span className="block truncate">{b.g.codigo ?? b.g.nombre}</span>
-              {alto > 9 && <span className="block font-mono text-[8px] font-medium opacity-70">{b.ini}</span>}
+              {alto > 9 && <span className="block tabular-nums text-[8px] font-medium opacity-70">{b.ini}</span>}
             </button>;
           })}
         </div>)}
