@@ -4,12 +4,20 @@ import { diaEnBolivia } from './organizarTareasDia';
 import { CATEGORIAS_NOTA, type CategoriaNota, type Nota } from '../ia/borradorCaptura';
 
 type MateriaAgenda = { nombre: string; color: string } | null;
+/** v2.12: resumen de TODOS los bloques del plan de la tarea (no solo los del rango pedido). */
+export type PlanTarea = { bloques: number; minutos: number; proximo: Date | null };
 export type TareaAgenda = EstimacionTarea & {
   id: string; titulo: string; tipo: string; prioridad: string; estado: string;
   fechaLimite: Date; completadaEn: Date | null; horaDefinida: boolean;
   materia: MateriaAgenda;
   notas: Nota[];
+  /** null = sin plan. */
+  plan?: PlanTarea | null;
+  /** Lo que DURA un examen o exposición (no las horas de estudio). null si no se sabe. */
+  duracionMin?: number | null;
 };
+/** v2.12–2.13: el horario de estudio («Mi ritmo») que usa Orbit para huecos y horas libres. */
+export type VentanaAgenda = { desde: string; hasta: string; diasLibres: number[] };
 export type TareaDia = TareaAgenda & { prioridadCalculada: PrioridadCalculada };
 export type ClaseAgenda = {
   id: string; titulo: string; diaSemana: number; horaInicio: string; horaFin: string;
@@ -26,6 +34,7 @@ export type BloqueEstudioAgenda = {
 };
 export type AgendaDia = {
   tareas: TareaAgenda[]; clases: ClaseAgenda[]; eventos: EventoAgenda[]; bloques: BloqueEstudioAgenda[];
+  ventana?: VentanaAgenda;
 };
 
 function registro(valor: unknown): Record<string, unknown> {
@@ -67,6 +76,23 @@ function leerNotas(valor: unknown): Nota[] {
       ? [{ categoria: n.categoria as CategoriaNota, texto: n.texto.trim() }] : [];
   });
 }
+/** Tolerantes: si el back todavía no los manda, quedan en null o sin ventana. */
+function leerPlanTarea(valor: unknown): PlanTarea | null {
+  if (!valor || typeof valor !== 'object') return null;
+  const p = valor as Record<string, unknown>;
+  const bloques = typeof p.bloques === 'number' && Number.isFinite(p.bloques) ? p.bloques : 0;
+  const minutos = typeof p.minutos === 'number' && Number.isFinite(p.minutos) ? p.minutos : 0;
+  const proximo = typeof p.proximo === 'string' && !Number.isNaN(Date.parse(p.proximo)) ? new Date(p.proximo) : null;
+  return bloques > 0 ? { bloques, minutos, proximo } : null;
+}
+function leerVentana(valor: unknown): VentanaAgenda | undefined {
+  if (!valor || typeof valor !== 'object') return undefined;
+  const v = valor as Record<string, unknown>;
+  const hora = (x: unknown) => typeof x === 'string' && /^\d{2}:\d{2}$/.test(x);
+  if (!hora(v.desde) || !hora(v.hasta)) return undefined;
+  const diasLibres = Array.isArray(v.diasLibres) ? v.diasLibres.filter((d): d is number => Number.isInteger(d) && d >= 1 && d <= 7) : [];
+  return { desde: v.desde as string, hasta: v.hasta as string, diasLibres };
+}
 function leerTarea(valor: unknown): TareaAgenda {
   const datos = registro(valor);
   if (typeof datos.horaDefinida !== 'boolean') throw new Error('La tarea no indica si su hora está definida.');
@@ -76,6 +102,8 @@ function leerTarea(valor: unknown): TareaAgenda {
     prioridad: texto(datos.prioridad), estado: texto(datos.estado),
     fechaLimite: fecha(datos.fechaLimite), completadaEn: fechaOpcional(datos.completadaEn),
     horaDefinida: datos.horaDefinida, materia: materia(datos.materia), notas: leerNotas(datos.notas),
+    plan: leerPlanTarea(datos.plan),
+    duracionMin: typeof datos.duracionMin === 'number' && datos.duracionMin > 0 && datos.duracionMin <= 600 ? datos.duracionMin : null,
   };
 }
 function leerPrioridad(valor: unknown): PrioridadCalculada {
@@ -122,6 +150,7 @@ export function leerAgenda(valor: unknown): AgendaDia {
     throw new Error('La zona horaria de tu perfil debe ser America/La_Paz para mostrar esta vista.');
   }
   return {
+    ventana: leerVentana(datos.ventana),
     tareas: lista(datos.tareas).map(leerTarea),
     bloques: (datos.bloques === undefined ? [] : lista(datos.bloques)).map((valor): BloqueEstudioAgenda => {
       const bloque = registro(valor), tarea = registro(bloque.tarea);
