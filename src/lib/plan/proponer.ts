@@ -7,7 +7,7 @@ import { horasPorDefecto } from '@/lib/estimacion/rubrica';
 import { franjaPreferida } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { cargarContextoPlan, type ContextoDeUsuario } from './cargar';
-import { inicioDePlan, limiteDePlan, planificar, type Franja, type Plan } from './planificador';
+import { CONFIG_PLAN, inicioDePlan, limiteDePlan, planificar, type Franja, type Plan } from './planificador';
 
 export type TareaParaPlan = {
   id: string; titulo: string; tipo: string; materiaId: string | null; fechaLimite: Date; horaDefinida: boolean;
@@ -25,7 +25,8 @@ export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, hora
   const desde = inicioDePlan(limite, ahora);
   const hasta = limite > desde ? limite : desde;
   const ctx = await cargarContextoPlan(usuarioId, desde, hasta, ahora, tarea.id, tarea.materiaId);
-  const preferencia = franjaPreferida(aprendido.franjas, ahora);
+  // La franja que eligió el usuario en "Mi ritmo" manda; si no eligió, la que aprendió Orbit
+  const preferencia = ctx.ritmo.franja ?? franjaPreferida(aprendido.franjas, ahora);
 
   const plan = limite > ahora
     ? planificar({ ...tarea, horas }, {
@@ -34,7 +35,7 @@ export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, hora
           .filter((d) => d.huecos.length),
         zona: ctx.zona, preferencia,
         minutosMateriaPorDia: ctx.minutosMateriaPorDia, minutosEstudioPorDia: ctx.minutosEstudioPorDia,
-      }, ahora)
+      }, ahora, { ...CONFIG_PLAN, maxEstudioDiaMin: Math.round(ctx.ritmo.maxHorasDia * 60) })
     : null;
   return { plan, horas, limite, ctx, preferencia };
 }

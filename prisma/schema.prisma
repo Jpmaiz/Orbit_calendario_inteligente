@@ -19,6 +19,8 @@ model Usuario {
   zonaHoraria        String    @default("America/La_Paz") @map("zona_horaria")
   margenMinimoMin    Int       @default(30) @map("margen_minimo_min")
   nivelNotificacion  String    @default("importante") @map("nivel_notificacion")
+  // "Mi ritmo": { desde, hasta, maxHorasDia, diasLibres, franja } (src/lib/usuarios/ritmo.ts). null = valores por defecto
+  ritmo              Json?
 
   creadoEn       DateTime  @default(now()) @map("creado_en")
   modificadoEn   DateTime  @updatedAt @map("modificado_en")
@@ -114,6 +116,8 @@ model Tarea {
   // Fase 3: se cierra sola al pasar la fecha (el usuario puede reabrirla y ya no se vuelve a cerrar)
   cerradaSolaEn       DateTime? @map("cerrada_sola_en")
   horasReales         Float?    @map("horas_reales")                 // si respondió la pregunta semanal
+  // Lo que DURA un examen o exposición (no las horas de estudio): de 10:00 a 12:00 = 120. null = no se sabe.
+  duracionMin         Int?      @map("duracion_min")
   // Notas por categoría: [{ categoria: llevar | temas | bibliografia | duracion | otros, texto }] (ver src/lib/borrador/notas.ts)
   notas               Json?
 

@@ -21,7 +21,11 @@ export type Disponibilidad = {
   planificadas: (tareaId: string, fin: Date, ahora?: Date) => number;
 };
 
-type Datos = { dias: HuecosDelDia[]; bloques: { tareaId: string; inicio: Date; fin: Date }[]; horasPorDia: number; horizonte: number };
+type Datos = {
+  dias: HuecosDelDia[]; bloques: { tareaId: string; inicio: Date; fin: Date }[]; horasPorDia: number; horizonte: number;
+  /** Tope de estudio por día ("Mi ritmo"); por defecto 4 h. */
+  topeMin?: number;
+};
 const cache = new Map<string, { datos: Datos; hasta: number }>();
 
 export function olvidarDisponibilidad(usuarioId: string) {
@@ -30,7 +34,7 @@ export function olvidarDisponibilidad(usuarioId: string) {
 
 /** Puro: arma las funciones a partir de los huecos y bloques (se prueba sin base de datos). */
 export function disponibilidadDe(datos: Datos): Disponibilidad {
-  const topeMin = CONFIG_PLAN.maxEstudioDiaMin;
+  const topeMin = datos.topeMin ?? CONFIG_PLAN.maxEstudioDiaMin;
   return {
     horasPorDia: datos.horasPorDia,
     libresHasta(fin, ahora = new Date()) {
@@ -68,7 +72,8 @@ export async function cargarDisponibilidad(usuarioId: string, ahora: Date = new 
   const datos: Datos = {
     dias: ctx.dias,
     bloques: ctx.bloquesAceptados ?? [],
-    horasPorDia: Math.max(0.5, horasLibresPorDia(ctx.dias, CONFIG_PLAN.maxEstudioDiaMin / 60)),
+    horasPorDia: Math.max(0.5, horasLibresPorDia(ctx.dias, ctx.ritmo.maxHorasDia)),
+    topeMin: Math.round(ctx.ritmo.maxHorasDia * 60),
     horizonte,
   };
   cache.set(usuarioId, { datos, hasta: Date.now() + TTL_MS });

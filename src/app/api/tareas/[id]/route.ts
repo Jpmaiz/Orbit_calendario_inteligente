@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { tareaPublica } from '@/lib/estimacion/publico';
+import { tieneDuracion } from '@/lib/tareas/duracion';
 import { validarTarea } from '@/lib/validacion/tarea';
 import { moverVinculadas } from '@/lib/tareas/vinculos';
 import { registrarHoras } from '@/lib/aprendizaje/senales';
@@ -77,6 +78,11 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (cerrada && v.datos.estado === undefined && nuevaFecha && nuevaFecha > new Date() && +nuevaFecha !== +existente.fechaLimite) {
       data.estado = 'pendiente';
       data.completadaEn = null;
+    }
+
+    // La duración solo existe en exámenes y exposiciones: si el tipo final es otro, se limpia
+    if (!tieneDuracion(v.datos.tipo ?? existente.tipo)) {
+      if (v.datos.duracionMin !== undefined || existente.duracionMin !== null) data.duracionMin = null;
     }
 
     const tarea = await prisma.tarea.update({ where: { id }, data });

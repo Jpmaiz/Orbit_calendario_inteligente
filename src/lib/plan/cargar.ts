@@ -4,7 +4,10 @@
  */
 import { prisma } from '@/lib/prisma/cliente';
 import { zonaDeUsuario } from '@/lib/usuarios/zona';
-import { huecosLibres, ocupacionesDeClases, diaLocal, claveDia, type Ocupacion, type HuecosDelDia } from './huecos';
+import { ritmoDeUsuario } from '@/lib/usuarios/zona';
+import type { Ritmo } from '@/lib/usuarios/ritmo';
+import { resumirBloques } from './resumen';
+import { CONFIG_HUECOS, huecosLibres, ocupacionesDeClases, diaLocal, claveDia, type Ocupacion, type HuecosDelDia } from './huecos';
 
 const HORA_MS = 3_600_000;
 
@@ -20,6 +23,8 @@ export type ContextoDeUsuario = {
   minutosMateriaPorDia: Map<string, number>;
   minutosEstudioPorDia: Map<string, number>;
   propios: BloqueGuardado[];                 // TODOS los bloques futuros aceptados de esta actividad
+  /** "Mi ritmo" del usuario: horario de estudio, tope por día, días libres y franja preferida. */
+  ritmo: Ritmo;
   /** Bloques aceptados del rango, de todas las actividades (para descontar lo ya planificado). */
   bloquesAceptados?: { tareaId: string; inicio: Date; fin: Date }[];
 };
@@ -31,7 +36,7 @@ export type ContextoDeUsuario = {
 export async function cargarContextoPlan(
   usuarioId: string, desde: Date, hasta: Date, ahora: Date, tareaId?: string, materiaId?: string | null,
 ): Promise<ContextoDeUsuario> {
-  const [zona, clases, eventos, bloques, propiosFuturos] = await Promise.all([
+  const [zona, clases, eventos, bloques, propiosFuturos, examenes, ritmo] = await Promise.all([
     zonaDeUsuario(usuarioId),
     prisma.eventoFijo.findMany({
       where: {
@@ -67,6 +72,16 @@ export async function cargarContextoPlan(
           orderBy: { fechaInicio: 'asc' },
         })
       : Promise.resolve([]),
+    // Exámenes y exposiciones con hora y duración conocidas: ese tramo está ocupado (no se estudia encima)
+    prisma.tarea.findMany({
+      where: {
+        usuarioId, eliminadoEn: null, tipo: { in: ['examen', 'exposicion'] }, horaDefinida: true, duracionMin: { not: null },
+        fechaLimite: { gte: new Date(desde.getTime() - 10 * HORA_MS), lte: hasta },
+        ...(tareaId ? { id: { not: tareaId } } : {}),
+      },
+      select: { titulo: true, fechaLimite: true, duracionMin: true },
+    }),
+    ritmoDeUsuario(usuarioId),
   ]);
 
   const ajenos = bloques.filter((b) => b.tareaId !== tareaId);
@@ -74,6 +89,7 @@ export async function cargarContextoPlan(
     ...ocupacionesDeClases(clases, desde, hasta, zona),
     ...eventos.map((e) => ({ inicio: e.inicio, fin: e.fin ?? new Date(e.inicio.getTime() + HORA_MS), titulo: e.titulo })),
     ...ajenos.map((b) => ({ inicio: b.fechaInicio, fin: b.fechaFin, titulo: `Estudio: ${b.tarea.titulo}` })),
+    ...examenes.map((t) => ({ inicio: t.fechaLimite, fin: new Date(t.fechaLimite.getTime() + t.duracionMin! * 60_000), titulo: t.titulo })),
   ];
 
   const minutosMateriaPorDia = new Map<string, number>();
@@ -88,12 +104,24 @@ export async function cargarContextoPlan(
   return {
     zona,
     ocupaciones,
-    dias: huecosLibres(desde, hasta, ocupaciones, zona, ahora),
+    // Huecos dentro del horario de estudio del usuario; sus días libres no tienen huecos
+    dias: huecosLibres(desde, hasta, ocupaciones, zona, ahora, { ...CONFIG_HUECOS, franjaInicio: ritmo.desde, franjaFin: ritmo.hasta })
+      .map((d) => (ritmo.diasLibres.includes(d.diaSemana) ? { ...d, huecos: [], libresMin: 0 } : d)),
+    ritmo,
     minutosMateriaPorDia,
     minutosEstudioPorDia,
     propios: propiosFuturos.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, origen: b.origen })),
     bloquesAceptados: bloques.map((b) => ({ tareaId: b.tareaId, inicio: b.fechaInicio, fin: b.fechaFin })),
   };
+}
+
+/** Resumen del plan de cada actividad del usuario (todos sus bloques aceptados o cumplidos). */
+export async function cargarResumenPlanes(usuarioId: string, ahora: Date = new Date()) {
+  const filas = await prisma.sugerencia.findMany({
+    where: { usuarioId, estado: { in: ['aceptada', 'cumplida'] }, tarea: { eliminadoEn: null } },
+    select: { tareaId: true, fechaInicio: true, fechaFin: true },
+  });
+  return resumirBloques(filas.map((f) => ({ tareaId: f.tareaId, inicio: f.fechaInicio, fin: f.fechaFin })), ahora);
 }
 
 /** Bloques que pisan una ocupación (una clase o evento nuevo cayó encima): hay que ofrecer moverlos. */

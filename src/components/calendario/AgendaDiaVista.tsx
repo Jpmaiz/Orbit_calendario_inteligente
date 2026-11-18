@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
 import OrbitaDelDia from './OrbitaDelDia';
@@ -30,11 +30,25 @@ async function consultar<T>(url: string, leer: (valor: unknown) => T, signal: Ab
   return leer(datos);
 }
 
-export default function AgendaDiaVista({ fechaActual }: { fechaActual: string }) {
+/** Datos que el servidor ya cargó (mismo formato que /api/agenda y /api/tareas). null = pedirlos aquí. */
+function cargaInicial(fechaActual: string, inicial: { agenda: unknown; tareas: unknown } | null | undefined): Carga | null {
+  if (!inicial) return null;
+  try {
+    return { fechaActual, errores: [], agenda: leerAgenda(inicial.agenda), tareas: leerTareasConPrioridad(inicial.tareas) };
+  } catch {
+    return null; // formato inesperado: se piden de nuevo
+  }
+}
+
+export default function AgendaDiaVista({ fechaActual, inicial }: {
+  fechaActual: string; inicial?: { agenda: unknown; tareas: unknown } | null;
+}) {
   const router = useRouter();
-  const [carga, establecerCarga] = useState<Carga | null>(null);
+  const [carga, establecerCarga] = useState<Carga | null>(() => cargaInicial(fechaActual, inicial));
   const hoy = diaEnBolivia(new Date(fechaActual));
   const [revision, establecerRevision] = useState(0);
+  // Con datos del servidor, la primera carga ya está hecha: solo se vuelve a pedir si algo cambia
+  const omitirPrimera = useRef(carga !== null);
 
   useEffect(() => {
     const actualizar = () => establecerRevision((valor) => valor + 1);
@@ -43,6 +57,10 @@ export default function AgendaDiaVista({ fechaActual }: { fechaActual: string })
   }, []);
 
   useEffect(() => {
+    if (omitirPrimera.current) {
+      omitirPrimera.current = false;
+      return;
+    }
     const controlador = new AbortController();
     async function cargar() {
       const [agenda, tareas] = await Promise.allSettled([

@@ -1,7 +1,9 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import AgendaDiaVista from '@/components/calendario/AgendaDiaVista';
 import PreguntaAprendizaje from '@/components/aprendizaje/PreguntaAprendizaje';
-import { diaEnBolivia } from '@/components/calendario/organizarTareasDia';
+import { diaEnBolivia, sumarDias } from '@/components/calendario/organizarTareasDia';
+import { cargarAgenda, cargarTareas } from '@/lib/agenda/consultas';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { nombreVisible } from '@/lib/usuarios/perfil';
@@ -18,16 +20,38 @@ async function cargarDatosDia() {
   if (!user) return { nombre: nombreSesion, fechaActual, usuarioId: null };
 
   try {
-    const perfil = await prisma.usuario.findUnique({
-      where: { id: user.id },
-      select: { nombre: true, apodo: true },
-    });
+    const perfil = await prisma.usuario.findUnique({ where: { id: user.id }, select: { nombre: true, apodo: true } });
     // El apodo (si lo puso en el perfil) manda; si no, el nombre de registro
     return { nombre: perfil ? nombreVisible(perfil) : nombreSesion, fechaActual, usuarioId: user.id };
   } catch {
     console.warn('No se pudo cargar el nombre del perfil.');
     return { nombre: nombreSesion, fechaActual, usuarioId: user.id };
   }
+}
+
+/**
+ * Agenda y tareas del día, cargadas en el servidor y enviadas en la MISMA respuesta (streaming con Suspense):
+ * la cabecera sale de inmediato y los datos llegan apenas están, sin que el celular haga otra vuelta a la base.
+ * Mismo rango que pide AgendaDiaVista: desde ayer ("Ya pasaron") hasta mañana. Si algo falla, el cliente los pide.
+ */
+async function AgendaConDatos({ usuarioId, fechaActual }: { usuarioId: string; fechaActual: Date }) {
+  const hoy = diaEnBolivia(fechaActual);
+  const [agenda, tareas] = await Promise.allSettled([
+    cargarAgenda(usuarioId, sumarDias(hoy, -1), sumarDias(hoy, 1)),
+    cargarTareas(usuarioId),
+  ]);
+  const inicial = agenda.status === 'fulfilled' && agenda.value.ok && tareas.status === 'fulfilled'
+    ? JSON.parse(JSON.stringify({ agenda: agenda.value.datos, tareas: tareas.value })) as { agenda: unknown; tareas: unknown }
+    : null;
+  return <AgendaDiaVista fechaActual={fechaActual.toISOString()} inicial={inicial} />;
+}
+
+/** Lo mismo que muestra AgendaDiaVista mientras carga. */
+function CargandoDia() {
+  return <div className="space-y-4">
+    <div aria-hidden="true" className="h-64 animate-pulse rounded-[30px] bg-[#ECEFE7] motion-reduce:animate-none" />
+    <p role="status" className="text-sm text-[#647168]">Cargando tu día…</p>
+  </div>;
 }
 
 const zona = 'America/La_Paz';
@@ -47,7 +71,8 @@ export default async function PaginaDia() {
 
   return (
     <div className="min-w-0 space-y-6 md:space-y-8 lg:space-y-9">
-      <header className="orbit-dia-sube flex items-end justify-between gap-4">
+      {/* Sin animación de entrada: es lo primero que se ve (LCP) y un fade desde opacidad 0 lo atrasa */}
+      <header className="flex items-end justify-between gap-4">
         <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
           <time dateTime={fechaActual.toISOString()} className="block text-[13px] font-semibold uppercase tracking-[0.12em] text-[#8A958D]">
             {fechaCorta}
@@ -63,7 +88,9 @@ export default async function PaginaDia() {
       </header>
 
       {usuarioId && <PreguntaAprendizaje key={usuarioId + ':' + diaEnBolivia(fechaActual)} claveConsulta={usuarioId + ':' + diaEnBolivia(fechaActual)} />}
-      <AgendaDiaVista fechaActual={fechaActual.toISOString()} />
+      {usuarioId
+        ? <Suspense fallback={<CargandoDia />}><AgendaConDatos usuarioId={usuarioId} fechaActual={fechaActual} /></Suspense>
+        : <AgendaDiaVista fechaActual={fechaActual.toISOString()} />}
     </div>
   );
 }

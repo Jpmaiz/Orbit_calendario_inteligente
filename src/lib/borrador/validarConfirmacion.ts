@@ -18,7 +18,9 @@ export type VenceConExistente = { clase: 'tarea' | 'evento'; id: string };
 
 export type ItemConfirmado =
   | (Comunes & { clase: 'tarea'; tipo: string; inicio: Date; horaDefinida: boolean; descripcion: string | null; confirmarNueva: boolean;
-      venceConExistente: VenceConExistente | null; notas: Nota[] | undefined })
+      venceConExistente: VenceConExistente | null; notas: Nota[] | undefined;
+      /** undefined = no vino (se usa lo que leyó la IA); null = no se sabe. Solo examen y exposición. */
+      duracionMin: number | null | undefined })
   | (Comunes & { clase: 'evento'; inicio: Date; fin: Date | null; ubicacion: string | null; descripcion: string | null;
       notas: Nota[] | undefined })
   | (Comunes & { clase: 'evento_fijo'; diasSemana: number[]; hora: string; horaFin: string; ubicacion: string | null;
@@ -73,6 +75,8 @@ export function validarItem(v: unknown, i: number): R<ItemConfirmado> {
         confirmarNueva: x.confirmarNueva === true,
         venceConExistente: venceConExistente(x.venceConExistente),
         notas,
+        duracionMin: x.duracionMin === undefined ? undefined
+          : Number.isInteger(x.duracionMin) && (x.duracionMin as number) >= 1 && (x.duracionMin as number) <= 600 ? (x.duracionMin as number) : null,
       },
     };
   }

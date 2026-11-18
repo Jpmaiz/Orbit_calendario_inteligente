@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
-import { tareaPublica } from '@/lib/estimacion/publico';
-import { diaEnZona } from '@/lib/periodos/periodos';
-import { cerrarVencidas } from '@/lib/tareas/cierre';
-import { zonaDeUsuario } from '@/lib/usuarios/zona';
-
-const DIA_MS = 86_400_000;
-const MAX_DIAS = 62;
+import { cargarAgenda } from '@/lib/agenda/consultas';
 
 /**
  * GET /api/agenda?desde=2026-10-26&hasta=2026-11-01
@@ -22,83 +15,12 @@ export async function GET(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
-
   const params = new URL(req.url).searchParams;
-  const desdeTxt = params.get('desde');
-  const hastaTxt = params.get('hasta');
-
   try {
-    const zonaHoraria = await zonaDeUsuario(user.id);
-    const zona: string = zonaHoraria;
-
-    const desde = desdeTxt ? diaEnZona(desdeTxt, '00:00', zona) : null;
-    const hastaInicio = hastaTxt ? diaEnZona(hastaTxt, '00:00', zona) : null;
-    if (!desde || !hastaInicio) {
-      return NextResponse.json({ error: 'Usa ?desde=AAAA-MM-DD&hasta=AAAA-MM-DD' }, { status: 400 });
-    }
-    const hasta = new Date(hastaInicio.getTime() + DIA_MS - 1); // hasta el final de ese día
-    const dias = (hasta.getTime() - desde.getTime()) / DIA_MS;
-    if (dias <= 0 || dias > MAX_DIAS) {
-      return NextResponse.json({ error: `El rango debe ser de 1 a ${MAX_DIAS} días` }, { status: 400 });
-    }
-
-    await cerrarVencidas(user.id); // lo que ya pasó se da por hecho (Fase 3)
-    const materia = { select: { id: true, nombre: true, color: true } };
-    const [clases, eventos, tareas, bloques] = await Promise.all([
-      prisma.eventoFijo.findMany({
-        where: {
-          usuarioId: user.id,
-          eliminadoEn: null,
-          // vigente en algún momento del rango (sin fechas = siempre vigente)
-          AND: [
-            { OR: [{ vigenteDesde: null }, { vigenteDesde: { lte: hasta } }] },
-            { OR: [{ vigenteHasta: null }, { vigenteHasta: { gte: desde } }] },
-          ],
-        },
-        orderBy: [{ diaSemana: 'asc' }, { horaInicio: 'asc' }],
-        include: { materia },
-      }),
-      prisma.evento.findMany({
-        where: {
-          usuarioId: user.id,
-          eliminadoEn: null,
-          inicio: { lte: hasta },
-          OR: [{ fin: { gte: desde } }, { fin: null, inicio: { gte: desde } }],
-        },
-        orderBy: { inicio: 'asc' },
-        include: { materia },
-      }),
-      prisma.tarea.findMany({
-        where: { usuarioId: user.id, eliminadoEn: null, fechaLimite: { gte: desde, lte: hasta } },
-        orderBy: { fechaLimite: 'asc' },
-        include: { materia },
-      }),
-      prisma.sugerencia.findMany({
-        where: {
-          usuarioId: user.id,
-          estado: { in: ['aceptada', 'cumplida'] },
-          fechaInicio: { lte: hasta },
-          fechaFin: { gte: desde },
-          tarea: { eliminadoEn: null },
-        },
-        orderBy: { fechaInicio: 'asc' },
-        select: {
-          id: true, fechaInicio: true, fechaFin: true, motivo: true, estado: true,
-          tarea: { select: { id: true, titulo: true, tipo: true, materia } },
-        },
-      }),
-    ]);
-
-    return NextResponse.json({
-      desde, hasta, zonaHoraria: zona, clases, eventos,
-      // Sin la estimación interna; con estimado { horas, carga, razones } (D21)
-      tareas: tareas.map(tareaPublica),
-      bloques: bloques.map((b) => ({
-        id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, tarea: b.tarea,
-      })),
-    });
+    const r = await cargarAgenda(user.id, params.get('desde'), params.get('hasta'));
+    return r.ok ? NextResponse.json(r.datos) : NextResponse.json({ error: r.error }, { status: r.status });
   } catch (error) {
     console.error('Error GET /api/agenda:', error);
     return NextResponse.json({ error: 'Error al obtener la agenda' }, { status: 500 });
   }
-}
+}

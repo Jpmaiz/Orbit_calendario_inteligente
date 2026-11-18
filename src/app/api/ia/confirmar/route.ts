@@ -12,6 +12,7 @@ import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { notasDeItem, type Nota } from '@/lib/borrador/notas';
 import { olvidarDisponibilidad } from '@/lib/plan/disponibilidad';
+import { duracionDeItem, tieneDuracion } from '@/lib/tareas/duracion';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 
 /** Otra petición ya confirmó esta interpretación (ganó la carrera). */
@@ -242,6 +243,8 @@ export async function POST(req: NextRequest) {
             data: {
               usuarioId: user.id, materiaId, titulo: item.titulo, tipo: item.tipo, fechaLimite: item.inicio,
               horaDefinida: item.horaDefinida, descripcion: descripcionDe(item, notasDe(item)), notas: notasDe(item),
+              // Lo que dura el examen: lo que mandó el front, o lo que leyó la IA (solo examen y exposición)
+              duracionMin: tieneDuracion(item.tipo) ? (item.duracionMin !== undefined ? item.duracionMin : leido ? duracionDeItem(leido) : null) : null,
               prioridad: est.importancia, estado: 'pendiente', origen: 'texto',
               duracionEstMin: Math.round(horas * 60), dificultad: est.dificultad,
               estimacion: {

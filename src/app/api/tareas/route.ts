@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { cargarTareas } from '@/lib/agenda/consultas';
 import { validarTarea } from '@/lib/validacion/tarea';
-import { CONFIG_PRIORIDAD, priorizarTareas } from '@/lib/prioridad';
-import { cargarDisponibilidad } from '@/lib/plan/disponibilidad';
 import { tareaPublica } from '@/lib/estimacion/publico';
-import { cerrarVencidas } from '@/lib/tareas/cierre';
+import { tieneDuracion } from '@/lib/tareas/duracion';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 
@@ -17,28 +16,7 @@ export async function GET() {
   }
 
   try {
-    // Lo que ya pasó se da por hecho (Fase 3): el usuario no tiene que marcar nada
-    await cerrarVencidas(user.id);
-    // La lista y el tiempo libre real van en paralelo (la base está lejos: cada ronda de consultas pesa).
-    // Tiempo libre: huecos de las próximas 2 semanas, en caché 10 min (src/lib/plan/disponibilidad.ts).
-    const [tareas, libre] = await Promise.all([
-      prisma.tarea.findMany({
-        where: { usuarioId: user.id, eliminadoEn: null },
-        orderBy: { fechaLimite: 'asc' },
-        include: { materia: { select: { id: true, nombre: true, color: true } } },
-      }),
-      cargarDisponibilidad(user.id).catch((error) => {
-        console.error('Tiempo libre: se usa el promedio por defecto', error);
-        return null;
-      }),
-    ]);
-    const ahora = new Date();
-    const horasEstudioPorDia = libre?.horasPorDia ?? CONFIG_PRIORIDAD.horasEstudioPorDia;
-    const priorizadas = priorizarTareas(tareas, ahora, { ...CONFIG_PRIORIDAD, horasEstudioPorDia }, libre ? {
-      libresHasta: (fin) => libre.libresHasta(fin, ahora),
-      planificadas: (t) => libre.planificadas(t.id, new Date(t.fechaLimite), ahora),
-    } : undefined);
-    return NextResponse.json({ tareas: priorizadas.map(tareaPublica), horasEstudioPorDia });
+    return NextResponse.json(await cargarTareas(user.id));
   } catch (error) {
     console.error('Error GET /api/tareas:', error);
     return NextResponse.json({ error: 'Error al obtener tareas' }, { status: 500 });
@@ -107,6 +85,7 @@ export async function POST(req: NextRequest) {
         ...resto,
         // Si el usuario escribió las horas, son suyas: ninguna estimación las reemplaza
         horasDelUsuario: resto.duracionEstMin != null,
+        duracionMin: tieneDuracion(tipo) ? resto.duracionMin ?? null : null, // solo examen y exposición
         titulo: titulo!,
         tipo: tipo!,
         fechaLimite: fechaLimite!,

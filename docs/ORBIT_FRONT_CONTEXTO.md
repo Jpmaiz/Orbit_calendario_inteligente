@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.11 · 17/11/2026)
+# Orbit — Contexto del backend para el front (v2.13 · 18/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,8 @@
 
 ## Índice
 
+★ [Novedades de la v2.13 (18/11) — perfil: mi ritmo, lo aprendido, semestre](#novedades-213)
+★ [Novedades de la v2.12 (18/11) — calendario: plan, duración de exámenes, ventana](#novedades-212)
 ★ [Novedades de la v2.11 (17/11) — apodo en el perfil](#novedades-211)
 ★ [Novedades de la v2.10 (10/11) — Planificar estudio: sugerencia, guardar, origen](#novedades-210)
 ★ [Novedades de la v2.9 (10/11) — tarjeta de tarea en Tu día: estimado, horas libres](#novedades-29)
@@ -30,6 +32,61 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-213"></a>
+## ★ Novedades de la v2.13 (18/11/2026) — Perfil: Mi ritmo, lo aprendido y el semestre
+
+**Migración:** `20261118010000_ritmo`. Pantallas sugeridas en `claude/traspaso-perfil.md`.
+
+**1. Mi ritmo** (cambia cómo planifica Orbit para ESE usuario)
+- `GET /api/perfil` trae `ritmo: { desde, hasta, maxHorasDia, diasLibres, franja }` y `ritmoPorDefecto`.
+- `PATCH /api/perfil { ritmo: {...} }`: cambio parcial; `ritmo: null` vuelve a los valores por defecto (07:00–22:30, 4 h, sin días libres, franja aprendida).
+  - Reglas: al menos 2 h entre `desde` y `hasta`; `maxHorasDia` de 1 a 8; al menos un día con estudio; `franja` = `manana`, `tarde`, `noche` o `null`.
+  - **400** con un mensaje claro si algo no cumple.
+- Lo usan la propuesta del plan, los huecos, `horasLibres` y `faltanHoras`. `/api/agenda` trae `ventana: { desde, hasta, diasLibres, maxHorasDia }`.
+
+**2. Cuéntale a Orbit tu semana** (IA)
+- `POST /api/perfil/ritmo/interpretar { texto }`. Ejemplo de texto: "trabajo martes y jueves de 6 a 9 de la noche, los domingos descanso, rindo más de noche".
+- Devuelve `{ ritmo, cambios, compromisos: [{ titulo, diasSemana, hora, horaFin }], resumen: string[] }`. 422 si no entendió nada.
+- **No guarda nada.** Si el usuario acepta:
+  1. `PATCH /api/perfil { ritmo }`;
+  2. `POST /api/eventos` por cada compromiso (clase fija **sin materia** = tiempo ocupado).
+
+**3. Lo que Orbit sabe de ti**
+- `GET /api/perfil/aprendizaje` → `{ conociendo, frases, datos }`: frases en palabras, sin números ni factor personal.
+- `DELETE /api/perfil/aprendizaje` = "Empezar de cero" (olvida horas y horarios aprendidos; tareas, planes y ritmo quedan).
+
+**4. Tu semestre a la vista**
+- `GET /api/perfil/semestre` → `{ semanas, semanaPesada, materiaMasPesada, materias, porPlanificarHoras, proximoExamen }` (próximas 8 semanas).
+- `semanaPesada` trae un `mensaje` listo ("La semana del 23 al 29 nov es la más cargada: ~20 h… Conviene empezar antes.").
+
+---
+
+<a id="novedades-212"></a>
+## ★ Novedades de la v2.12 (18/11/2026) — Calendario Semana y Mes
+
+Respuesta a `claude/traspaso-calendario.md`. **Migración:** `20261118000000_duracion_examen`.
+
+**A. `plan` en cada tarea** (`GET /api/tareas` y `GET /api/agenda`):
+```ts
+plan: { bloques: number; minutos: number; proximo: string | null } | null
+```
+- Cuenta **todos** los bloques guardados (aceptados o cumplidos, pasados y futuros), estén o no en el rango pedido. Los omitidos no cuentan.
+- `proximo`: inicio del primer bloque que todavía no terminó. `null` en `plan` = sin bloques.
+
+**B. `duracionMin`** (solo `examen` y `exposicion`; en otros tipos, `null`). Es lo que **dura** el examen, no las horas de estudio (`duracionEstMin`).
+- Sale de la captura: "de 10:00 a 12:00" (`hora` y `horaFin`) o "dura 2 h". "15 min por grupo" no cuenta. Sin dato, `null`.
+- Viene en los GET y en cada ítem del borrador. Confirmar y `PATCH /api/tareas/{id}` aceptan `duracionMin` (1–600 o `null`).
+- Con hora definida y `duracionMin`, ese tramo cuenta como **ocupado** en la propuesta del plan, en `horasLibres` y al guardar un plan.
+- `fechaLimite` de un examen = **hora de inicio** si `horaDefinida: true`. Con `horaDefinida: false` la hora es interna: no lo dibujes como bloque.
+
+**C. `ventana`** en `GET /api/agenda`: `{ desde: "07:00", hasta: "22:30" }`. Es la que usa Orbit para huecos, sugerencias y
+`horasLibres` (con 15 min de margen y máx. 4 h de estudio por día). Úsala para "X h libres".
+
+**Exámenes siempre como tarea:** si la IA lee como evento algo que se llama examen, parcial, final, control, exposición o defensa,
+se guarda como tarea de ese tipo, con su duración y lo que haya que estudiar.
 
 ---
 

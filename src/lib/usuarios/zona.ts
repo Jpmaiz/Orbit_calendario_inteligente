@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma/cliente';
+import { leerRitmo, type Ritmo } from './ritmo';
 
 /**
  * Zona horaria del usuario, en caché por proceso (10 min).
@@ -20,4 +21,20 @@ export async function zonaDeUsuario(usuarioId: string): Promise<string> {
 
 export function olvidarZona(usuarioId: string) {
   cache.delete(usuarioId);
+}
+
+/** Ritmo del usuario, en caché por proceso (10 min). Guardarlo debe llamar a olvidarRitmo(). */
+const cacheRitmo = new Map<string, { ritmo: Ritmo; hasta: number }>();
+
+export async function ritmoDeUsuario(usuarioId: string): Promise<Ritmo> {
+  const c = cacheRitmo.get(usuarioId);
+  if (c && c.hasta > Date.now()) return c.ritmo;
+  const u = await prisma.usuario.findUnique({ where: { id: usuarioId }, select: { ritmo: true } });
+  const ritmo = leerRitmo(u?.ritmo ?? null);
+  cacheRitmo.set(usuarioId, { ritmo, hasta: Date.now() + TTL_MS });
+  return ritmo;
+}
+
+export function olvidarRitmo(usuarioId: string) {
+  cacheRitmo.delete(usuarioId);
 }

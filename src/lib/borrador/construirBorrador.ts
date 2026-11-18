@@ -12,6 +12,7 @@ import { resolverFecha, HORA_POR_TIPO } from '@/lib/fechas/resolverFecha';
 import type { ItemExtraido } from '@/lib/ia/extraccion';
 import { cargaDe, estimar, razonesParaUsuario } from '@/lib/estimacion/rubrica';
 import { notasDeItem } from '@/lib/borrador/notas';
+import { duracionDeItem } from '@/lib/tareas/duracion';
 import { quitarDatosPersonales } from '@/lib/privacidad';
 import { aplicarFactor, factorPersonal } from '@/lib/estimacion/personal';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
@@ -176,6 +177,8 @@ export async function construirBorrador(
       // Tarjeta del borrador: tipo seguro o se pregunta; notas por categoría; fragmento del mensaje ("Tu mensaje")
       tipoSeguro: item.clase === 'tarea' ? item.tipoSeguro ?? true : true,
       notas: notasDeItem(item),
+      // Examen o exposición: cuánto dura (de 10:00 a 12:00, "dura 2 h"); null si el texto no lo dice
+      duracionMin: item.clase === 'tarea' ? duracionDeItem(item) : null,
       // Puntos del calendario de la tarjeta: días con clase de esa materia (1 = lunes … 7 = domingo)
       diasClase: item.clase === 'tarea' ? diasDeClase(materiaPropuesta, clases, clasesDelTexto, materiaClave, ahora) : [],
       origen,

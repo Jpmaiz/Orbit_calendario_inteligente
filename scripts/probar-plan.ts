@@ -121,5 +121,17 @@ prueba('minutosNecesarios es exacto (misma base que el chip): 5 h 15 → 315', (
   assert.equal(plan({ ...entrega, horas: 5.25 }).minutosNecesarios, 315);
 });
 
+
+// v2.12: un examen con duración conocida ocupa ese tramo (no se sugiere estudio encima)
+prueba('Examen de 10:00 a 12:00 cuenta como ocupado: no se sugiere estudio encima', () => {
+  const ocup = [{ inicio: en(12, '10:00'), fin: en(12, '12:00'), titulo: 'Examen de Redes' }];
+  const t: TareaAPlanificar = { titulo: 'Tarea', tipo: 'tarea', fechaLimite: en(12, '23:00'), horaDefinida: true, horas: 3 };
+  const desde = en(12, '00:00');
+  const dias = huecosLibres(desde, en(12, '23:59'), ocup, ZONA, desde);
+  const p = planificar(t, { dias, zona: ZONA }, desde);
+  assert.ok(p.bloques.length > 0);
+  assert.ok(p.bloques.every((b) => b.fin <= en(12, '09:45') || b.inicio >= en(12, '12:15')), ver(p));
+});
+
 console.log(fallas ? `\n${fallas} prueba(s) fallaron` : '\nTodas las pruebas pasaron');
 process.exit(fallas ? 1 : 0);

@@ -11,6 +11,7 @@ export interface DatosTarea {
   titulo?: string;
   descripcion?: string | null;
   notas?: Nota[]; // lista completa: reemplaza la guardada ([] = sin notas)
+  duracionMin?: number | null; // lo que DURA un examen o exposición (1–600); null = no se sabe
   tipo?: string;
   fechaLimite?: Date;
   horaDefinida?: boolean;         // false = "hora por definir"
@@ -98,6 +99,15 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
       return { ok: false, error: `Duración inválida (1 a ${DURACION_MAX_MIN} minutos, o null)` };
     }
     datos.duracionEstMin = d as number | null;
+  }
+
+  // duracionMin: lo que dura un examen o exposición (no las horas de estudio). La ruta lo limpia en otros tipos.
+  if (b.duracionMin !== undefined) {
+    const d = b.duracionMin;
+    if (d !== null && (typeof d !== 'number' || !Number.isInteger(d) || d < 1 || d > 600)) {
+      return { ok: false, error: 'duracionMin inválida (1 a 600 minutos, o null)' };
+    }
+    datos.duracionMin = d as number | null;
   }
 
   // dificultad: 1–5 o null

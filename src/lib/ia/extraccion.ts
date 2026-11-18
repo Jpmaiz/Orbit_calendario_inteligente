@@ -4,6 +4,7 @@
  */
 import type { FechaDicha } from '@/lib/fechas/resolverFecha';
 import { normalizarLecturaEstimacion, type LecturaEstimacion } from '@/lib/estimacion/rubrica';
+import { tipoEvaluado } from '@/lib/tareas/duracion';
 
 export type ClaseItem = 'tarea' | 'evento' | 'evento_fijo';
 export const TIPOS_TAREA = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'] as const;
@@ -17,7 +18,7 @@ export type ItemExtraido = {
   fechaDicha: FechaDicha | null;             // tarea y evento
   fechaFinDicha: FechaDicha | null;          // evento de varios días ("del 20 al 29"): último día
   hora: string | null;                       // "HH:mm" (tarea: hora límite o del examen; evento: inicio)
-  horaFin: string | null;                    // evento y evento_fijo
+  horaFin: string | null;                    // evento y evento_fijo; en examen o exposición, hasta qué hora es
   diasSemana: number[];                      // evento_fijo: 1 = lunes … 7 = domingo
   materia: string | null;                    // nombre tal como aparece
   codigoMateria: string | null;              // ej. "SIS-311"
@@ -91,6 +92,8 @@ CLASE:
     Si es un solo día, "fechaFinDicha" = null.
     Si para el evento hay que llevar estudiado algo ("estudiar semiología de apéndice y nudos"), ponlo en "preparacion"
     con su ESTIMACION (los temas a estudiar). No crees otro ítem para eso: el sistema lo crea.
+- Un examen, parcial, control o exposición/defensa es SIEMPRE "tarea" (con su "tipo"), nunca "evento".
+    Si el texto dice hasta qué hora es ("de 10:00 a 12:00"), pon "hora" y "horaFin"; si dice cuánto dura ("dura 2 h"), ponlo en "duracion".
 - "tipoSeguro": true si el texto dice qué es ("examen", "entrega", "exposición", "proyecto"); false si lo dedujiste.
 - "evento_fijo": se repite cada semana (una clase). Usa "diasSemana" (1 = lunes … 7 = domingo), "hora" de inicio y "horaFin". "fechaDicha" = null.
 
@@ -207,10 +210,13 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
     const titulo = texto(r.titulo, 200);
     if (!titulo) continue;
 
-    const clase: ClaseItem = r.clase === 'evento' || r.clase === 'evento_fijo' ? r.clase : 'tarea';
+    const leida: ClaseItem = r.clase === 'evento' || r.clase === 'evento_fijo' ? r.clase : 'tarea';
+    // Un examen o exposición es SIEMPRE una tarea (se prepara y se planifica), aunque la IA lo lea como evento
+    const evaluado = leida === 'evento' ? tipoEvaluado(titulo) : null;
+    const clase: ClaseItem = evaluado ? 'tarea' : leida;
     const tipo =
       clase === 'tarea'
-        ? (TIPOS_TAREA as readonly string[]).includes(r.tipo as string) ? (r.tipo as ItemExtraido['tipo']) : 'tarea'
+        ? evaluado ?? ((TIPOS_TAREA as readonly string[]).includes(r.tipo as string) ? (r.tipo as ItemExtraido['tipo']) : 'tarea')
         : null;
     const diasSemana =
       clase === 'evento_fijo' && Array.isArray(r.diasSemana)
@@ -222,7 +228,7 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       titulo,
       tipo,
       // Tipo inválido o ausente (se usó "tarea" por defecto) = no es seguro
-      tipoSeguro: clase !== 'tarea' || ((TIPOS_TAREA as readonly string[]).includes(r.tipo as string) && r.tipoSeguro !== false),
+      tipoSeguro: clase !== 'tarea' || !!evaluado || ((TIPOS_TAREA as readonly string[]).includes(r.tipo as string) && r.tipoSeguro !== false),
       fechaDicha: clase === 'evento_fijo' ? null : normalizarFecha(r.fechaDicha),
       fechaFinDicha: clase === 'evento' ? normalizarFecha(r.fechaFinDicha) : null,
       hora: esHora(r.hora) ? r.hora : null,
@@ -238,7 +244,10 @@ export function normalizarItems(crudo: unknown): ItemExtraido[] {
       fechaInferida: clase !== 'evento_fijo' && r.fechaInferida === true,
       venceCon: clase === 'tarea' && Number.isInteger(r.venceCon) && (r.venceCon as number) >= 0 ? (r.venceCon as number) : null,
       materiaSugerida: texto(r.materiaSugerida, 100),
-      estimacion: clase === 'tarea' ? normalizarLecturaEstimacion(r.estimacion) : null,
+      // Si venía como evento con algo que estudiar, eso es la estimación del examen
+      estimacion: clase === 'tarea'
+        ? normalizarLecturaEstimacion(r.estimacion) ?? (evaluado ? normalizarPreparacion(r.preparacion)?.estimacion ?? null : null)
+        : null,
       preparacion: clase === 'evento' ? normalizarPreparacion(r.preparacion) : null,
       preparativos: textos(r.preparativos, 5, 120),
       referencias: textos(r.referencias, 5, 120),
