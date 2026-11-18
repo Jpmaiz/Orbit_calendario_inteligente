@@ -1,61 +1,49 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import AvatarPerfil from './AvatarPerfil';
-import IconoDashboard from './IconoDashboard';
 import EditarPerfil from './EditarPerfil';
+import Dodecaedro from '../marca/Dodecaedro';
 import { useAgendaRango } from '../calendario/useAgendaRango';
 import { lunesDeSemana, sumarDias } from '../calendario/agendaSemana';
-import { leerTareasConPrioridad } from '../calendario/agendaDia';
-import { AGENDA_ACTUALIZADA } from '../calendario/actualizacionAgenda';
-import { contarPendientes, leerMateriasPerfil, resumirSemana } from './resumenPerfil';
+import { diaEnBolivia } from '../calendario/organizarTareasDia';
+import { cuantoFalta } from '../calendario/hitosCalendario';
+import { formatearHoras } from '../estimacion/estimacionFrontend';
+import { leerMateriasPerfil } from './resumenPerfil';
+import { useConsulta } from '../perfil/useConsulta';
+import { leerPerfilRitmo, leerSemestre, type Semestre } from '../perfil/contratoPerfil';
+import RuedaSemestre from '../perfil/RuedaSemestre';
+import MiRitmo from '../perfil/MiRitmo';
+import LoQueSabe from '../perfil/LoQueSabe';
 
-type Consulta<T> = { datos: T | null; error: boolean };
+const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
+const modulo = 'rounded-[28px] bg-white p-[18px] shadow-[inset_0_0_0_1px_#E3E8DE]';
+const paso = (i: number) => ({ '--i': i }) as CSSProperties;
 
-function useConsultaPerfil<T>(url: string, leer: (valor: unknown) => T) {
-  const [carga, establecerCarga] = useState<Consulta<T> | null>(null);
-  const [revision, establecerRevision] = useState(0);
-  useEffect(() => {
-    const actualizar = () => establecerRevision((valor) => valor + 1);
-    window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
-    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
-  }, []);
-  useEffect(() => {
-    const controlador = new AbortController();
-    async function cargar() {
-      try {
-        const respuesta = await fetch(url, { signal: controlador.signal, cache: 'no-store' });
-        if (!respuesta.ok) throw new Error('No se pudo cargar.');
-        const datos = leer(await respuesta.json());
-        if (!controlador.signal.aborted) establecerCarga({ datos, error: false });
-      } catch {
-        if (!controlador.signal.aborted) establecerCarga({ datos: null, error: true });
-      }
-    }
-    void cargar();
-    return () => controlador.abort();
-  }, [url, leer, revision]);
-  return { carga, reintentar: () => establecerRevision((valor) => valor + 1) };
+function semestreVacio(s: Semestre) {
+  return s.semanas.every((semana) => semana.horas === 0) && !s.proximoExamen && s.porPlanificarHoras === 0;
 }
 
-const tarjeta = 'min-w-0 rounded-3xl border border-[#E7ECE3] bg-white p-5 shadow-[0_4px_18px_rgba(38,61,52,0.04)] md:p-6';
-const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4';
-const boton = 'min-h-11 rounded-xl px-3 text-sm font-medium text-[#35695D] underline underline-offset-4 ' + foco;
-
-function leerPendientes(valor: unknown) {
-  return contarPendientes(leerTareasConPrioridad(valor));
+function Flecha({ color }: { color: string }) {
+  return <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M7 17 17 7M9 7h8v8" /></svg>;
 }
 
+/**
+ * Perfil en módulos: quién eres, tu semestre a la vista, tu ritmo, lo que Orbit aprendió y tus materias.
+ * Una acción principal por módulo y sin números internos (las frases y mensajes ya vienen redactados del back).
+ */
 export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = null, fechaActual, cerrarSesionAction }: {
   nombre: string | null; apodo?: string | null; correo: string | null; fotoUrl?: string | null; fechaActual: string;
   cerrarSesionAction: () => Promise<void>;
 }) {
   const lunes = lunesDeSemana(new Date(fechaActual));
+  const hoy = diaEnBolivia(new Date(fechaActual));
   const agenda = useAgendaRango(lunes, sumarDias(lunes, 6));
-  const materias = useConsultaPerfil('/api/materias', leerMateriasPerfil);
-  const pendientes = useConsultaPerfil('/api/tareas', leerPendientes);
-  const resumen = agenda.agenda ? resumirSemana(agenda.agenda, lunes) : null;
+  const semestre = useConsulta('/api/perfil/semestre', leerSemestre);
+  const perfil = useConsulta('/api/perfil', leerPerfilRitmo);
+  const materias = useConsulta('/api/materias', leerMateriasPerfil);
   const router = useRouter();
   // undefined = no se editó en esta visita; null = se quitó el apodo
   const [apodoGuardado, establecerApodoGuardado] = useState<string | null | undefined>(undefined);
@@ -63,97 +51,108 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
   const apodoActual = apodoGuardado === undefined ? apodo : apodoGuardado;
   const nombreActual = apodoActual?.trim() || nombre;
   const nombreVisible = nombreActual?.trim() || correo;
-
-  const indicadores = [
-    { etiqueta: 'Actividades esta semana', valor: resumen?.actividades, cargando: agenda.cargando, icono: <IconoDashboard nombre="calendario" className="h-[18px] w-[18px]" /> },
-    { etiqueta: 'Tareas pendientes', valor: pendientes.carga?.datos, cargando: !pendientes.carga, icono: <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]"><rect x="4" y="3" width="16" height="18" rx="3" /><path d="m8 12 3 3 5-6" /></svg> },
-    { etiqueta: 'Horas de estudio planificadas', valor: resumen?.horas, cargando: agenda.cargando, icono: <IconoDashboard nombre="reloj" className="h-[18px] w-[18px]" /> },
-  ];
+  const datosSemestre = semestre.carga?.datos ?? null;
+  const examen = datosSemestre?.proximoExamen ?? null;
+  const masPesada = datosSemestre?.materiaMasPesada?.nombre ?? null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 pt-2 [overflow-wrap:anywhere] md:space-y-7">
-      <h1 className="text-2xl font-semibold tracking-[-0.03em] md:text-3xl">Perfil</h1>
+    <div className="mx-auto max-w-xl space-y-4 pt-1 [overflow-wrap:anywhere]">
+      <div className="flex items-center justify-between px-1">
+        <h1 className="text-[25px] font-bold tracking-[-0.02em]">Perfil</h1>
+        <span aria-hidden="true" className="text-[#35695D]"><Dodecaedro className="h-8 w-8" girando /></span>
+      </div>
 
-      <section aria-label="Datos del perfil" className="relative isolate flex flex-col overflow-hidden rounded-3xl border border-[#DFE8D9] bg-white shadow-[0_6px_24px_rgba(38,61,52,0.05)]">
-        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-32 bg-linear-to-br from-[#E0ECDA] via-[#EDF5E6] to-[#DCEDE6]">
-          <span className="absolute -right-10 -top-20 h-60 w-60 rounded-full border border-white/60" />
-          <span className="absolute -right-2 -top-12 h-44 w-44 rounded-full border border-white/50" />
-        </div>
-        <div className="hidden md:flex md:justify-end md:px-6 md:pt-3 md:pb-0">
-          <form action={cerrarSesionAction}>
-            <button type="submit" className={'inline-flex min-h-9 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M9 4H5v16h4m0-8h12m-4-4 4 4-4 4" /></svg>
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-        <div className="order-1 flex min-w-0 flex-col items-center gap-4 px-5 pt-6 pb-6 text-center md:order-none md:flex-row md:gap-5 md:px-7 md:pt-5 md:pb-7 md:text-left">
-          <div className="relative shrink-0 rounded-full bg-white p-1.5 shadow-[0_5px_18px_rgba(38,61,52,0.08)]">
-            <AvatarPerfil nombre={nombreActual} fotoUrl={fotoUrl} />
-            <button type="button" aria-label="Editar perfil: foto" title="Editar foto de perfil" onClick={() => establecerEditor('foto')} className={'absolute bottom-0 right-0 flex h-10 w-10 items-center justify-center rounded-full border-[3px] border-white bg-[#234F45] text-white shadow-sm transition-colors hover:bg-[#316457] ' + foco}>
-              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M8 5l2-2h4l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z" /><circle cx="12" cy="13" r="4" /></svg>
-            </button>
-          </div>
-          <div className="min-w-0 max-w-full md:flex-1">
-            {nombreVisible ? <h2 className="text-2xl leading-tight font-semibold tracking-[-0.035em] text-[#234F45] md:text-3xl">{nombreVisible}</h2> : <p className="text-sm leading-6 text-[#647168]">No se pudieron obtener los datos de tu cuenta.</p>}
-            {nombreActual?.trim() && (correo || apodoActual) && <p className="mt-1.5 text-sm leading-6 text-[#718074]">
-              {[apodoActual?.trim() ? nombre : null, correo].filter(Boolean).join(' · ')}</p>}
-          <button type="button" onClick={() => establecerEditor('nombre')} className={'mt-3 inline-flex min-h-8 max-w-full items-center justify-center gap-1.5 rounded-xl border border-[#8AA99B] bg-white/40 px-3 py-1.5 text-xs font-medium text-[#234F45] transition-colors hover:border-[#527867] hover:bg-[#EDF5E8] ' + foco}>
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15l-1 6Z" /></svg>
-            Editar perfil
+      <div className="grid grid-cols-2 gap-3">
+        <section aria-label="Datos del perfil" className="orbit-aparece col-span-2 flex items-center gap-3.5 rounded-[26px] p-4" style={{ ...paso(0), background: 'linear-gradient(135deg, #E3EEDD, #F4F8F0 55%, #E2EEE8)' }}>
+          <button type="button" onClick={() => establecerEditor('foto')} aria-label="Editar foto de perfil" className={'shrink-0 rounded-full ' + foco}>
+            <AvatarPerfil nombre={nombreActual} fotoUrl={fotoUrl} pequeno />
           </button>
-
+          <div className="min-w-0 flex-1">
+            {nombreVisible ? <p className="truncate text-xl font-bold tracking-[-0.02em] text-[#234F45]">{nombreVisible}</p>
+              : <p className="text-sm text-[#647168]">No se pudieron obtener los datos de tu cuenta.</p>}
+            {nombreActual?.trim() && (correo || apodoActual) && <p className="mt-0.5 truncate text-[12.5px] text-[#647168]">
+              {[apodoActual?.trim() ? nombre : null, correo].filter(Boolean).join(' · ')}</p>}
           </div>
-        </div>
-      </section>
-      <div className="grid min-w-0 items-start gap-5 md:grid-cols-2 md:gap-6">
-        <section aria-labelledby="perfil-resumen" className={tarjeta}>
-          <h2 id="perfil-resumen" className="text-lg font-semibold tracking-[-0.025em] text-[#234F45]">Resumen</h2>
-          <p className="mt-1 text-xs leading-5 text-[#647168]">Semana actual · lunes a domingo</p>
-          <dl className="mt-4 divide-y divide-[#EFF2EB]">
-            {indicadores.map(({ etiqueta, valor, cargando, icono }) => (
-              <div key={etiqueta} className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-4 transition-colors hover:bg-[#F8FAF6]">
-                <dt className="flex min-w-0 flex-1 items-center gap-2.5 text-sm leading-6 text-[#647168]">
-                  <span aria-hidden="true" className="shrink-0 text-[#789380]">{icono}</span>
-                  <span className="min-w-0">{etiqueta}</span>
-                </dt>
-                <dd className={valor != null ? 'max-w-[40%] shrink-0 text-right text-2xl leading-tight font-semibold tracking-tight text-[#234F45] tabular-nums' : 'max-w-[40%] shrink-0 text-right text-xs leading-5 text-[#647168]'}>{valor ?? (cargando ? 'Cargando…' : 'No disponible')}</dd>
-              </div>
-            ))}
-          </dl>
-          {agenda.cargando && <p role="status" className="mt-3 text-xs text-[#647168]">Cargando agenda semanal…</p>}
-          {agenda.error && <div role="alert" className="mt-4 rounded-xl border border-[#EED4D7] bg-[#FCF5F5] p-3 text-xs leading-5 text-[#A34955]">
-            <p>No se pudo cargar la agenda semanal.</p>
-            <button type="button" onClick={agenda.recargar} className={boton}>Reintentar agenda</button>
-          </div>}
-          {pendientes.carga?.error && <div role="alert" className="mt-4 rounded-xl border border-[#EED4D7] bg-[#FCF5F5] p-3 text-xs leading-5 text-[#A34955]">
-            <p>No se pudieron cargar las tareas pendientes.</p>
-            <button type="button" onClick={pendientes.reintentar} className={boton}>Reintentar tareas</button>
-          </div>}
+          <button type="button" onClick={() => establecerEditor('nombre')}
+            className={'min-h-10 shrink-0 rounded-full bg-white px-3.5 text-[13px] font-semibold text-[#234F45] shadow-[0_1px_3px_rgba(35,79,69,.12)] hover:bg-[#F4F8F0] ' + foco}>Editar</button>
         </section>
 
-        <section aria-labelledby="perfil-materias" className={tarjeta}>
-          <h2 id="perfil-materias" className="text-lg font-semibold tracking-[-0.025em] text-[#234F45]">Materias</h2>
-          {!materias.carga && <p role="status" className="mt-4 rounded-xl bg-[#F8FAF5] p-4 text-sm text-[#647168]">Cargando materias…</p>}
-          {materias.carga?.error && <div role="alert" className="mt-4 rounded-xl border border-[#EED4D7] bg-[#FCF5F5] p-3 text-xs leading-5 text-[#A34955]">
-            <p>No se pudieron cargar las materias.</p>
-            <button type="button" onClick={materias.reintentar} className={boton}>Reintentar materias</button>
-          </div>}
-          {materias.carga?.datos?.length === 0 && <div className="mt-4 rounded-xl bg-[#F8FAF5] p-4">
-            <p className="text-sm font-medium">Aún no tienes materias</p>
-            <p className="mt-1 text-sm leading-6 text-[#647168]">Tus materias aparecerán aquí cuando las registres.</p>
-          </div>}
-          {!!materias.carga?.datos?.length && <ul className="mt-3 divide-y divide-[#F1F3EE]">
-            {materias.carga.datos.map((materia) => <li key={materia.id} className="flex min-w-0 items-center gap-3 rounded-lg px-1 py-3.5 text-sm leading-6 transition-colors hover:bg-[#F8FAF6]">
-              <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: materia.color }} />
-              <span className="min-w-0 font-medium">{materia.nombre}</span>
-            </li>)}
+        {!semestre.carga && <div role="status" className="orbit-aparece col-span-2 flex h-40 items-center justify-center rounded-[28px] text-sm text-[#CFE0D7]" style={{ ...paso(1), background: '#1F4A40' }}>Cargando tu semestre…</div>}
+        {semestre.carga?.error && <div role="alert" className={'col-span-2 text-sm text-[#647168] ' + modulo}>
+          No pude cargar tu semestre. <button type="button" onClick={semestre.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
+        </div>}
+        {datosSemestre && (semestreVacio(datosSemestre)
+          ? <section aria-label="Tu semestre a la vista" className="orbit-aparece col-span-2 flex flex-col items-center gap-3 rounded-[28px] px-[22px] py-7 text-center"
+            style={{ ...paso(1), background: 'radial-gradient(circle at 50% 30%, #2F6656 0, #1F4A40 70%)' }}>
+            <svg aria-hidden="true" viewBox="0 0 84 84" className="h-[84px] w-[84px]"><circle cx="42" cy="42" r="34" fill="none" stroke="rgba(255,255,255,.25)" strokeWidth="2" strokeDasharray="3 6" /><circle cx="42" cy="8" r="5" fill="#A9CDB9" /></svg>
+            <p className="text-[15px] leading-relaxed text-[#DCEBE2]">Cuando cargues tu horario y tus tareas, aquí verás tu semestre.</p>
+          </section>
+          : <>
+            <RuedaSemestre semestre={datosSemestre} />
+            <Link href="/mes" style={paso(2)} aria-label={datosSemestre.porPlanificarHoras > 0 ? `Por planificar: ${formatearHoras(datosSemestre.porPlanificarHoras)?.replace('~', 'unas ')}. Ver el mes` : 'Todo planificado. Ver el mes'}
+              className={'orbit-aparece flex min-h-[116px] flex-col justify-between gap-3.5 rounded-3xl bg-white px-4 pb-4 pt-3.5 shadow-[inset_0_0_0_1px_#E3E8DE] transition-transform hover:-translate-y-0.5 ' + (examen ? '' : 'col-span-2 ') + foco}>
+              <span className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-[#4C6A5D]">
+                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-[#EAF1EC] text-[#245B4C]">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[15px] w-[15px]"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
+                  </span>Por planificar
+                </span>
+                <Flecha color="#8A958D" />
+              </span>
+              <span className="flex flex-col">
+                <span className="text-[27px] leading-tight font-bold tracking-[-0.02em] tabular-nums">{datosSemestre.porPlanificarHoras > 0 ? formatearHoras(datosSemestre.porPlanificarHoras) : 'Todo listo'}</span>
+                <span className="text-[13px] text-[#647168]">{datosSemestre.porPlanificarHoras > 0 ? 'reparte el estudio en el mes' : 'tienes todo planificado'}</span>
+              </span>
+            </Link>
+            {examen && <Link href={'/semana?dia=' + diaEnBolivia(examen.fecha)} style={paso(2)}
+              aria-label={`Próximo examen: ${examen.titulo}, ${cuantoFalta(hoy, diaEnBolivia(examen.fecha))}. Ver ese día`}
+              className={'orbit-aparece flex min-h-[116px] flex-col justify-between gap-3.5 rounded-3xl bg-[#FCF2DE] px-4 pb-4 pt-3.5 text-[#4A3810] transition-transform hover:-translate-y-0.5 ' + foco}>
+              <span className="flex items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 text-[12.5px] font-semibold text-[#916820]">
+                  <span aria-hidden="true" className="flex h-7 w-7 items-center justify-center rounded-[9px] bg-white/75">
+                    <svg viewBox="0 0 24 24" className="h-[13px] w-[13px]"><path d="M12 2.5 21.5 9.4 17.9 20.6H6.1L2.5 9.4Z" fill="currentColor" /></svg>
+                  </span>Próximo examen
+                </span>
+                <Flecha color="#B08A3C" />
+              </span>
+              <span className="flex flex-col gap-0.5">
+                <span className="text-base leading-snug font-bold">{examen.titulo}</span>
+                <span className="text-[13px] font-semibold text-[#916820]">{cuantoFalta(hoy, diaEnBolivia(examen.fecha))}</span>
+              </span>
+            </Link>}
+          </>)}
+
+        {!perfil.carga && <div role="status" className={'col-span-2 text-sm text-[#647168] ' + modulo}>Cargando tu ritmo…</div>}
+        {perfil.carga?.error && <div role="alert" className={'col-span-2 text-sm text-[#647168] ' + modulo}>
+          No pude cargar tu ritmo. <button type="button" onClick={perfil.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
+        </div>}
+        {perfil.carga?.datos && <MiRitmo inicial={perfil.carga.datos.ritmo} clases={agenda.agenda?.clases ?? []} />}
+
+        <LoQueSabe />
+
+        <section aria-labelledby="perfil-materias" className={'orbit-aparece col-span-2 flex flex-col gap-3 ' + modulo} style={paso(5)}>
+          <h2 id="perfil-materias" className="text-base font-bold">Materias</h2>
+          {!materias.carga && <p role="status" className="text-sm text-[#647168]">Cargando materias…</p>}
+          {materias.carga?.error && <p role="alert" className="text-sm text-[#647168]">
+            No se pudieron cargar las materias. <button type="button" onClick={materias.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
+          </p>}
+          {materias.carga?.datos?.length === 0 && <p className="text-sm leading-relaxed text-[#647168]">Tus materias aparecerán aquí cuando las registres.</p>}
+          {!!materias.carga?.datos?.length && <ul className="flex flex-wrap gap-2">
+            {materias.carga.datos.map((materia) => {
+              const pesada = materia.nombre === masPesada;
+              return <li key={materia.id} className="inline-flex min-h-10 items-center gap-2 rounded-full py-1 pl-3 pr-3.5 text-[13.5px] font-medium"
+                style={{ background: pesada ? `color-mix(in srgb, ${materia.color} 16%, white)` : '#F3F5F0' }}>
+                <span aria-hidden="true" className="h-[9px] w-[9px] shrink-0 rounded-full" style={{ backgroundColor: materia.color }} />
+                {materia.nombre}
+                {pesada && <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-bold" style={{ color: `color-mix(in srgb, ${materia.color} 60%, #142E27)` }}>más carga</span>}
+              </li>;
+            })}
           </ul>}
         </section>
       </div>
 
-      <form action={cerrarSesionAction} className="flex justify-center pt-2 pb-6 md:hidden">
-        <button type="submit" className={'inline-flex min-h-11 items-center gap-2 rounded-xl border border-[#CDDBCF] bg-white/50 px-3 py-2 text-xs font-medium text-[#52685C] transition-colors hover:bg-[#F4F8F0] hover:border-[#BCCFBE] ' + foco}>
+      <form action={cerrarSesionAction} className="flex justify-center pb-6 pt-1">
+        <button type="submit" className={'inline-flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold text-[#647168] hover:bg-[#EEF1EA] hover:text-[#263D34] ' + foco}>
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M9 4H5v16h4m0-8h12m-4-4 4 4-4 4" /></svg>
           Cerrar sesión
         </button>

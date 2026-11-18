@@ -106,7 +106,12 @@ dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1
 @keyframes orbit-nav-gema { 0% { transform: rotate(0) scale(1); } 25% { transform: rotate(-10deg) scale(.8); } 75% { transform: rotate(80deg) scale(1.15); } 100% { transform: rotate(72deg) scale(1); } }
 @keyframes orbit-nav-asiente { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-1.5px); } 70% { transform: translateY(.4px); } }
 
+/* Perfil: la rueda del semestre entra girando. */
+@keyframes orbit-rueda { from { opacity: 0; transform: rotate(-90deg) scale(.6); } }
+.orbit-rueda { transform-origin: 50% 50%; animation: orbit-rueda .7s cubic-bezier(.2, .9, .25, 1) .12s both; }
+
 @media (prefers-reduced-motion: reduce) {
+  .orbit-rueda { animation: none; }
   .orbit-nav, .orbit-nav *, .orbit-nav-icono { animation: none !important; transition: none !important; }
   .orbit-dia-sube, .orbit-dia-aparece, .orbit-dia-tramo, .orbit-dia-halo, .orbit-dia-llena { animation: none; }
   .orbit-planeta, .orbit-anillo::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
