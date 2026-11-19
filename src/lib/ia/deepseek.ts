@@ -53,6 +53,10 @@ class AdaptadorDeepSeek implements AdaptadorIA {
     return normalizarItems(leerJson(contenido));
   }
 
+  async jsonDeTexto(prompt: string): Promise<unknown> {
+    return leerJson(await this.pedirJson(prompt, 2));
+  }
+
   async jsonConImagenes(prompt: string, imagenes: ImagenEntrada[]): Promise<unknown> {
     const partes: OpenAI.Chat.ChatCompletionContentPart[] = [
       { type: 'text', text: prompt },

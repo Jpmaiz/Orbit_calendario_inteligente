@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { tareaPublica } from '@/lib/estimacion/publico';
+import { tieneDuracion } from '@/lib/tareas/duracion';
 import { validarTarea } from '@/lib/validacion/tarea';
 import { moverVinculadas } from '@/lib/tareas/vinculos';
 import { registrarHoras } from '@/lib/aprendizaje/senales';
@@ -63,12 +65,25 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
         v.datos.estado === 'completada' ? existente.completadaEn ?? new Date() : null;
     }
 
-    // Cierre automático: reabrir una tarea (cerrada sola o a mano) impide que se vuelva a cerrar sola.
-    // Si cambia la fecha, se limpia: la nueva fecha vuelve a seguir la regla normal.
+    // Cierre automático: reabrir una tarea (cerrada sola o a mano) la protege solo ese día (cerradaSolaEn = ahora).
+    // Si su fecha ya pasó, al día siguiente se vuelve a cerrar sola. Si cambia la fecha, se limpia y sigue la regla normal.
     const cerrada = existente.estado === 'completada' || existente.estado === 'no_realizada';
     const reabre = cerrada && (v.datos.estado === 'pendiente' || v.datos.estado === 'en_proceso');
     if (v.datos.fechaLimite !== undefined && +new Date(v.datos.fechaLimite) !== +existente.fechaLimite) data.cerradaSolaEn = null;
-    else if (reabre) data.cerradaSolaEn = existente.cerradaSolaEn ?? new Date();
+    else if (reabre) data.cerradaSolaEn = new Date();
+
+    // Sin "Reabrir": si el docente posterga y el usuario mueve una tarea ya cerrada a una fecha futura,
+    // vuelve sola a pendiente (no hay que reabrirla a mano).
+    const nuevaFecha = v.datos.fechaLimite !== undefined ? new Date(v.datos.fechaLimite) : null;
+    if (cerrada && v.datos.estado === undefined && nuevaFecha && nuevaFecha > new Date() && +nuevaFecha !== +existente.fechaLimite) {
+      data.estado = 'pendiente';
+      data.completadaEn = null;
+    }
+
+    // La duración solo existe en exámenes y exposiciones: si el tipo final es otro, se limpia
+    if (!tieneDuracion(v.datos.tipo ?? existente.tipo)) {
+      if (v.datos.duracionMin !== undefined || existente.duracionMin !== null) data.duracionMin = null;
+    }
 
     const tarea = await prisma.tarea.update({ where: { id }, data });
 
@@ -89,7 +104,7 @@ export async function PATCH(req: NextRequest, { params }: Contexto) {
     if (tarea.estado === 'completada' || tarea.estado === 'no_realizada') {
       await prisma.sugerencia.deleteMany({ where: { usuarioId: user.id, tareaId: id, estado: 'aceptada', fechaInicio: { gt: new Date() } } });
     }
-    return NextResponse.json({ tarea });
+    return NextResponse.json({ tarea: tareaPublica(tarea) });
   } catch (error) {
     console.error('Error PATCH /api/tareas/[id]:', error);
     return NextResponse.json({ error: 'Error al actualizar la tarea' }, { status: 500 });

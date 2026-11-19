@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.7 · 08/11/2026)
+# Orbit — Contexto del backend para el front (v2.13 · 18/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,12 @@
 
 ## Índice
 
+★ [Novedades de la v2.13 (18/11) — perfil: mi ritmo, lo aprendido, semestre](#novedades-213)
+★ [Novedades de la v2.12 (18/11) — calendario: plan, duración de exámenes, ventana](#novedades-212)
+★ [Novedades de la v2.11 (17/11) — apodo en el perfil](#novedades-211)
+★ [Novedades de la v2.10 (10/11) — Planificar estudio: sugerencia, guardar, origen](#novedades-210)
+★ [Novedades de la v2.9 (10/11) — tarjeta de tarea en Tu día: estimado, horas libres](#novedades-29)
+★ [Novedades de la v2.8 (10/11) — tarjeta del borrador: razones, notas, tipo seguro, origen](#novedades-28)
 ★ [Novedades de la v2.7 (08/11) — correcciones pedidas en el informe del front](#novedades-27)
 ★ [Guía de experiencia de usuario — Fases 1 a 3 (leer antes de diseñar)](#guia-ux)
 ★ [Novedades de la v2.6 (08/11) — Orbit aprende sin pedir nada](#novedades-26)
@@ -26,6 +32,201 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-213"></a>
+## ★ Novedades de la v2.13 (18/11/2026) — Perfil: Mi ritmo, lo aprendido y el semestre
+
+**Migración:** `20261118010000_ritmo`. Pantallas sugeridas en `claude/traspaso-perfil.md`.
+
+**1. Mi ritmo** (cambia cómo planifica Orbit para ESE usuario)
+- `GET /api/perfil` trae `ritmo: { desde, hasta, maxHorasDia, diasLibres, franja }` y `ritmoPorDefecto`.
+- `PATCH /api/perfil { ritmo: {...} }`: cambio parcial; `ritmo: null` vuelve a los valores por defecto (07:00–22:30, 4 h, sin días libres, franja aprendida).
+  - Reglas: al menos 2 h entre `desde` y `hasta`; `maxHorasDia` de 1 a 8; al menos un día con estudio; `franja` = `manana`, `tarde`, `noche` o `null`.
+  - **400** con un mensaje claro si algo no cumple.
+- Lo usan la propuesta del plan, los huecos, `horasLibres` y `faltanHoras`. `/api/agenda` trae `ventana: { desde, hasta, diasLibres, maxHorasDia }`.
+
+**2. Cuéntale a Orbit tu semana** (IA)
+- `POST /api/perfil/ritmo/interpretar { texto }`. Ejemplo de texto: "trabajo martes y jueves de 6 a 9 de la noche, los domingos descanso, rindo más de noche".
+- Devuelve `{ ritmo, cambios, compromisos: [{ titulo, diasSemana, hora, horaFin }], resumen: string[] }`. 422 si no entendió nada.
+- **No guarda nada.** Si el usuario acepta:
+  1. `PATCH /api/perfil { ritmo }`;
+  2. `POST /api/eventos` por cada compromiso (clase fija **sin materia** = tiempo ocupado).
+
+**3. Lo que Orbit sabe de ti**
+- `GET /api/perfil/aprendizaje` → `{ conociendo, frases, datos }`: frases en palabras, sin números ni factor personal.
+- `DELETE /api/perfil/aprendizaje` = "Empezar de cero" (olvida horas y horarios aprendidos; tareas, planes y ritmo quedan).
+
+**4. Tu semestre a la vista**
+- `GET /api/perfil/semestre` → `{ semanas, semanaPesada, materiaMasPesada, materias, porPlanificarHoras, proximoExamen }` (próximas 8 semanas).
+- `semanaPesada` trae un `mensaje` listo ("La semana del 23 al 29 nov es la más cargada: ~20 h… Conviene empezar antes.").
+
+---
+
+<a id="novedades-212"></a>
+## ★ Novedades de la v2.12 (18/11/2026) — Calendario Semana y Mes
+
+Respuesta a `claude/traspaso-calendario.md`. **Migración:** `20261118000000_duracion_examen`.
+
+**A. `plan` en cada tarea** (`GET /api/tareas` y `GET /api/agenda`):
+```ts
+plan: { bloques: number; minutos: number; proximo: string | null } | null
+```
+- Cuenta **todos** los bloques guardados (aceptados o cumplidos, pasados y futuros), estén o no en el rango pedido. Los omitidos no cuentan.
+- `proximo`: inicio del primer bloque que todavía no terminó. `null` en `plan` = sin bloques.
+
+**B. `duracionMin`** (solo `examen` y `exposicion`; en otros tipos, `null`). Es lo que **dura** el examen, no las horas de estudio (`duracionEstMin`).
+- Sale de la captura: "de 10:00 a 12:00" (`hora` y `horaFin`) o "dura 2 h". "15 min por grupo" no cuenta. Sin dato, `null`.
+- Viene en los GET y en cada ítem del borrador. Confirmar y `PATCH /api/tareas/{id}` aceptan `duracionMin` (1–600 o `null`).
+- Con hora definida y `duracionMin`, ese tramo cuenta como **ocupado** en la propuesta del plan, en `horasLibres` y al guardar un plan.
+- `fechaLimite` de un examen = **hora de inicio** si `horaDefinida: true`. Con `horaDefinida: false` la hora es interna: no lo dibujes como bloque.
+
+**C. `ventana`** en `GET /api/agenda`: `{ desde: "07:00", hasta: "22:30" }`. Es la que usa Orbit para huecos, sugerencias y
+`horasLibres` (con 15 min de margen y máx. 4 h de estudio por día). Úsala para "X h libres".
+
+**Exámenes siempre como tarea:** si la IA lee como evento algo que se llama examen, parcial, final, control, exposición o defensa,
+se guarda como tarea de ese tipo, con su duración y lo que haya que estudiar.
+
+---
+
+<a id="novedades-211"></a>
+## ★ Novedades de la v2.11 (17/11/2026) — apodo en el perfil
+
+**Migración:** `20261117000000_apodo` (`npx prisma migrate deploy` + `generate`).
+- `usuarios.nombre` es el nombre de registro y **no se edita**. `usuarios.apodo` es cómo quiere el usuario que Orbit lo llame.
+- En toda la app se muestra `apodo || nombre`: el saludo de `/dia` y la cabecera de `/perfil`. Las dos pantallas leen de la tabla `usuarios`.
+- `GET /api/perfil` → `{ nombre, apodo, nombreVisible, correo }`.
+- `PATCH /api/perfil { apodo: string | null }`: hasta 40 caracteres; `""` o `null` quita el apodo. Supabase Auth no se toca,
+  así que el cambio se ve al instante.
+- "Editar perfil" ahora edita el **apodo**. Ya no llama a `supabase.auth.updateUser`.
+
+**Sin "Reabrir" (decisión de JP, 17/11):** lo que pasa se cierra solo y no se reabre a mano.
+- `/dia` muestra en "Ya pasaron" solo lo que pasó **ayer y hoy**. Lo anterior se ve solo en el calendario (semana o mes), tocando la tarea.
+- Si el docente posterga, el usuario **cambia la fecha** (`PATCH { fechaLimite }` a una fecha futura) y la tarea vuelve sola a pendiente.
+- Si igual llega `PATCH { estado: "pendiente" }` sobre una tarea pasada, el back la protege solo ese día y al siguiente la vuelve a cerrar.
+
+---
+
+<a id="novedades-210"></a>
+## ★ Novedades de la v2.10 (10/11/2026) — pantalla "Planificar estudio"
+
+Respuesta a `claude/traspaso-plan-estudio.md`. **Migración:** `20261110010000_origen_bloques` (`npx prisma migrate deploy` + `generate`).
+
+**A. La sugerencia (`GET /api/plan/{tareaId}` → `propuesta`)**
+- Bloques de **1 h o más** (60, 90, 120 min), que **empiezan en :00 o :30**. Los huecos de menos de 1 h no se sugieren.
+- 15 min de margen antes y después de cada clase, evento o bloque de otra actividad (ya existía).
+- Máx. 4 h de estudio y 2 h de la misma materia por día; repartido en varios días.
+- El repaso del día antes del examen dura **1 h** (antes 30 min).
+- Si no alcanza, la propuesta viene incompleta con `faltanMin`. `aviso` sigue llegando; el front puede ignorarlo.
+- **`minutosNecesarios` es exacto**, en la misma base que el chip (`estimado.horas × 60`); antes se redondeaba a la media hora.
+
+**B. Guardar (`POST /api/plan/{tareaId}`)**
+```
+Body: { bloques: [{ inicio, fin, tipo?: "estudio" | "repaso", origen?: "orbit" | "usuario" }] }
+```
+- Inicio y fin en cuartos de hora (:00, :15, :30, :45), de 30 min a 4 h.
+- **400** si un bloque:
+  - empieza antes del cuarto de hora actual;
+  - termina después de la fecha (sin hora definida: fin de ese día);
+  - se cruza con una clase, un evento o un bloque de otra actividad (sin margen: pegado a una clase vale);
+  - se cruza con otro bloque del plan.
+
+  El mensaje dice cuál y con qué, por ejemplo: "Bloque 2 (mié 09:30): se cruza con «Redes II»".
+- El tope de 4 h por día **no** se valida.
+- **Manda `tipo`** para que el repaso no se guarde como estudio. El back usa `tipo`, no `motivo`.
+- **Bloque en curso** (empezó y no terminó): se conserva tal cual y no se edita. Si el front lo reenvía igual, se ignora; si otro bloque lo pisa, 400.
+- Un bloque guardado que ahora está en `conflictos` (cayó encima una clase nueva) da 400 si se reenvía: el usuario tiene que quitarlo o moverlo.
+- `choques` sigue llegando, siempre vacío.
+
+**C. Origen.** Cada bloque guarda `origen` (`orbit` = la sugerencia sin tocar; `usuario` = puesto o ajustado a mano; sin dato = `usuario`).
+Se devuelve en `guardado` y en la respuesta del POST. La Fase 3 lo usa para los votos de franja.
+
+**D. Grilla.** `GET /api/agenda` trae `clases`, `eventos` y `bloques` de todas las actividades (con `tarea.id`: separa los de esta tarea), hasta 62 días.
+Orbit sugiere solo hasta las 22:30; a mano se acepta hasta el final de la grilla.
+
+**E. Plan guardado.** `guardado` y `propuesta` vienen por separado. Cada bloque de `guardado` trae ahora `origen` y `enCurso`.
+El POST reemplaza todos los bloques que todavía no empezaron.
+
+---
+
+<a id="novedades-29"></a>
+## ★ Novedades de la v2.9 (10/11/2026) — tarjeta de tarea en "Tu día"
+
+Respuesta a `claude/traspaso-tarea-dia.md`. Sin migración.
+
+**A. `estimado` en las tareas guardadas.** `GET /api/tareas`, `GET /api/agenda` (sus `tareas`) y las respuestas de
+`POST /api/tareas` y `PATCH /api/tareas/{id}` traen `estimado: { horas, carga, razones }`, igual que el borrador
+(`null` si la tarea no tiene horas).
+- `razones: []` si las horas las puso el usuario (`horasDelUsuario: true`) o si la tarea se creó a mano.
+- Las tareas guardadas desde la v2.4 también traen razones: se calculan con la lectura guardada.
+- **Ya no se devuelve `estimacion`** (interna: dificultad, lectura de la rúbrica, factor personal). No existe `GET /api/tareas/{id}`.
+
+**B. "No te alcanza el tiempo".** `prioridadCalculada` trae dos campos nuevos, en la misma base que el chip (horas netas, sin colchón):
+- `horasLibres`: horas libres reales para esta tarea hasta su fecha y hora. Se calcula con los huecos del horario (tope de 4 h
+  de estudio por día), restando lo que vence antes y sumando los bloques ya planificados de esta tarea.
+- `faltanHoras = max(0, estimado.horas − horasLibres)`.
+- Texto: "Hasta mañana a las 09:00 te queda ~`horasLibres` libre. Te faltarían ~`faltanHoras`".
+  **Borde ámbar si `faltanHoras > 0`** (no usar `sobrecargaHoras`, que lleva colchón y solo sirve para ordenar).
+- Guardar o borrar un plan, o confirmar un borrador, actualiza estos números en la siguiente carga de `/api/tareas`.
+
+**C. Lo que ya pasó (sin cambios, verificado).**
+- Cierre automático: a la hora + 1 h, o al terminar el día si no tiene hora. Queda `estado: "completada"` con `cerradaSolaEn`.
+- `PATCH { estado: "pendiente" }` = **Reabrir**: no se vuelve a cerrar sola.
+- `GET /api/agenda` devuelve las tareas del rango en cualquier estado (máx. 62 días): los últimos 7 días sirven para "Ya pasaron".
+
+---
+
+<a id="novedades-28"></a>
+## ★ Novedades de la v2.8 (10/11/2026) — tarjeta del borrador ("Revisa antes de guardar")
+
+Respuesta al traspaso del chat de front (`claude/traspaso-tarjeta-borrador.md`). Requiere migración: `npx prisma migrate deploy`
+y `npx prisma generate` (con el servidor apagado).
+
+**Campos nuevos por ítem del borrador** (`/api/ia/extraer` y `/api/ia/extraer-imagen`):
+```ts
+{
+  estimado: { horas, carga, razones: string[] },   // tareas. razones: máx. 3, ≤ 60 caracteres, para la burbuja "Por qué ~5 h"
+  tipoSeguro: boolean,                              // false → abrir Detalles con "¿Qué tipo de actividad es?" (eventos/clases: true)
+  notas: { categoria: "llevar" | "temas" | "bibliografia" | "duracion" | "otros"; texto: string }[],
+  origen: string | null,                            // trozo del mensaje del que salió el ítem ("Tu mensaje"); foto/PDF sin datos personales
+  diasClase: number[]                               // tareas: días con clase de su materia (1 = lun … 7 = dom) → puntos del calendario
+}
+```
+- **Razones**: frases simples ("Temas: OSPF, EIGRP y 3 más", "Tiene varias partes y es en grupo"). Sin rangos, posiciones ni factor
+  personal. **Solo se muestran si el usuario toca el chip** (ver guía, regla 3).
+- **`clase`** viene siempre resuelta (tarea, evento o evento_fijo): el front no la pregunta.
+- **Notas**: una nota por tema, por cosa que llevar y por fuente; ya vienen sin repetidas y ordenadas por categoría. Lo que antes
+  llegaba pegado en `descripcion` ("Llevar: …", "Bibliografía: …", "Temas: …") **ya no se pega**: ahora va solo en `notas`.
+  La `descripcion` de la IA sale también como nota `otros`.
+- Ya no viajan al front `estimacion` (la lectura de la rúbrica) ni `preparacion`. `evidencia` sigue por compatibilidad (= `origen`).
+
+**Guardar notas**
+- `POST /api/ia/confirmar`: cada ítem de tarea o evento acepta `notas` (la lista completa, como quedó en la tarjeta). Si no se manda,
+  se guardan las que leyó la IA. Formato inválido → 400.
+- **`descripcion`: ya no hace falta mandarla** (mándala `null`). La descripción de la IA vive como nota `otros`. Si igual llega, el back
+  no la guarda dos veces: la descarta si es igual a una nota o a la descripción original de la IA (así, si el usuario quitó esa nota,
+  no vuelve). Solo se guarda un texto distinto, escrito por el usuario.
+- `PATCH /api/tareas/{id}` y `PATCH /api/eventos-puntuales/{id}` aceptan `notas` (lista completa; `[]` = sin notas).
+- `GET` de tareas, eventos y agenda devuelven `notas` (o `null` si nunca tuvo).
+
+**"Añade algo más" → `POST /api/ia/notas`** (decisión de JP: la IA lo reparte en las mismas categorías)
+```
+Body: { texto: string (1–500), titulo?: string }
+200 { notas: [{ categoria, texto }], ia: boolean }
+```
+- **No guarda nada**: el front agrega las notas a la tarjeta y se guardan al confirmar (o con `PATCH { notas }`).
+- Tarda ~1–3 s. Si la IA falla o pasa de 6 s, devuelve el texto tal cual como una nota `otros` con `ia: false` (nunca error).
+- Mientras espera: mostrar el texto escrito como nota "pendiente" (atenuada) y reemplazarla con lo que llegue.
+
+**Hora de clase al cambiar la fecha → `POST /api/ia/revisar`**
+- Cada tarea trae ahora `horaClase: { inicio, fin, motivo } | null`: la clase de esa materia el día de la fecha, buscada en las
+  clases guardadas **y en las del mismo borrador** (por eso conviene esto y no calcularlo con `/api/eventos`).
+  - Con `horaClase` → "¿Es en horario de clase, 16:00 – 17:30?" · **Sí** / **Otra hora**.
+  - `null` y la tarea tiene materia → "¿A qué hora? No tienes X este día."
+  - Sin materia → no viene `horaClase` útil (`null`): preguntar la hora directamente.
+- También trae `diasClase` (días con clase de esa materia): al cambiar la materia en la tarjeta, actualiza los puntos del calendario.
+- En el borrador inicial sigue `horaPropuesta` (exámenes y exposiciones sin hora), con el mismo formato.
 
 ---
 
@@ -69,7 +270,8 @@
 2. **Cero mantenimiento.** No pedir marcar tareas ni bloques, no confirmar dos veces, nada de notificaciones insistentes.
    Si el usuario no hace nada, todo está bien.
 3. **Solo horas.** Se muestra "~6 h". La dificultad nunca aparece como número ni texto: solo como color (`carga`).
-   Nada de explicaciones del cálculo.
+   Las razones (`estimado.razones`) solo se muestran si el usuario las pide (burbuja al tocar el chip). Nunca el factor
+   personal, rangos ni supuestos de la estimación (v2.8).
 4. **Una acción principal por pantalla.** Lo secundario va como enlace de texto ("Ahora no", "Cancelar").
 5. **Calma.** Animaciones de 400 ms o menos con las clases `orbit-*` existentes; respetar `prefers-reduced-motion`.
 
@@ -138,7 +340,7 @@ La carga se pinta como **punto o borde izquierdo de 3 px**, nunca como etiqueta.
 
 ### Lo que NO hacer
 
-- Mostrar dificultad, razones, supuestos de la estimación o el factor personal.
+- Mostrar dificultad, supuestos de la estimación o el factor personal, o las razones sin que el usuario las pida.
 - Pedir marcar tareas o bloques como hechos, o mostrar rachas o porcentajes de cumplimiento.
 - Mandar notificaciones para la pregunta semanal o para el plan.
 - Abrir la vista del plan sin que el usuario la pida.

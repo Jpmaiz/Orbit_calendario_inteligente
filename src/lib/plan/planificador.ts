@@ -2,10 +2,11 @@
  * Planificador de bloques de estudio (Fase 2). Código puro y determinista: la IA no decide horarios.
  *
  * Reparte las horas estimadas de UNA actividad en los huecos libres antes de su fecha:
- * 1. Bloques de 60 min (50 de estudio + 10 de pausa; Biwer et al., 2023). Media hora como mínimo.
+ * 1. Bloques de 60 min (50 de estudio + 10 de pausa; Biwer et al., 2023). Ningún bloque sugerido dura menos de 1 h
+ *    ni empieza fuera de :00 o :30 (un bloque puede durar 90 o 120 min). A mano, el usuario puede usar huecos más cortos.
  * 2. Máximo 2 h de la misma materia por día y 4 h de estudio en total por día.
  * 3. Examen: en al menos 3 días distintos (estudio espaciado; Cepeda et al., 2006). El último día antes del
- *    examen queda un repaso corto con preguntas. Nunca se estudia el mismo día del examen.
+ *    examen queda un repaso de 1 h con preguntas. Nunca se estudia el mismo día del examen.
  * 4. Los días se eligen repartidos en el rango (no todo al final), y los días más cercanos a la fecha reciben más.
  * 5. Si no alcanza el tiempo, se arma lo que cabe y se dice cuánto falta.
  *
@@ -17,15 +18,16 @@ import { diaLocal, type Hueco, type HuecosDelDia } from './huecos';
 export const CONFIG_PLAN = {
   /** Duración normal de un bloque: 50 min de estudio + 10 de pausa. */
   bloqueMin: 60,
-  /** Unidad mínima de reparto. */
+  /** Unidad de reparto: los bloques duran 60, 90, 120… y empiezan en :00 o :30. */
   pasoMin: 30,
+  /** Ningún bloque sugerido dura menos que esto (ni se sugieren huecos más cortos). */
+  bloqueMinimoMin: 60,
   maxMateriaDiaMin: 120,
   maxEstudioDiaMin: 240,
   /** Un examen se reparte en al menos estos días (incluido el repaso). */
   diasMinimosExamen: 3,
-  /** Repaso del día anterior: 30 min, o 60 si el examen pide 4 h o más. */
-  repasoCortoMin: 30,
-  repasoLargoMin: 60,
+  /** Repaso del día anterior al examen. */
+  repasoMin: 60,
   /** Solo se planifica dentro de los últimos N días antes de la fecha. */
   horizonteDias: 28,
   /** Una entrega con hora: el último bloque termina al menos esto antes. */
@@ -93,7 +95,9 @@ export function planificar(
   config: ConfigPlan = CONFIG_PLAN,
 ): Plan {
   const limite = limiteDePlan(tarea, ctx.zona, config);
-  const necesarios = minutosDe(tarea.horas, config.pasoMin);
+  // Lo que se informa es exacto (misma base que el chip "~5 h 15"); lo que se reparte, en medias horas y al menos 1 bloque
+  const necesariosExactos = Math.max(1, Math.round(tarea.horas * 60));
+  const necesarios = Math.max(config.bloqueMinimoMin, minutosDe(tarea.horas, config.pasoMin));
   const esExamen = tarea.tipo === 'examen';
   const materia = ctx.minutosMateriaPorDia ?? new Map<string, number>();
   const estudio = ctx.minutosEstudioPorDia ?? new Map<string, number>();
@@ -105,7 +109,7 @@ export function planificar(
     .map((d) => {
       const huecos = d.huecos
         .map((h) => recortar(h, ahora, limite, config.pasoMin))
-        .filter((h): h is Hueco => h !== null && h.minutos >= config.pasoMin);
+        .filter((h): h is Hueco => h !== null && h.minutos >= config.bloqueMinimoMin);
       const libres = huecos.reduce((s, h) => s + h.minutos, 0);
       const tope = Math.min(
         config.maxMateriaDiaMin - (materia.get(d.dia) ?? 0),
@@ -124,8 +128,8 @@ export function planificar(
     // 1) Examen: repaso corto el último día útil antes del examen
     let principales = dias;
     // (con un solo día disponible no hay "día anterior": todo es estudio)
-    if (esExamen && necesarios >= 3 * config.pasoMin && dias.length >= 2) {
-      const repaso = Math.min(necesarios >= 240 ? config.repasoLargoMin : config.repasoCortoMin, pendiente);
+    if (esExamen && necesarios >= config.repasoMin + config.bloqueMinimoMin && dias.length >= 2) {
+      const repaso = Math.min(config.repasoMin, pendiente);
       const ultimo = dias[dias.length - 1];
       const puesto = colocar(ultimo, repaso, 'repaso', orden, ctx.zona, config, bloques);
       pendiente -= puesto;
@@ -146,7 +150,8 @@ export function planificar(
       for (const d of ronda) {
         if (pendiente <= 0) break;
         const trozo = Math.min(config.bloqueMin, pendiente, d.cupo - d.asignado);
-        if (trozo >= config.pasoMin) {
+        // Un día recibe al menos 1 h: media hora suelta solo se suma a un día que ya tiene su bloque
+        if (trozo >= config.pasoMin && d.asignado + trozo >= config.bloqueMinimoMin) {
           d.asignado += trozo;
           pendiente -= trozo;
           avanza = true;
@@ -165,22 +170,22 @@ export function planificar(
         .filter((b) => b.tipo === 'estudio' && claveDe(b.inicio, ctx.zona) === d.dia)
         .reduce((s, b) => s + b.minutos, 0);
       const libre = Math.min(d.cupo - usado, pendiente);
-      if (libre >= config.pasoMin) pendiente -= colocar(d, libre - (libre % config.pasoMin), 'estudio', orden, ctx.zona, config, bloques);
+      if (libre >= config.bloqueMinimoMin) pendiente -= colocar(d, libre - (libre % config.pasoMin), 'estudio', orden, ctx.zona, config, bloques);
     }
   }
 
   bloques.sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
   const planificados = bloques.reduce((s, b) => s + b.minutos, 0);
-  const faltan = Math.max(0, necesarios - planificados);
+  const faltan = Math.max(0, necesariosExactos - planificados);
   return {
     bloques: unirSeguidos(bloques),
-    minutosNecesarios: necesarios,
+    minutosNecesarios: necesariosExactos,
     minutosPlanificados: planificados,
     faltanMin: faltan,
     libresAntesMin,
     diasUsados: new Set(bloques.map((b) => claveDe(b.inicio, ctx.zona))).size,
     limite: limite.toISOString(),
-    aviso: faltan > 0 ? avisoFalta(planificados, necesarios, tarea, ctx.zona) : null,
+    aviso: faltan > 0 ? avisoFalta(planificados, necesariosExactos, tarea, ctx.zona) : null,
   };
 }
 
@@ -188,7 +193,8 @@ export function planificar(
 
 function recortar(h: Hueco, ahora: Date, limite: Date, paso: number): Hueco | null {
   const pasoMs = paso * MIN_MS;
-  const ini = Math.max(h.inicio.getTime(), Math.ceil(ahora.getTime() / (15 * MIN_MS)) * 15 * MIN_MS);
+  // La sugerencia empieza siempre en :00 o :30 (los huecos vienen en cuartos de hora)
+  const ini = Math.ceil(Math.max(h.inicio.getTime(), ahora.getTime()) / pasoMs) * pasoMs;
   const fin = Math.min(h.fin.getTime(), limite.getTime());
   const minutos = Math.floor((fin - ini) / pasoMs) * paso;
   return minutos > 0 ? { inicio: new Date(ini), fin: new Date(ini + minutos * MIN_MS), minutos } : null;
@@ -223,11 +229,19 @@ function colocar(
   d: { huecos: Hueco[] }, minutos: number, tipo: BloquePlan['tipo'], orden: Franja[], zona: string,
   config: ConfigPlan, salida: BloquePlan[],
 ): number {
+  const minimo = config.bloqueMinimoMin;
   let resto = minutos;
-  while (resto >= config.pasoMin) {
-    const opcion = mejorLugar(d.huecos, resto, orden, zona, config.pasoMin);
+  while (resto >= minimo) {
+    const opcion = mejorLugar(d.huecos, resto, orden, zona, config.pasoMin, minimo);
     if (!opcion) break;
-    const { hueco, inicio, largo } = opcion;
+    const { hueco, inicio } = opcion;
+    let largo = opcion.largo;
+    // Si sobraría menos de 1 h para otro bloque, se deja 1 h entera para el siguiente (o no se parte)
+    const queda = resto - largo;
+    if (queda > 0 && queda < minimo) {
+      largo = resto - minimo;
+      if (largo < minimo) break;
+    }
     const fin = new Date(inicio.getTime() + largo * MIN_MS);
     salida.push({ inicio, fin, minutos: largo, tipo });
     resto -= largo;
@@ -244,11 +258,11 @@ function colocar(
 }
 
 /** El mejor lugar: un hueco donde quepa todo (si no, el más grande), empezando en la franja preferida. */
-function mejorLugar(huecos: Hueco[], minutos: number, orden: Franja[], zona: string, paso: number) {
+function mejorLugar(huecos: Hueco[], minutos: number, orden: Franja[], zona: string, paso: number, minimo: number) {
   let mejor: { hueco: Hueco; inicio: Date; largo: number; puntaje: number } | null = null;
   for (const h of huecos) {
     const largo = Math.min(minutos, Math.floor(h.minutos / paso) * paso);
-    if (largo < paso) continue;
+    if (largo < minimo) continue;
     // Intentar empezar al inicio de cada franja, en orden de preferencia
     for (let r = 0; r < orden.length; r++) {
       const [fi, ff] = FRANJAS[orden[r]];

@@ -35,6 +35,10 @@ class AdaptadorGemini implements AdaptadorIA {
     return normalizarItems(leerJson(respuesta));
   }
 
+  async jsonDeTexto(prompt: string): Promise<unknown> {
+    return leerJson(await this.generarConReintento(prompt, 2));
+  }
+
   async jsonConImagenes(prompt: string, imagenes: ImagenEntrada[]): Promise<unknown> {
     const partes: Part[] = [
       { text: prompt },

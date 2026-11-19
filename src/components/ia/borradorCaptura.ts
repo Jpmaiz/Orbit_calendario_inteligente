@@ -5,6 +5,11 @@ import type { Estimado } from '@/tipos/tarea';
 import { leerEstimado } from '../estimacion/estimacionFrontend';
 
 export const tiposTarea = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'] as const;
+export const nombresTipo: Record<string, string> = { examen: 'Examen', tarea: 'Tarea', entrega: 'Entrega', proyecto: 'Proyecto', exposicion: 'Exposición' };
+export const CATEGORIAS_NOTA = ['llevar', 'temas', 'bibliografia', 'duracion', 'otros'] as const;
+export type CategoriaNota = (typeof CATEGORIAS_NOTA)[number];
+export type Nota = { categoria: CategoriaNota; texto: string };
+export type HoraClase = { inicio: string; fin: string; motivo: string };
 export type ClaseItem = 'tarea' | 'evento' | 'evento_fijo';
 export type MateriaUsuario = { id: string; nombre: string; codigo: string | null };
 export type MateriaElegida =
@@ -19,6 +24,15 @@ export type PropuestaMateria =
 export type ReferenciaExistente = { clase: 'tarea' | 'evento'; id: string };
 export type ItemExtraido = {
   estimado?: Estimado | null;
+  /** Por qué ~N h: solo se muestran si el usuario toca el chip (guía v2.8, regla 3). */
+  razones: string[];
+  /** false → Detalles se abre con "¿Qué tipo de actividad es?". */
+  tipoSeguro: boolean;
+  notas: Nota[];
+  /** Fragmento del mensaje del que salió el ítem ("Tu mensaje"). */
+  origen: string | null;
+  /** Días con clase de su materia (1 = lun … 7 = dom): puntos del calendario. */
+  diasClase: number[];
   clase: ClaseItem; titulo: string; tipo: string | null; fechaDicha: unknown;
   venceCon: number | null; // Posición del destino en la lista original, nunca un ID.
   hora: string | null; horaFin: string | null; diasSemana: number[];
@@ -27,7 +41,7 @@ export type ItemExtraido = {
   inicio: string | null; fin: string | null; horaDefinida: boolean;
   supuestos: string[]; opcionesFecha: { etiqueta: string; fecha: string }[] | null; faltantes: string[];
   materiaPropuesta: PropuestaMateria;
-  horaPropuesta: { inicio: string; fin: string; motivo: string } | null;
+  horaPropuesta: HoraClase | null;
   vigencia: { desde: string; hasta: string; periodo: string } | null;
   duplicado: { tipoDuplicado: string; pregunta: string; sugerenciasDiferencia?: string[];
     diasExistentes?: number[]; tarea?: { id: string; titulo: string; fechaLimite?: string; horaDefinida?: boolean }; similitud?: number;
@@ -48,6 +62,15 @@ export type ItemRevision = {
   decisionDuplicado: 'pendiente' | 'existente' | 'nueva'; excluido: boolean;
   existenteElegido?: ReferenciaExistente | null; // Omitir no selecciona un existente.
   fechaEditadaManualmente?: boolean; inicioVinculado?: string | null;
+  notas: Nota[];
+  /** Clase de la materia en la fecha elegida (POST /api/ia/revisar). undefined = aún no se revisó. */
+  horaClase?: HoraClase | null;
+  /** Días con clase de la materia elegida, según la última revisión. undefined = los del borrador. */
+  diasClase?: number[];
+  /** La hora salió de "Sí, es en horario de clase": al cambiar la fecha se vuelve a preguntar. */
+  horaDeClase?: boolean;
+  esperandoHoraClase?: boolean;
+  tipoElegido?: boolean;
 };
 export type ResultadoConfirmacion = {
   creados: { tareas: string[]; eventos: string[]; clases: string[]; materias: { id: string; nombre: string }[] };
@@ -81,6 +104,30 @@ function numero(v: unknown): number {
   if (typeof v !== 'number' || !Number.isFinite(v)) throw new Error('El servidor devolvió un número inválido.');
   return v;
 }
+/** Tolerante: descarta lo que no tenga categoría o texto válidos. */
+function leerNotas(v: unknown): Nota[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((x) => {
+    const n = (x ?? {}) as Record<string, unknown>;
+    const ok = (CATEGORIAS_NOTA as readonly string[]).includes(n.categoria as string) && typeof n.texto === 'string' && n.texto.trim();
+    return ok ? [{ categoria: n.categoria as CategoriaNota, texto: (n.texto as string).trim() }] : [];
+  });
+}
+function leerRazones(v: unknown): string[] {
+  const r = v && typeof v === 'object' ? (v as Record<string, unknown>).razones : null;
+  return Array.isArray(r) ? r.filter((x): x is string => typeof x === 'string' && !!x.trim()).slice(0, 3) : [];
+}
+function leerDiasClase(v: unknown): number[] {
+  return Array.isArray(v) ? v.filter((d): d is number => Number.isInteger(d) && d >= 1 && d <= 7) : [];
+}
+function leerHoraClase(v: unknown): HoraClase | null {
+  if (v == null) return null;
+  const h = objeto(v);
+  return { inicio: texto(h.inicio), fin: texto(h.fin), motivo: texto(h.motivo) };
+}
+/** Notas que vienen de "Añade algo más" (POST /api/ia/notas). */
+export function leerNotasIA(v: unknown): Nota[] { return leerNotas(objeto(v).notas); }
+
 function propuesta(v: unknown): PropuestaMateria {
   const p = objeto(v);
   if (p.accion === 'ninguna') return { accion: 'ninguna' };
@@ -163,6 +210,11 @@ export function leerBorrador(v: unknown): Borrador {
       const vg = i.vigencia === null ? null : objeto(i.vigencia);
       return {
         estimado: i.clase === 'tarea' ? leerEstimado(i.estimado) : null,
+        razones: i.clase === 'tarea' ? leerRazones(i.estimado) : [],
+        tipoSeguro: typeof i.tipoSeguro === 'boolean' ? i.tipoSeguro : true,
+        notas: leerNotas(i.notas),
+        diasClase: leerDiasClase(i.diasClase),
+        origen: typeof i.origen === 'string' && i.origen.trim() ? i.origen : typeof i.evidencia === 'string' && i.evidencia.trim() ? i.evidencia : null,
         clase: i.clase, titulo: texto(i.titulo), tipo: nullable(i.tipo), fechaDicha: i.fechaDicha, venceCon,
         hora: nullable(i.hora), horaFin: nullable(i.horaFin), diasSemana: lista(i.diasSemana).map(numero),
         materia: nullable(i.materia), codigoMateria: nullable(i.codigoMateria), descripcion: nullable(i.descripcion),
@@ -173,7 +225,7 @@ export function leerBorrador(v: unknown): Borrador {
           const o = objeto(v); return { etiqueta: texto(o.etiqueta), fecha: fecha(o.fecha) };
         }),
         materiaPropuesta: propuesta(i.materiaPropuesta),
-        horaPropuesta: h ? { inicio: texto(h.inicio), fin: texto(h.fin), motivo: texto(h.motivo) } : null,
+        horaPropuesta: h ? leerHoraClase(h) : null,
         vigencia: vg ? { desde: fecha(vg.desde), hasta: fecha(vg.hasta), periodo: texto(vg.periodo) } : null,
         duplicado: leerDuplicado(i.duplicado),
         choques: lista(i.choques).map((v) => { const c = objeto(v); return { titulo: texto(c.titulo), cuando: texto(c.cuando) }; }),
@@ -225,7 +277,16 @@ export function crearRevision(i: ItemExtraido): ItemRevision {
     vigenciaDesde: i.vigencia ? diaISO(i.vigencia.desde) : '', vigenciaHasta: i.vigencia ? diaISO(i.vigencia.hasta) : '',
     fechaElegida: !i.opcionesFecha?.length, propuestaResuelta: !i.horaPropuesta,
     decisionDuplicado: i.duplicado && i.clase === 'tarea' ? 'pendiente' : 'existente', excluido: false,
+    notas: i.notas.map((n) => ({ ...n })), horaClase: undefined, horaDeClase: false, esperandoHoraClase: false,
+    tipoElegido: i.tipoSeguro,
   };
+}
+/** La pregunta de hora vigente: la de la revisión (si ya hubo) o la del borrador inicial. */
+export function propuestaHora(i: ItemRevision): HoraClase | null {
+  return i.horaClase !== undefined ? i.horaClase : i.original.horaPropuesta;
+}
+export function diasClaseDe(i: ItemRevision): number[] {
+  return i.diasClase ?? i.original.diasClase;
 }
 export function actualizarRevision(items: ItemRevision[], indice: number, cambios: Partial<ItemRevision>): ItemRevision[] {
   const anterior = items[indice];
@@ -351,7 +412,7 @@ export function problemasItem(i: ItemRevision): string[] {
     if (!i.fecha || !inicioDe(i)) problemas.push('¿Para cuándo es? Indica una fecha válida.');
     if (!i.fechaElegida) problemas.push('Elige una de las fechas propuestas o indica otra fecha.');
     if (i.horaDefinida && !esHora(i.hora)) problemas.push('Indica una hora válida.');
-    if (!i.propuestaResuelta && i.original.horaPropuesta) problemas.push('Responde la propuesta de horario.');
+    if (!i.propuestaResuelta) problemas.push(propuestaHora(i) ? 'Responde si es en horario de clase.' : 'Elige la hora o marca «Hora por definir».');
     if (i.clase === 'evento') {
       if (!i.horaDefinida || !esHora(i.hora)) problemas.push('Confirma la hora del evento.');
       if (i.horaFin && (!finDe(i) || !inicioDe(i) || new Date(finDe(i)!) <= new Date(inicioDe(i)!))) problemas.push('El fin del evento debe ser posterior al inicio.');
@@ -368,13 +429,13 @@ function itemParaEnvio(i: ItemRevision, indice: number, existente: ReferenciaExi
   const comunes = { clase: i.clase, titulo: i.titulo.trim(), materia: i.materia, materiaDetectada: i.original.materia, indice };
   if (i.clase === 'tarea') return {
     ...comunes, clase: 'tarea' as const, tipo: i.tipo, inicio: inicioDe(i)!,
-    horaDefinida: i.horaDefinida, descripcion: i.descripcion || null,
+    horaDefinida: i.horaDefinida, descripcion: null, notas: i.notas,
     confirmarNueva: i.decisionDuplicado === 'nueva',
     ...(existente ? { venceConExistente: { clase: existente.clase, id: existente.id } } : {}),
   };
   if (i.clase === 'evento') return {
     ...comunes, clase: 'evento' as const, inicio: inicioDe(i)!, fin: finDe(i),
-    ubicacion: i.ubicacion || null, descripcion: i.descripcion || null,
+    ubicacion: i.ubicacion || null, descripcion: null, notas: i.notas,
   };
   // Conservar los instantes exactos de la vigencia propuesta cuando no se editaron.
   const original = i.original.vigencia;
@@ -406,7 +467,7 @@ export function construirConfirmacion(interpretacionId: string, items: ItemRevis
 }
 
 export type ResultadoRevision = { indice: number } & (
-  | { duplicado: ItemExtraido['duplicado']; choques: ItemExtraido['choques'] }
+  | { duplicado: ItemExtraido['duplicado']; choques: ItemExtraido['choques']; horaClase?: HoraClase | null; diasClase?: number[] }
   | { error: string }
 );
 
@@ -434,7 +495,11 @@ export function leerRevisionCalculada(valor: unknown, cantidad: number): Resulta
       const choque = objeto(valor);
       return { titulo: texto(choque.titulo), cuando: texto(choque.cuando) };
     });
-    return { indice, duplicado, choques };
+    return {
+      indice, duplicado, choques,
+      ...('horaClase' in resultado ? { horaClase: leerHoraClase(resultado.horaClase) } : {}),
+      ...(Array.isArray(resultado.diasClase) ? { diasClase: leerDiasClase(resultado.diasClase) } : {}),
+    };
   });
 }
 
@@ -444,11 +509,15 @@ export function aplicarRevisionCalculada(
   const porIndice = new Map(resultados.map((resultado) => [indices[resultado.indice], resultado]));
   return items.map((item, indice) => {
     const resultado = porIndice.get(indice);
-    if (item.excluido || !resultado || 'error' in resultado) return item;
+    if (!resultado) return item;
+    if ('error' in resultado) return item.esperandoHoraClase ? { ...item, esperandoHoraClase: false, horaClase: null } : item;
+    if (item.excluido) return item;
     const { duplicado, choques } = resultado;
+    const hora = resultado.horaClase !== undefined
+      ? { horaClase: resultado.horaClase, esperandoHoraClase: false } : item.esperandoHoraClase ? { esperandoHoraClase: false } : {};
     const mismaTarea = duplicado?.tarea?.id && duplicado.tarea.id === item.original.duplicado?.tarea?.id;
     return {
-      ...item,
+      ...item, ...hora, ...(resultado.diasClase ? { diasClase: resultado.diasClase } : {}),
       original: { ...item.original, duplicado, choques },
       // Una decisión sobre otra tarea duplicada necesita una nueva confirmación del usuario.
       decisionDuplicado: item.clase !== 'tarea' ? item.decisionDuplicado

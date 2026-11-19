@@ -5,7 +5,7 @@
  *    se agrega una tarea "Preparación: …" que vence cuando empieza el evento. El evento en sí no se prepara (0 h).
  * 2) "venceCon": una entrega que se hace al empezar otro ítem ("entregar al ingresar al examen")
  *    toma la fecha y la hora de ese ítem. Si el examen no tiene hora, la entrega queda "hora por definir".
- * 3) Preparativos y referencias van a la descripción, para que el usuario los vea en el borrador.
+ * 3) Preparativos, referencias y temas ya NO se copian a la descripción: van como notas (src/lib/borrador/notas.ts).
  *
  * La lista que devuelve es la que se guarda en InterpretacionIA: los índices del borrador
  * (y "venceCon") se refieren a ESTA lista.
@@ -21,7 +21,7 @@ export function prepararItems(leidos: ItemExtraido[]): ItemExtraido[] {
     nuevoIndice[i] = salida.length;
     salida.push(it);
     if (it.clase === 'evento' && it.preparacion?.estimacion) {
-      const temas = it.preparacion.estimacion.temas.map((t) => t.nombre);
+      const temas = it.preparacion.estimacion.temas;
       preparaciones.set(salida.length, nuevoIndice[i]);
       salida.push({
         ...it,
@@ -32,11 +32,13 @@ export function prepararItems(leidos: ItemExtraido[]): ItemExtraido[] {
         horaFin: null,
         diasSemana: [],
         ubicacion: null,
-        descripcion: temas.length ? `Temas: ${temas.join(', ')}` : it.preparacion.titulo,
+        descripcion: temas.length ? null : it.preparacion.titulo, // los temas salen como notas
         estimacion: it.preparacion.estimacion,
         preparacion: null,
         preparativos: [],
         referencias: [],
+        duracion: null,
+        tipoSeguro: true,
         venceCon: null,
       });
     }
@@ -66,13 +68,6 @@ export function prepararItems(leidos: ItemExtraido[]): ItemExtraido[] {
       } else {
         item = { ...item, venceCon: null };
       }
-    }
-    const extra = [
-      item.preparativos.length ? `Llevar: ${item.preparativos.join('; ')}` : null,
-      item.referencias.length ? `Bibliografía: ${item.referencias.join('; ')}` : null,
-    ].filter(Boolean);
-    if (extra.length) {
-      item = { ...item, descripcion: [item.descripcion, ...extra].filter(Boolean).join('\n').slice(0, 1000) };
     }
     return item;
   });

@@ -2,9 +2,12 @@
  * Validación de eventos de UNA sola vez (tabla Evento): reunión de grupo, charla, defensa…
  * Las clases semanales (EventoFijo) se validan en validacion/evento.ts.
  */
+import { normalizarNotas, type Nota } from '@/lib/borrador/notas';
+
 export interface DatosEventoPuntual {
   titulo?: string;
   descripcion?: string | null;
+  notas?: Nota[]; // lista completa: reemplaza la guardada ([] = sin notas)
   inicio?: Date;
   fin?: Date | null;
   ubicacion?: string | null;
@@ -39,6 +42,13 @@ export function validarEventoPuntual(body: unknown, modo: 'crear' | 'editar'): R
     datos.titulo = b.titulo.trim();
   } else if (crear) {
     return { ok: false, error: 'Falta el título' };
+  }
+
+  // notas: [{ categoria, texto }] (src/lib/borrador/notas.ts)
+  if (b.notas !== undefined) {
+    const notas = normalizarNotas(b.notas);
+    if (!notas) return { ok: false, error: 'notas debe ser una lista de { categoria, texto } ([] para quitarlas todas)' };
+    datos.notas = notas;
   }
 
   // descripcion

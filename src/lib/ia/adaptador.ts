@@ -9,6 +9,8 @@ export interface AdaptadorIA {
   extraerItems(texto: string, ctx: ContextoExtraccion): Promise<ItemExtraido[]>;
   /** Manda un prompt + imágenes y devuelve el JSON crudo (lo valida quien lo pide). */
   jsonConImagenes(prompt: string, imagenes: ImagenEntrada[]): Promise<unknown>;
+  /** Prompt corto de texto → JSON crudo (lo valida quien lo pide). Un reintento como máximo: tiene que ser rápido. */
+  jsonDeTexto(prompt: string): Promise<unknown>;
 }
 
 /** Algunos modelos envuelven el JSON en ```json ... ```: se limpia antes de leerlo. */

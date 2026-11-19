@@ -1,3 +1,4 @@
+import { normalizarNotas, type Nota } from '@/lib/borrador/notas';
 export const TIPOS = ['examen', 'tarea', 'entrega', 'proyecto', 'exposicion'];
 export const PRIORIDADES = ['alta', 'media', 'baja'];
 export const ESTADOS = ['pendiente', 'en_proceso', 'completada', 'no_realizada'];
@@ -9,6 +10,8 @@ const DURACION_MAX_MIN = 6000;
 export interface DatosTarea {
   titulo?: string;
   descripcion?: string | null;
+  notas?: Nota[]; // lista completa: reemplaza la guardada ([] = sin notas)
+  duracionMin?: number | null; // lo que DURA un examen o exposición (1–600); null = no se sabe
   tipo?: string;
   fechaLimite?: Date;
   horaDefinida?: boolean;         // false = "hora por definir"
@@ -43,6 +46,13 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
     datos.titulo = b.titulo.trim();
   } else if (crear) {
     return { ok: false, error: 'Falta el título' };
+  }
+
+  // notas: [{ categoria, texto }] (src/lib/borrador/notas.ts)
+  if (b.notas !== undefined) {
+    const notas = normalizarNotas(b.notas);
+    if (!notas) return { ok: false, error: 'notas debe ser una lista de { categoria, texto } ([] para quitarlas todas)' };
+    datos.notas = notas;
   }
 
   // descripcion
@@ -89,6 +99,15 @@ export function validarTarea(body: unknown, modo: 'crear' | 'editar'): Resultado
       return { ok: false, error: `Duración inválida (1 a ${DURACION_MAX_MIN} minutos, o null)` };
     }
     datos.duracionEstMin = d as number | null;
+  }
+
+  // duracionMin: lo que dura un examen o exposición (no las horas de estudio). La ruta lo limpia en otros tipos.
+  if (b.duracionMin !== undefined) {
+    const d = b.duracionMin;
+    if (d !== null && (typeof d !== 'number' || !Number.isInteger(d) || d < 1 || d > 600)) {
+      return { ok: false, error: 'duracionMin inválida (1 a 600 minutos, o null)' };
+    }
+    datos.duracionMin = d as number | null;
   }
 
   // dificultad: 1–5 o null

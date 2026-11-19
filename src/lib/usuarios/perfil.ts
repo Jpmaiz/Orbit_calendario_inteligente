@@ -26,7 +26,27 @@ function nombreDe(cuenta: CuentaSupabase, nombre?: string | null): string {
  * Así una cuenta que quedó sin perfil (por ejemplo, porque falló la base justo al registrarse)
  * se repara sola la próxima vez que esa persona entra.
  */
+export const MAX_APODO = 40;
+
+/** Lo que se muestra en toda la app: el apodo si lo tiene, si no el nombre de registro. */
+export function nombreVisible(u: { nombre: string; apodo: string | null }): string {
+  return u.apodo?.trim() || u.nombre;
+}
+
+/** Valida el apodo que manda el perfil. "" o null = quitarlo (vuelve al nombre). undefined = no vino. */
+export function normalizarApodo(v: unknown): { ok: true; apodo: string | null } | { ok: false; error: string } {
+  if (v === null) return { ok: true, apodo: null };
+  if (typeof v !== 'string') return { ok: false, error: 'apodo debe ser texto (o null para quitarlo)' };
+  const apodo = v.replace(/\s+/g, ' ').trim();
+  if (apodo.length > MAX_APODO) return { ok: false, error: `El apodo puede tener hasta ${MAX_APODO} caracteres` };
+  return { ok: true, apodo: apodo || null };
+}
+
+/** Perfiles ya verificados en este proceso: el layout no repite el upsert en cada página. */
+const asegurados = new Set<string>();
+
 export async function asegurarPerfil(cuenta: CuentaSupabase, nombre?: string | null): Promise<boolean> {
+  if (asegurados.has(cuenta.id)) return true;
   if (!cuenta.email) {
     console.error('asegurarPerfil: la cuenta no tiene email', cuenta.id);
     return false;
@@ -37,6 +57,7 @@ export async function asegurarPerfil(cuenta: CuentaSupabase, nombre?: string | n
       update: {}, // si ya existe, no se toca
       create: { id: cuenta.id, email: cuenta.email, nombre: nombreDe(cuenta, nombre) },
     });
+    asegurados.add(cuenta.id);
     return true;
   } catch (error) {
     console.error('asegurarPerfil: no se pudo crear el perfil local de', cuenta.id, error);

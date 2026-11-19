@@ -3,8 +3,9 @@ import type { ResultadoPrioridad } from '@/lib/prioridad';
 export type PrioridadCalculada = ResultadoPrioridad;
 
 export type CargaEstudio = 'ligera' | 'media' | 'pesada';
-export type Estimado = { horas: number; carga: CargaEstudio | null };
-/** Proyección frontend de la duración vigente; estimado no es un campo nuevo del API de tareas. */
+/** razones: solo se muestran si el usuario toca el chip de horas (guía v2.9, regla 3). */
+export type Estimado = { horas: number; carga: CargaEstudio | null; razones?: string[] };
+/** estimado viene del back (v2.9): ya no se calcula desde duracionEstMin y dificultad. */
 export type EstimacionTarea = {
   duracionEstMin?: number | null; horasDelUsuario?: boolean; estimado?: Estimado | null;
 };

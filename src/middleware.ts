@@ -25,9 +25,9 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims(): verifica (y refresca) la sesión sin ir al servidor de Auth en cada navegación
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims?.sub ? data.claims : null;
 
   // Si no hay sesión y quiere entrar al dashboard → login
   if (!user && !request.nextUrl.pathname.startsWith('/login') && !request.nextUrl.pathname.startsWith('/registro')) {

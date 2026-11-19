@@ -1,12 +1,12 @@
-﻿import { connection } from 'next/server';
+import { connection } from 'next/server';
 import AgendaSemanaVista from '@/components/calendario/AgendaSemanaVista';
 
-export default async function PaginaSemana() {
+export default async function PaginaSemana({ searchParams }: { searchParams: Promise<{ dia?: string | string[] }> }) {
   await connection();
-  return <div className="min-w-0 space-y-4 md:space-y-5">
-    <header>
-      <h1 className="text-sm font-semibold text-[#708070]">Calendario</h1>
-    </header>
-    <AgendaSemanaVista fechaActual={new Date().toISOString()} />
+  // Desde Mes, «Ver el día en Semana» llega con ?dia=AAAA-MM-DD.
+  const { dia } = await searchParams;
+  const diaInicial = typeof dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dia) && !Number.isNaN(Date.parse(dia)) ? dia : null;
+  return <div className="min-w-0">
+    <AgendaSemanaVista fechaActual={new Date().toISOString()} diaInicial={diaInicial} />
   </div>;
 }

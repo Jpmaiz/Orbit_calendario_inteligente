@@ -3,10 +3,12 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
-import IconoDashboard from './IconoDashboard';
+import IconoNavegacion from './IconoNavegacion';
+import Dodecaedro from '../marca/Dodecaedro';
 import CapturaRapida, { ORBIT_AGREGADO } from '@/components/ia/CapturaRapida';
 
 type Panel = 'Orbit';
+type Pestaña = 'dia' | 'calendario' | 'perfil';
 
 export default function ControlesDashboard({
   ubicacion,
@@ -24,6 +26,10 @@ export default function ControlesDashboard({
   const [orbitOcupado, establecerOrbitOcupado] = useState(false);
   // "+14" sobre Calendario cuando Orbit acaba de agregar algo
   const [nuevos, establecerNuevos] = useState<number | null>(null);
+  // La pestaña tocada se enciende al instante, sin esperar a que cargue la ruta; vale mientras la ruta no cambie.
+  const [toque, establecerToque] = useState<{ desde: string; hacia: Pestaña } | null>(null);
+  const pendiente = toque && toque.desde === ruta ? toque.hacia : null;
+  const activa: Pestaña | null = panelAbierto ? null : pendiente ?? (esCalendario ? 'calendario' : esPerfil ? 'perfil' : 'dia');
 
   useEffect(() => {
     if (ubicacion !== 'navegacion') return;
@@ -49,28 +55,31 @@ export default function ControlesDashboard({
   const estiloNavegacion = (activo: boolean) =>
     'flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-xs font-medium transition-colors ' +
     (activo ? 'bg-[#EAF0E5] text-[#245B4C] ' : 'text-[#78827B] hover:text-[#245B4C] ') + foco;
+  // Home, Calendario y Perfil: sin fondo; color, peso y animación salen de `orbit-nav` (globals.css) con aria-current.
+  const estiloPestaña = 'orbit-nav flex min-h-16 min-w-0 flex-col items-center justify-center gap-1 rounded-2xl text-xs ' + foco;
 
   return (
     <>
       {ubicacion === 'selector' ? null : (
         <>
-          <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
+          <nav aria-label="Navegación principal" className="orbit-barra fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
             <div className="mx-auto grid w-full grid-cols-4 px-4 py-2 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8">
-              <Link href="/dia" aria-current={!panelAbierto && !esCalendario && !esPerfil ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && !esCalendario && !esPerfil)}>
-                <span className="flex h-8 items-center"><IconoDashboard nombre="home" /></span>
+              <Link href="/dia" onClick={() => establecerToque({ desde: ruta, hacia: 'dia' })} aria-current={activa === 'dia' ? 'page' : undefined} className={estiloPestaña}>
+                <span className="orbit-nav-icono"><IconoNavegacion nombre="home" /></span>
                 Home
               </Link>
-              <Link href="/semana" onClick={() => establecerNuevos(null)} aria-current={!panelAbierto && esCalendario ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && esCalendario) + ' relative'}>
-                <span className="flex h-8 items-center"><IconoDashboard nombre="calendario" /></span>
+              <Link href="/semana" onClick={() => { establecerNuevos(null); establecerToque({ desde: ruta, hacia: 'calendario' }); }} aria-current={activa === 'calendario' ? 'page' : undefined} className={estiloPestaña + ' relative'}>
+                <span className="orbit-nav-icono"><IconoNavegacion nombre="calendario" /></span>
                 Calendario
                 {nuevos !== null && <span aria-label={`${nuevos} nuevos`} className="orbit-pop absolute right-[calc(50%-1.9rem)] top-1.5 rounded-full bg-[#234F45] px-1.5 py-px text-[10px] font-bold text-white">+{nuevos}</span>}
               </Link>
               <button type="button" onClick={() => abrirPanel('Orbit')} aria-expanded={panelAbierto && panel === 'Orbit'} aria-label="Orbit: agregar tareas, clases o eventos" className={'orbit-boton ' + (panelAbierto && panel === 'Orbit' ? estiloNavegacion(true) : estiloNavegacion(false).replace('text-[#78827B]', 'text-[#35695D]'))}>
-                <span className="flex h-8 items-center"><IconoDashboard nombre="orbit" className="h-6 w-6" /></span>
+                {/* Logo de Orbit: gira lento y acelera mientras el panel está abierto */}
+                <span className="orbit-anillo relative flex h-8 w-8 items-center justify-center"><Dodecaedro className="h-7 w-7" girando rapido={panelAbierto && panel === 'Orbit'} /></span>
                 Orbit
               </button>
-              <Link href="/perfil" aria-current={!panelAbierto && esPerfil ? 'page' : undefined} className={estiloNavegacion(!panelAbierto && esPerfil)}>
-                <span className="flex h-8 items-center"><IconoDashboard nombre="perfil" /></span>
+              <Link href="/perfil" onClick={() => establecerToque({ desde: ruta, hacia: 'perfil' })} aria-current={activa === 'perfil' ? 'page' : undefined} className={estiloPestaña}>
+                <span className="orbit-nav-icono"><IconoNavegacion nombre="perfil" /></span>
                 Perfil
               </Link>
             </div>

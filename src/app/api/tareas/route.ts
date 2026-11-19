@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
+import { cargarTareas } from '@/lib/agenda/consultas';
 import { validarTarea } from '@/lib/validacion/tarea';
-import { CONFIG_PRIORIDAD, priorizarTareas } from '@/lib/prioridad';
-import { cargarContextoPlan } from '@/lib/plan/cargar';
-import { horasLibresPorDia } from '@/lib/plan/huecos';
-import { CONFIG_PLAN } from '@/lib/plan/planificador';
-import { cerrarVencidas } from '@/lib/tareas/cierre';
+import { tareaPublica } from '@/lib/estimacion/publico';
+import { tieneDuracion } from '@/lib/tareas/duracion';
 import { buscarDuplicada } from '@/lib/tareas/duplicados';
 import { DIFERENCIAS_POR_TIPO, preguntaDuplicado } from '@/lib/tareas/comparar';
 
@@ -18,26 +16,7 @@ export async function GET() {
   }
 
   try {
-    // Lo que ya pasó se da por hecho (Fase 3): el usuario no tiene que marcar nada
-    await cerrarVencidas(user.id);
-    const tareas = await prisma.tarea.findMany({
-      where: { usuarioId: user.id, eliminadoEn: null },
-      orderBy: { fechaLimite: 'asc' },
-      include: { materia: { select: { id: true, nombre: true, color: true } } },
-    });
-    // Horas de estudio por día: las reales (huecos de las próximas 2 semanas, con tope de 4 h), no un 3 fijo
-    let horasEstudioPorDia = CONFIG_PRIORIDAD.horasEstudioPorDia;
-    try {
-      const ahora = new Date();
-      const ctx = await cargarContextoPlan(user.id, ahora, new Date(ahora.getTime() + 14 * 86_400_000), ahora);
-      horasEstudioPorDia = Math.max(0.5, horasLibresPorDia(ctx.dias, CONFIG_PLAN.maxEstudioDiaMin / 60));
-    } catch (error) {
-      console.error('Capacidad de estudio: se usa el valor por defecto', error);
-    }
-    return NextResponse.json({
-      tareas: priorizarTareas(tareas, new Date(), { ...CONFIG_PRIORIDAD, horasEstudioPorDia }),
-      horasEstudioPorDia,
-    });
+    return NextResponse.json(await cargarTareas(user.id));
   } catch (error) {
     console.error('Error GET /api/tareas:', error);
     return NextResponse.json({ error: 'Error al obtener tareas' }, { status: 500 });
@@ -106,6 +85,7 @@ export async function POST(req: NextRequest) {
         ...resto,
         // Si el usuario escribió las horas, son suyas: ninguna estimación las reemplaza
         horasDelUsuario: resto.duracionEstMin != null,
+        duracionMin: tieneDuracion(tipo) ? resto.duracionMin ?? null : null, // solo examen y exposición
         titulo: titulo!,
         tipo: tipo!,
         fechaLimite: fechaLimite!,
@@ -113,7 +93,7 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    return NextResponse.json({ tarea }, { status: 201 });
+    return NextResponse.json({ tarea: tareaPublica(tarea) }, { status: 201 });
   } catch (error) {
     console.error('Error POST /api/tareas:', error);
     return NextResponse.json({ error: 'Error al crear la tarea' }, { status: 500 });

@@ -78,6 +78,12 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
   const enCurso = useRef(false);
   const materiasEnCurso = useRef(false);
   const tituloResultado = useRef<HTMLHeadingElement>(null);
+  // Revisión silenciosa de la hora de clase al cambiar fecha o materia (no bloquea la tarjeta).
+  const itemsActuales = useRef<ItemRevision[]>([]);
+  const relojHora = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const turnoHora = useRef(0);
+  useEffect(() => { itemsActuales.current = items; }, [items]);
+  useEffect(() => () => { if (relojHora.current) clearTimeout(relojHora.current); }, []);
 
   const dictado = useDictado((dicho) => establecerTexto((t) => (t.trim() ? t.trim() + ' ' : '') + dicho));
 
@@ -202,6 +208,31 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
     establecerEstadoRevision(null);
     establecerCorregida(true);
     establecerError(null);
+    if (cambios.esperandoHoraClase) programarRevisionHora();
+  }
+
+  /** POST /api/ia/revisar → horaClase de cada tarea ("¿Es en horario de clase?" / "¿A qué hora?"). */
+  function programarRevisionHora() {
+    if (relojHora.current) clearTimeout(relojHora.current);
+    relojHora.current = setTimeout(async () => {
+      const turno = ++turnoHora.current;
+      const sinRespuesta = () => establecerItems((actuales) => actuales.map((item) =>
+        item.esperandoHoraClase ? { ...item, esperandoHoraClase: false, horaClase: null } : item));
+      let solicitud: ReturnType<typeof construirSolicitudRevision>;
+      try {
+        solicitud = construirSolicitudRevision(itemsActuales.current);
+      } catch {
+        sinRespuesta();
+        return;
+      }
+      try {
+        const resultados = leerRevisionCalculada(await consultar('/api/ia/revisar', solicitud.body), solicitud.indices.length);
+        if (turno !== turnoHora.current) return;
+        establecerItems((actuales) => aplicarRevisionCalculada(actuales, solicitud.indices, resultados));
+      } catch {
+        if (turno === turnoHora.current) sinRespuesta();
+      }
+    }, 350);
   }
 
   async function revisarCambios() {
@@ -296,6 +327,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
   const incluidos = items.filter((i) => !i.excluido);
   const erroresVinculos = problemasVinculos(items);
   const pendientes = incluidos.some((i) => problemasItem(i).length > 0) || erroresVinculos.length > 0;
+  const faltaHora = incluidos.some((i) => i.clase !== 'evento_fijo' && !i.propuestaResuelta);
   const ocupada = enviando !== null || guardandoPeriodo;
   const esHorario = !!borrador && documento?.tipo === 'horario' && items.some((i) => i.clase === 'evento_fijo');
   const leyendo = enviando === 'extraer';
@@ -454,7 +486,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
             {esHorario && documento
               ? <BorradorHorario items={items} materias={materias} documento={documento} cambiar={cambiarItem} />
               : items.map((item, indice) => <div key={indice} className="orbit-aparece" style={{ ['--i' as string]: indice }}>
-                <TarjetaBorrador item={item} indice={indice} materias={materias} cambiar={(cambios) => cambiarItem(indice, cambios)} />
+                <TarjetaBorrador item={item} indice={indice} total={items.length} materias={materias} cambiar={(cambios) => cambiarItem(indice, cambios)} />
               </div>)}
           </fieldset>
 
@@ -462,7 +494,10 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
             {erroresVinculos.map((mensaje) => <li key={mensaje}>{mensaje}</li>)}
           </ul>}
           {incluidos.length === 0 && <p className="text-sm text-[#657360]">{items.length ? 'Quitaste todo: no hay nada que agregar.' : 'No encontré nada que agregar. Prueba escribiéndolo de otra forma.'}</p>}
-          {pendientes && <p className="text-xs font-medium text-[#A34955]">Completa lo marcado o quítalo para continuar.</p>}
+          {pendientes && <p aria-live="polite" className="flex items-center gap-2 text-[13px] text-[#916820]">
+            <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C5A355]" />
+            {faltaHora ? 'Responde la pregunta de la hora para guardar.' : 'Completa lo marcado o quítalo para continuar.'}
+          </p>}
           {corregida && <button type="button" className="min-h-9 text-xs font-semibold text-[#35695D] underline-offset-4 hover:underline" disabled={ocupada || incluidos.length === 0 || incluidos.length > 20} onClick={() => void revisarCambios()}>
             {enviando === 'revisar' ? 'Revisando…' : 'Volver a revisar duplicados y choques'}
           </button>}

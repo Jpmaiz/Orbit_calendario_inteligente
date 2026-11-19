@@ -233,6 +233,76 @@ export function estimar(tipo: string, lectura: LecturaEstimacion | null): Estima
   return { horas, minutos: Math.round(horas * 60), dificultad, importancia, origen: 'ia', escala, rango, razones, supuestos };
 }
 
+// ───────────────────────── Razones para el usuario ─────────────────────────
+
+const MAX_RAZONES = 3;
+const MAX_LARGO_RAZON = 60;
+
+/** "Cubre Cardio, Digestivo y 2 más" sin pasar el largo máximo. */
+function listaCorta(prefijo: string, nombres: string[], max = MAX_LARGO_RAZON): string {
+  for (let n = nombres.length; n >= 1; n--) {
+    const resto = nombres.length - n;
+    const visibles = nombres.slice(0, n);
+    const lista = resto > 0
+      ? `${visibles.join(', ')} y ${resto} más`
+      : visibles.length > 1 ? `${visibles.slice(0, -1).join(', ')} y ${visibles[visibles.length - 1]}` : visibles[0];
+    const frase = `${prefijo}${lista}`;
+    if (frase.length <= max) return frase;
+  }
+  return `${prefijo}${nombres.length} temas`.slice(0, max);
+}
+
+/**
+ * Hasta 3 frases cortas para la burbuja "Por qué ~5 h" (solo se muestran si el usuario las pide).
+ * Sin rangos, posiciones ni números internos de la rúbrica, y sin el factor personal.
+ * Las cantidades del propio trabajo ("20 diapositivas") sí: las dijo el docente.
+ */
+export function razonesParaUsuario(tipo: string, lectura: LecturaEstimacion | null): string[] {
+  const escala = tipo === 'examen' ? lectura?.escala ?? null : null;
+  if (!lectura) {
+    return ['Estimación general para este tipo de actividad', 'El mensaje no dice qué temas entran'];
+  }
+  const r: string[] = [];
+
+  // 1) Lo que más pesa: el alcance
+  if (escala === 'final') r.push('Examen final: integra todo el semestre');
+  if (escala === 'control') r.push('Es un control: suele entrar poco');
+  const c = lectura.cantidades;
+  const cantidades = [
+    c.paginasLeer ? plural(c.paginasLeer, 'página a leer', 'páginas a leer') : null,
+    c.paginasEscribir ? plural(c.paginasEscribir, 'página a escribir', 'páginas a escribir') : null,
+    c.ejercicios ? plural(c.ejercicios, 'ejercicio', 'ejercicios') : null,
+    c.diapositivas ? plural(c.diapositivas, 'diapositiva', 'diapositivas') : null,
+    c.minutosExposicion ? `${c.minutosExposicion} min de exposición` : null,
+  ].filter((x): x is string => !!x);
+  if (cantidades.length) {
+    const frase = cantidades.join(', ');
+    r.push((frase.charAt(0).toUpperCase() + frase.slice(1)).slice(0, MAX_LARGO_RAZON));
+  } else if (lectura.temas.length) {
+    const amplios = lectura.temas.some((t) => t.amplitud === 'amplio');
+    const frase = listaCorta(lectura.temas.length === 1 ? 'Tema: ' : 'Temas: ', lectura.temas.map((t) => t.nombre));
+    r.push(amplios && lectura.temas.length === 1 ? `${frase} (tema amplio)`.slice(0, MAX_LARGO_RAZON) : frase);
+  } else if (lectura.volumen === 'alto') {
+    r.push('Es un trabajo extenso');
+  } else if (lectura.volumen === 'bajo') {
+    r.push('Es un trabajo corto');
+  } else if (escala !== 'final') {
+    r.push('El mensaje no dice qué temas entran');
+  }
+
+  // 2) Lo que lo hace más exigente
+  if (lectura.nivelCognitivo === 4) r.push('Pide crear o diseñar algo propio');
+  else if (lectura.nivelCognitivo === 3) r.push('Pide analizar, comparar o defender');
+  if (lectura.partes && lectura.grupal) r.push('Tiene varias partes y es en grupo');
+  else if (lectura.partes) r.push('Tiene varias partes');
+  else if (lectura.grupal) r.push('Es en grupo: coordinar toma tiempo');
+  if (lectura.formato === 'oral') r.push('Hay que exponerlo');
+  else if (lectura.formato === 'practico') r.push('Es práctico: hay que ensayarlo');
+  if (lectura.claridad === 'baja') r.push('Las instrucciones no son del todo claras');
+
+  return r.slice(0, MAX_RAZONES);
+}
+
 /** Carga visible para el front, solo como color: ligera (dificultad 1–2), media (3 o sin dato), pesada (4–5). */
 export type Carga = 'ligera' | 'media' | 'pesada';
 export function cargaDe(dificultad: number | null): Carga {

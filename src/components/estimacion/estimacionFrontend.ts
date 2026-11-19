@@ -10,18 +10,18 @@ export function leerEstimado(valor: unknown): Estimado | null {
   if (typeof e.horas !== 'number' || !Number.isFinite(e.horas) || e.horas <= 0) return null;
   return { horas: e.horas, carga: carga(e.carga) };
 }
+/** Tarea guardada (v2.9): el back manda estimado { horas, carga, razones } o null. */
 export function leerEstimacionTarea(datos: Record<string, unknown>): EstimacionTarea {
   const duracion = datos.duracionEstMin;
   const minutos = typeof duracion === 'number' && Number.isInteger(duracion) && duracion > 0 ? duracion : null;
-  const d = datos.dificultad;
-  // Misma correspondencia que cargaDe en la rúbrica de JP; sin inferir una dificultad.
-  const nivel = d === null ? 'media' : typeof d === 'number' && Number.isInteger(d) && d >= 1 && d <= 5
-    ? d <= 2 ? 'ligera' : d >= 4 ? 'pesada' : 'media' : null;
+  const base = leerEstimado(datos.estimado);
+  const e = datos.estimado as Record<string, unknown> | null | undefined;
+  const razones = Array.isArray(e?.razones)
+    ? e.razones.filter((r): r is string => typeof r === 'string' && !!r.trim()).slice(0, 3) : [];
   return {
     duracionEstMin: minutos,
     horasDelUsuario: typeof datos.horasDelUsuario === 'boolean' ? datos.horasDelUsuario : undefined,
-    // La duración vigente manda, incluso si el JSON interno conserva una estimación anterior.
-    estimado: minutos === null ? null : { horas: minutos / 60, carga: nivel },
+    estimado: base ? { ...base, razones } : null,
   };
 }
 export function formatearHoras(horas: number): string | null {

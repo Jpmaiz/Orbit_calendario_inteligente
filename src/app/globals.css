@@ -8,8 +8,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-jakarta);
+  --font-mono: var(--font-jakarta);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,7 +22,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-jakarta), system-ui, sans-serif;
 }
 
 /* ───────────── Orbit: animaciones de la captura (botón Orbit y su hoja) ───────────── */
@@ -41,11 +41,12 @@ body {
 .orbit-planeta { transform-origin: 12px 12px; animation: orbit-orbita 9s linear infinite; }
 .orbit-boton[aria-expanded="true"] .orbit-planeta { animation-duration: 1.4s; }
 .orbit-boton { position: relative; }
-.orbit-boton::after {
-  content: ""; position: absolute; left: 50%; top: 10px; width: 34px; height: 34px; margin-left: -17px; border-radius: 9999px;
+/* Anillo que late desde el centro del logo (el span que envuelve al dodecaedro). */
+.orbit-anillo::after {
+  content: ""; position: absolute; inset: -1px; border-radius: 9999px;
   border: 2px solid #35695D; opacity: 0; pointer-events: none; animation: orbit-latido 3.4s ease-out 1.5s infinite;
 }
-.orbit-boton[aria-expanded="true"]::after { animation: none; }
+.orbit-boton[aria-expanded="true"] .orbit-anillo::after { animation: none; }
 dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1.05); }
 .orbit-aparece { animation: orbit-aparece .35s ease-out both; animation-delay: calc(var(--i, 0) * 60ms); }
 .orbit-pop { animation: orbit-pop .35s cubic-bezier(.2, 1.5, .4, 1) both; animation-delay: calc(var(--i, 0) * 45ms); }
@@ -56,8 +57,72 @@ dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1
 .orbit-gira { animation: orbit-gira .8s linear infinite; }
 .orbit-traza { stroke-dasharray: 30; stroke-dashoffset: 30; animation: orbit-traza .4s .25s forwards; }
 
+/* ───────────── Orbit: "órbita del día" en /dia (arco de 07:00 a 23:00) ───────────── */
+@keyframes orbit-dia-sube { from { opacity: 0; transform: translateY(14px); } }
+@keyframes orbit-dia-aparece { from { opacity: 0; } }
+@keyframes orbit-dia-dibuja { from { stroke-dashoffset: 1; } }
+@keyframes orbit-dia-halo { 0% { opacity: .55; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(2.8); } }
+.orbit-dia-sube { animation: orbit-dia-sube .4s cubic-bezier(.2, .8, .2, 1) both; animation-delay: var(--t, 0ms); }
+.orbit-dia-aparece { animation: orbit-dia-aparece .4s ease-out both; animation-delay: var(--t, 0ms); }
+.orbit-dia-tramo { stroke-dasharray: 1 1; animation: orbit-dia-dibuja .32s cubic-bezier(.3, .7, .2, 1) both; animation-delay: var(--t, 0ms); }
+.orbit-dia-halo { transform-box: fill-box; transform-origin: center; animation: orbit-dia-halo 2.8s ease-out 1s infinite; }
+@keyframes orbit-dia-llena { from { height: 0; } }
+.orbit-dia-llena { animation: orbit-dia-llena .4s cubic-bezier(.3, .7, .2, 1) .3s both; }
+
+/* ───────────── Barra de navegación: pestañas con facetas (Home, Calendario, Perfil) ─────────────
+   Se encienden con aria-current="page": 1) el borde se entinta, 2) la cara se llena y la cruza un brillo,
+   3) cada ícono hace su gesto. Al salir se apagan al revés. Orbit tiene su propio estilo (arriba). */
+.orbit-nav { color: #647168; font-weight: 500; transition: color .48s ease, font-weight .48s ease; }
+.orbit-nav:hover { color: #245B4C; }
+.orbit-nav[aria-current="page"] { color: #245B4C; font-weight: 680; }
+.orbit-nav-icono { display: flex; height: 32px; width: 32px; align-items: center; justify-content: center; transition: transform .16s ease; }
+.orbit-nav:active .orbit-nav-icono { transform: scale(.9); }
+.orbit-nav svg * { transform-box: fill-box; }
+
+.orbit-nav-base { stroke: #647168; stroke-width: 1.6; transition: stroke .3s ease; }
+.orbit-nav:hover .orbit-nav-base { stroke: #4C6A5D; }
+.orbit-nav-tinta { stroke: #245B4C; stroke-width: 1.7; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset .48s cubic-bezier(.4, 0, .6, 1); }
+.orbit-nav[aria-current="page"] .orbit-nav-tinta { stroke-dashoffset: 0; transition: stroke-dashoffset .72s cubic-bezier(.45, .05, .25, 1); }
+
+.orbit-nav-cara { fill: #D5E8DC; transform-origin: 50% 100%; transform: scaleY(0); transition: transform .4s cubic-bezier(.5, 0, .75, 0); }
+.orbit-nav[aria-current="page"] .orbit-nav-cara { transform: scaleY(1); transition: transform .64s cubic-bezier(.2, .9, .3, 1) .12s; }
+.orbit-nav-brillo { fill: #fff; opacity: 0; }
+.orbit-nav[aria-current="page"] .orbit-nav-brillo { animation: orbit-nav-brillo .6s ease-out .2s both; }
+
+.orbit-nav-detalle { stroke: #647168; stroke-width: 1.6; transition: stroke .4s ease .24s; }
+.orbit-nav:hover .orbit-nav-detalle { stroke: #4C6A5D; }
+.orbit-nav[aria-current="page"] .orbit-nav-detalle { stroke: #245B4C; }
+.orbit-nav-puerta { transform-origin: 50% 100%; }
+.orbit-nav[aria-current="page"] .orbit-nav-puerta { animation: orbit-nav-puerta .56s cubic-bezier(.2, 1, .3, 1) .22s both; }
+.orbit-nav[aria-current="page"] .orbit-nav-anillas { animation: orbit-nav-anillas .6s ease-out .12s both; }
+.orbit-nav-gema { fill: #647168; stroke: #647168; stroke-width: 1; transform-origin: 50% 50%; transition: fill .4s ease, stroke .4s ease; }
+.orbit-nav[aria-current="page"] .orbit-nav-gema { fill: #245B4C; stroke: #245B4C; animation: orbit-nav-gema .68s cubic-bezier(.2, 1.1, .3, 1) .16s both; }
+.orbit-nav[aria-current="page"] .orbit-nav-asiente { animation: orbit-nav-asiente .64s ease-in-out .2s both; }
+
+@keyframes orbit-nav-brillo { 0% { opacity: 0; transform: translateX(0); } 35% { opacity: .75; } 100% { opacity: 0; transform: translateX(38px); } }
+/* La puerta se encoge y se estira (parte de su tamaño, sin saltos); la gema gira una cara: 72° la deja igual. */
+@keyframes orbit-nav-puerta { 0% { transform: scaleY(1); } 30% { transform: scaleY(.45); } 70% { transform: scaleY(1.12); } 100% { transform: scaleY(1); } }
+@keyframes orbit-nav-anillas { 0% { transform: translateY(0); } 35% { transform: translateY(1.6px); } 70% { transform: translateY(-.5px); } 100% { transform: translateY(0); } }
+@keyframes orbit-nav-gema { 0% { transform: rotate(0) scale(1); } 25% { transform: rotate(-10deg) scale(.8); } 75% { transform: rotate(80deg) scale(1.15); } 100% { transform: rotate(72deg) scale(1); } }
+@keyframes orbit-nav-asiente { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-1.5px); } 70% { transform: translateY(.4px); } }
+
+/* Perfil: la rueda del semestre entra girando. */
+@keyframes orbit-rueda { from { opacity: 0; transform: rotate(-90deg) scale(.6); } }
+.orbit-rueda { transform-origin: 50% 50%; animation: orbit-rueda .7s cubic-bezier(.2, .9, .25, 1) .12s both; }
+
 @media (prefers-reduced-motion: reduce) {
-  .orbit-planeta, .orbit-boton::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
+  .orbit-rueda { animation: none; }
+  .orbit-nav, .orbit-nav *, .orbit-nav-icono { animation: none !important; transition: none !important; }
+  .orbit-dia-sube, .orbit-dia-aparece, .orbit-dia-tramo, .orbit-dia-halo, .orbit-dia-llena { animation: none; }
+  .orbit-planeta, .orbit-anillo::after, .orbit-scan-v, .orbit-scan-h { animation: none; }
   dialog.orbit-hoja[open], .orbit-aparece, .orbit-pop, .orbit-bloque, .orbit-papel { animation: none; }
   .orbit-traza { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Barra de navegación proporcional a la pantalla: 12 px en un celular chico, hasta 15 px en tablet o escritorio.
+   Todo se mide en em, así íconos, texto y alto crecen juntos. */
+.orbit-barra { font-size: clamp(12px, 3.4vw, 15px); }
+.orbit-barra a, .orbit-barra button { min-height: 5.2em; font-size: 1em; }
+.orbit-barra .orbit-nav-icono, .orbit-barra .orbit-anillo { height: 2.6em; width: 2.6em; }
+.orbit-barra .orbit-nav-icono svg { height: 1.9em; width: 1.9em; }
+.orbit-barra .orbit-anillo svg { height: 2.25em; width: 2.25em; }

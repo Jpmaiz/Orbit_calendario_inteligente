@@ -137,6 +137,29 @@ export function proponerHoraDesdeHorario(
   return null;
 }
 
+/**
+ * Días de la semana (1 = lunes … 7 = domingo) en que hay clase de esa materia: para los puntos del calendario
+ * de la tarjeta. Clases guardadas que no terminaron y clases del mismo texto (materia nueva, por nombre).
+ */
+export function diasDeClase(
+  materia: PropuestaMateria,
+  clasesGuardadas: ClaseFija[],
+  clasesDelTexto: { materiaClave: string | null; diasSemana: number[] }[],
+  materiaClaveDelItem: string | null,
+  ahora: Date,
+): number[] {
+  const dias = new Set<number>();
+  if (materia.accion === 'vincular') {
+    for (const c of clasesGuardadas) {
+      if (c.materiaId === materia.materiaId && (!c.vigenteHasta || c.vigenteHasta >= ahora)) dias.add(c.diaSemana);
+    }
+  }
+  if (materiaClaveDelItem) {
+    for (const c of clasesDelTexto) if (c.materiaClave === materiaClaveDelItem) c.diasSemana.forEach((d) => dias.add(d));
+  }
+  return [...dias].sort((a, b) => a - b);
+}
+
 // ───────────────────────── 3. Choques de horario ─────────────────────────
 
 export type Choque = { titulo: string; cuando: string };
