@@ -118,3 +118,11 @@ dialog.orbit-hoja[open] { animation: orbit-hoja .42s cubic-bezier(.2, .9, .25, 1
   dialog.orbit-hoja[open], .orbit-aparece, .orbit-pop, .orbit-bloque, .orbit-papel { animation: none; }
   .orbit-traza { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Barra de navegación proporcional a la pantalla: 12 px en un celular chico, hasta 15 px en tablet o escritorio.
+   Todo se mide en em, así íconos, texto y alto crecen juntos. */
+.orbit-barra { font-size: clamp(12px, 3.4vw, 15px); }
+.orbit-barra a, .orbit-barra button { min-height: 5.2em; font-size: 1em; }
+.orbit-barra .orbit-nav-icono, .orbit-barra .orbit-anillo { height: 2.6em; width: 2.6em; }
+.orbit-barra .orbit-nav-icono svg { height: 1.9em; width: 1.9em; }
+.orbit-barra .orbit-anillo svg { height: 2.25em; width: 2.25em; }

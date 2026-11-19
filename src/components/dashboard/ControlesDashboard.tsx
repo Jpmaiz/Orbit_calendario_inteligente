@@ -62,7 +62,7 @@ export default function ControlesDashboard({
     <>
       {ubicacion === 'selector' ? null : (
         <>
-          <nav aria-label="Navegación principal" className="fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
+          <nav aria-label="Navegación principal" className="orbit-barra fixed inset-x-0 bottom-0 z-40 border-t border-[#E8EBE5] bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-lg">
             <div className="mx-auto grid w-full grid-cols-4 px-4 py-2 md:max-w-3xl md:px-6 lg:max-w-5xl lg:px-8">
               <Link href="/dia" onClick={() => establecerToque({ desde: ruta, hacia: 'dia' })} aria-current={activa === 'dia' ? 'page' : undefined} className={estiloPestaña}>
                 <span className="orbit-nav-icono"><IconoNavegacion nombre="home" /></span>
