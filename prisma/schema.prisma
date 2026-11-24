@@ -21,6 +21,8 @@ model Usuario {
   nivelNotificacion  String    @default("importante") @map("nivel_notificacion")
   // "Mi ritmo": { desde, hasta, maxHorasDia, diasLibres, franja } (src/lib/usuarios/ritmo.ts). null = valores por defecto
   ritmo              Json?
+  // Avisos push: { bloques, manana } (src/lib/avisos/preferencias.ts). null = todos activados
+  avisos             Json?
 
   creadoEn       DateTime  @default(now()) @map("creado_en")
   modificadoEn   DateTime  @updatedAt @map("modificado_en")
@@ -36,6 +38,7 @@ model Usuario {
   aliasMaterias    AliasMateria[]
   periodos         PeriodoAcademico[]
   senales          SenalAprendizaje[]
+  suscripcionesPush SuscripcionPush[]
 
   @@map("usuarios")
 }
@@ -169,6 +172,8 @@ model Recordatorio {
   fechaEnvio    DateTime  @map("fecha_envio")
   mensaje       String
   estado        String    @default("pendiente")
+  // Avisos push ya enviados: "bloque:<id>" o "manana:2026-11-24" (uno solo por clave y usuario)
+  clave         String?
 
   creadoEn     DateTime  @default(now()) @map("creado_en")
   modificadoEn DateTime  @updatedAt @map("modificado_en")
@@ -176,7 +181,23 @@ model Recordatorio {
   usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   @@index([usuarioId, fechaEnvio])
+  @@unique([usuarioId, clave])
   @@map("recordatorios")
+}
+
+/// Dispositivo donde el usuario activó los avisos push (D25). Lo usa solo el backend.
+model SuscripcionPush {
+  id         String   @id @default(uuid())
+  usuarioId  String   @map("usuario_id")
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId])
+  @@map("suscripciones_push")
 }
 
 // ============ IA / TRAZABILIDAD ============
