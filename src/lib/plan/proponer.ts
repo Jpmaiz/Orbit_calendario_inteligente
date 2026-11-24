@@ -4,17 +4,22 @@
  */
 import { zonaDeUsuario } from '@/lib/usuarios/zona';
 import { horasPorDefecto } from '@/lib/estimacion/rubrica';
-import { franjaPreferida } from '@/lib/estimacion/personal';
+import { energiaEfectiva, type EnergiaEfectiva } from '@/lib/aprendizaje/energia';
 import { cargarAprendizaje } from '@/lib/aprendizaje/senales';
 import { cargarContextoPlan, type ContextoDeUsuario } from './cargar';
-import { CONFIG_PLAN, inicioDePlan, limiteDePlan, planificar, type Franja, type Plan } from './planificador';
+import { CONFIG_PLAN, demandaDe, inicioDePlan, limiteDePlan, planificar, type Demanda, type Plan } from './planificador';
+
+export { demandaDe };
 
 export type TareaParaPlan = {
   id: string; titulo: string; tipo: string; materiaId: string | null; fechaLimite: Date; horaDefinida: boolean;
   duracionEstMin: number | null;
+  /** Para saber si su estudio es profundo o práctica (estimacion.lectura.nivelCognitivo). */
+  estimacion?: unknown;
+  dificultad?: number | null;
 };
 
-export type Propuesta = { plan: Plan | null; horas: number; limite: Date; ctx: ContextoDeUsuario; preferencia: Franja | null };
+export type Propuesta = { plan: Plan | null; horas: number; limite: Date; ctx: ContextoDeUsuario; energia: EnergiaEfectiva; demanda: Demanda };
 
 export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, horasPedidas: number | null, ahora: Date = new Date()): Promise<Propuesta> {
   const horas = horasPedidas ?? (tarea.duracionEstMin ? tarea.duracionEstMin / 60 : horasPorDefecto(tarea.tipo));
@@ -25,17 +30,18 @@ export async function proponerPlan(usuarioId: string, tarea: TareaParaPlan, hora
   const desde = inicioDePlan(limite, ahora);
   const hasta = limite > desde ? limite : desde;
   const ctx = await cargarContextoPlan(usuarioId, desde, hasta, ahora, tarea.id, tarea.materiaId);
-  // La franja que eligió el usuario en "Mi ritmo" manda; si no eligió, la que aprendió Orbit
-  const preferencia = ctx.ritmo.franja ?? franjaPreferida(aprendido.franjas, ahora);
+  // Lo que eligió el usuario manda; lo aprendido solo completa si no marcó ningún momento como alto
+  const energia = energiaEfectiva(ctx.ritmo.energia, aprendido.momentos, ahora);
+  const demanda = demandaDe(tarea);
 
   const plan = limite > ahora
     ? planificar({ ...tarea, horas }, {
         dias: ctx.dias
           .map((d) => ({ ...d, huecos: d.huecos.filter((h) => h.fin > desde && h.inicio < limite) }))
           .filter((d) => d.huecos.length),
-        zona: ctx.zona, preferencia,
+        zona: ctx.zona, energia: energia.energia, demanda, diasMenosEstudio: ctx.ritmo.menosEstudio,
         minutosMateriaPorDia: ctx.minutosMateriaPorDia, minutosEstudioPorDia: ctx.minutosEstudioPorDia,
       }, ahora, { ...CONFIG_PLAN, maxEstudioDiaMin: Math.round(ctx.ritmo.maxHorasDia * 60) })
     : null;
-  return { plan, horas, limite, ctx, preferencia };
+  return { plan, horas, limite, ctx, energia, demanda };
 }

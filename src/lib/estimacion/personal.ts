@@ -10,9 +10,8 @@
  * Horas: cada señal es una razón real ÷ estimada para un estudiante promedio. Se promedian en escala
  * logarítmica (×2 y ×0,5 se compensan), lo reciente pesa más (media vida de 120 días) y se mezclan con lo
  * general según cuántos datos hay: n ÷ (n + 3). Niveles: esta materia y tipo → este tipo → otros tipos → 1.
- * Franja: los bloques que el usuario pone o saca votan por mañana, tarde o noche.
+ * Momento del día: los bloques que el usuario mueve votan por mañana, mediodía, tarde o noche (src/lib/aprendizaje/energia.ts).
  */
-import type { Franja } from '@/lib/plan/planificador';
 
 export const CONFIG_PERSONAL = {
   /** Datos "previos": con 3 datos el historial pesa la mitad; con 10, el 77 %. */
@@ -23,13 +22,9 @@ export const CONFIG_PERSONAL = {
   /** Una razón fuera de esto se recorta: un dato raro no descalibra. */
   razonMin: 0.25,
   razonMax: 4,
-  /** Votos netos mínimos para que una franja gane, y ventaja sobre la segunda. */
-  votosFranja: 2,
-  ventajaFranja: 1,
 };
 
 export type SenalHoras = { razon: number; peso: number; materiaId: string | null; tipoTarea: string | null; creadoEn: Date };
-export type SenalFranja = { franja: Franja; voto: number; peso: number; creadoEn: Date };
 export type FactorPersonal = { factor: number; datos: number; nivel: 'materia' | 'tipo' | 'global' | 'ninguno' };
 
 const DIA_MS = 86_400_000;
@@ -79,21 +74,6 @@ export function factorPersonal(
 export function aplicarFactor(horasPromedio: number, factor: number): number {
   if (horasPromedio <= 0) return 0;
   return Math.max(0.5, Math.round(horasPromedio * factor * 2) / 2);
-}
-
-/** Franja preferida, si hay suficientes votos y una gana con ventaja. */
-export function franjaPreferida(votos: SenalFranja[], ahora: Date = new Date(), cfg = CONFIG_PERSONAL): Franja | null {
-  const puntos: Record<Franja, number> = { manana: 0, tarde: 0, noche: 0 };
-  for (const v of votos) puntos[v.franja] += v.voto * v.peso * pesoEnElTiempo(v.creadoEn, ahora, cfg) * 2; // peso 0,5 → 1 voto
-  const orden = (Object.entries(puntos) as [Franja, number][]).sort((a, b) => b[1] - a[1]);
-  const [primera, segunda] = orden;
-  return primera[1] >= cfg.votosFranja && primera[1] - segunda[1] >= cfg.ventajaFranja ? primera[0] : null;
-}
-
-/** Franja de un instante según la hora local: mañana < 14:00 ≤ tarde < 19:00 ≤ noche. */
-export function franjaDe(fecha: Date, zona: string): Franja {
-  const h = +new Intl.DateTimeFormat('en-GB', { timeZone: zona, hour: '2-digit', hourCycle: 'h23' }).format(fecha);
-  return h < 14 ? 'manana' : h < 19 ? 'tarde' : 'noche';
 }
 
 /** Respuesta a la pregunta semanal → horas reales (relativas a lo que se le sugirió). */

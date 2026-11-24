@@ -3,20 +3,23 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma/cliente';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { nombreVisible, normalizarApodo } from '@/lib/usuarios/perfil';
-import { leerRitmo, normalizarRitmo, RITMO_POR_DEFECTO } from '@/lib/usuarios/ritmo';
+import { franjaCompatible, leerRitmo, normalizarRitmo, RITMO_POR_DEFECTO, type Ritmo } from '@/lib/usuarios/ritmo';
 import { olvidarRitmo } from '@/lib/usuarios/zona';
 import { olvidarDisponibilidad } from '@/lib/plan/disponibilidad';
 
 const seleccion = { nombre: true, apodo: true, email: true, ritmo: true } as const;
+/** El ritmo con `franja` (v2.13: primer momento con energía alta) para que el front anterior siga funcionando. */
+const conFranja = (r: Ritmo) => ({ ...r, franja: franjaCompatible(r.energia) });
 const respuesta = (u: { nombre: string; apodo: string | null; email: string; ritmo: unknown }) => ({
   nombre: u.nombre, apodo: u.apodo, nombreVisible: nombreVisible(u), correo: u.email,
-  ritmo: leerRitmo(u.ritmo), ritmoPorDefecto: RITMO_POR_DEFECTO,
+  ritmo: conFranja(leerRitmo(u.ritmo)), ritmoPorDefecto: conFranja(RITMO_POR_DEFECTO),
 });
 
 /**
  * GET /api/perfil → { nombre, apodo, nombreVisible, correo, ritmo, ritmoPorDefecto }
  * nombre = el de registro (no se edita aquí); apodo = cómo quiere que Orbit lo llame; nombreVisible = apodo || nombre.
- * ritmo = "Mi ritmo" { desde, hasta, maxHorasDia, diasLibres, franja } (con los valores por defecto si no lo cambió).
+ * ritmo = "Mi ritmo" { desde, hasta, maxHorasDia, diasLibres, energia: { manana, mediodia, tarde, noche: alta|normal|baja },
+ *   energiaPreguntada, menosEstudio: [1–7], franja (solo compatibilidad v2.13) } (con los valores por defecto si no lo cambió).
  */
 export async function GET() {
   const user = await obtenerUsuario();
@@ -32,9 +35,12 @@ export async function GET() {
 }
 
 /**
- * PATCH /api/perfil  Body: { apodo?: string | null, ritmo?: { desde?, hasta?, maxHorasDia?, diasLibres?, franja? } | null }
+ * PATCH /api/perfil  Body: { apodo?: string | null, ritmo?: { desde?, hasta?, maxHorasDia?, diasLibres?, energia?, energiaPreguntada?,
+ *   menosEstudio?, franja? } | null }
  * - apodo: máx. 40 caracteres; "" o null lo quita. El nombre de registro, el correo y Supabase Auth no se tocan.
- * - ritmo: cambio parcial (lo que no viene se conserva); null = volver a los valores por defecto.
+ * - ritmo: cambio parcial (lo que no viene se conserva); null = volver a los valores por defecto. Todo con toques, sin texto:
+ *   energia es parcial por momento ({ noche: "alta" }); las dos preguntas de la primera vez mandan
+ *   { energia: { <mejor>: "alta", <cuesta>: "baja" }, energiaPreguntada: true } ("no sé" = no se manda ese momento).
  *   Desde el siguiente pedido, el plan, los huecos y "te faltarían" usan el ritmo nuevo.
  * 200 = lo mismo que GET
  */

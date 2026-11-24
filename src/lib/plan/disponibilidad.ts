@@ -7,7 +7,7 @@
  */
 import { cargarContextoPlan } from './cargar';
 import { horasLibresPorDia, type HuecosDelDia } from './huecos';
-import { CONFIG_PLAN } from './planificador';
+import { CONFIG_PLAN, topeEstudio } from './planificador';
 
 const DIA_MS = 86_400_000;
 const HORIZONTE_DIAS = 14;
@@ -23,8 +23,9 @@ export type Disponibilidad = {
 
 type Datos = {
   dias: HuecosDelDia[]; bloques: { tareaId: string; inicio: Date; fin: Date }[]; horasPorDia: number; horizonte: number;
-  /** Tope de estudio por día ("Mi ritmo"); por defecto 4 h. */
+  /** Tope de estudio por día ("Mi ritmo"); por defecto 4 h. La mitad en los días con "menos estudio". */
   topeMin?: number;
+  diasMenosEstudio?: number[];
 };
 const cache = new Map<string, { datos: Datos; hasta: number }>();
 
@@ -47,7 +48,7 @@ export function disponibilidadDe(datos: Datos): Disponibilidad {
           const b = Math.min(h.fin.getTime(), fin.getTime());
           if (b > a) delDia += (b - a) / 60_000;
         }
-        min += Math.min(topeMin, delDia);
+        min += Math.min(topeEstudio(d.diaSemana, topeMin, datos.diasMenosEstudio), delDia);
       }
       // Lo que queda después del horizonte cargado: promedio por día
       const despues = Math.max(0, fin.getTime() - Math.max(datos.horizonte, ahora.getTime()));
@@ -74,6 +75,7 @@ export async function cargarDisponibilidad(usuarioId: string, ahora: Date = new 
     bloques: ctx.bloquesAceptados ?? [],
     horasPorDia: Math.max(0.5, horasLibresPorDia(ctx.dias, ctx.ritmo.maxHorasDia)),
     topeMin: Math.round(ctx.ritmo.maxHorasDia * 60),
+    diasMenosEstudio: ctx.ritmo.menosEstudio,
     horizonte,
   };
   cache.set(usuarioId, { datos, hasta: Date.now() + TTL_MS });

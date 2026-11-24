@@ -7,8 +7,8 @@ import { proponerPlan } from '@/lib/plan/proponer';
 import { olvidarDisponibilidad } from '@/lib/plan/disponibilidad';
 import { enCurso, limiteParaGuardar, validarPlan, type BloqueAGuardar } from '@/lib/plan/validarPlan';
 import { zonaDeUsuario } from '@/lib/usuarios/zona';
-import { franjaDe } from '@/lib/estimacion/personal';
-import { registrarFranjas, registrarHoras } from '@/lib/aprendizaje/senales';
+import { registrarMomentos, registrarHoras } from '@/lib/aprendizaje/senales';
+import { votosDelPlan } from '@/lib/aprendizaje/energia';
 
 type Contexto = { params: Promise<{ tareaId: string }> };
 
@@ -20,7 +20,7 @@ async function tareaPropia(id: string, usuarioId: string) {
     where: { id, usuarioId, eliminadoEn: null },
     select: {
       id: true, titulo: true, tipo: true, materiaId: true, fechaLimite: true, horaDefinida: true,
-      duracionEstMin: true, estado: true, estimacion: true,
+      duracionEstMin: true, estado: true, estimacion: true, dificultad: true,
     },
   });
 }
@@ -34,7 +34,9 @@ const iso = (b: { inicio: Date; fin: Date }) => ({ inicio: b.inicio.toISOString(
  * No guarda nada. `horas` (opcional) = el total que eligió el usuario con − / +; si no, la estimación.
  * 200 {
  *   tarea: { id, titulo, tipo, fechaLimite, horas },
- *   propuesta: { bloques: [{ inicio, fin, minutos, tipo: estudio|repaso }], minutosNecesarios, minutosPlanificados, faltanMin, aviso },
+ *   propuesta: { bloques: [{ inicio, fin, minutos, tipo: estudio|repaso, demanda, momento, razon }], minutosNecesarios, minutosPlanificados, faltanMin, aviso },
+ *     demanda = profundo | practica | repaso · momento = manana | mediodia | tarde | noche
+ *     razon = por qué está ahí ("Tu mejor momento", "Repaso al final del día") o null
  *   guardado: [{ id, inicio, fin, tipo, estado, origen, enCurso }],   ← el plan que ya aceptó, si existe
  *   conflictos: [{ id, motivo }],                    ← bloques guardados que ahora pisan algo
  *   huecos: [{ dia, diaSemana, huecos: [{ inicio, fin, minutos }] }]   ← para tocar un hueco y agregar un bloque
@@ -59,7 +61,9 @@ export async function GET(req: NextRequest, { params }: Contexto) {
       tarea: { id: tarea.id, titulo: tarea.titulo, tipo: tarea.tipo, fechaLimite: tarea.fechaLimite, horas },
       propuesta: plan
         ? {
-            bloques: plan.bloques.map((b) => ({ ...iso(b), minutos: b.minutos, tipo: b.tipo })),
+            bloques: plan.bloques.map((b) => ({
+              ...iso(b), minutos: b.minutos, tipo: b.tipo, demanda: b.demanda, momento: b.momento, razon: b.razon,
+            })),
             minutosNecesarios: plan.minutosNecesarios,
             minutosPlanificados: plan.minutosPlanificados,
             faltanMin: plan.faltanMin,
@@ -166,7 +170,8 @@ export async function POST(req: NextRequest, { params }: Contexto) {
  * Señales que deja guardar un plan:
  * - Horas: si el total guardado (con los bloques que ya pasaron) se aleja 30 min o más de lo estimado,
  *   ese total es una pista de lo que realmente necesita (peso 0,5).
- * - Franja: los bloques que puso donde Orbit no propuso votan por esa franja; los que sacó, en contra.
+ * - Momento del día (energia.ts): mover un bloque a otra hora del mismo día vota por el momento nuevo y contra el
+ *   anterior; moverlo a otro día no vota; agregar uno vota a favor; borrar uno sin reemplazo, medio voto en contra.
  */
 async function aprenderDelPlan(
   usuarioId: string,
@@ -188,14 +193,7 @@ async function aprenderDelPlan(
 
   const { plan, ctx } = await proponerPlan(usuarioId, tarea, total > 0 ? total / 60 : null, ahora);
   if (!plan || !guardados.length) return;
-  const cruza = (a: { inicio: Date; fin: Date }, b: { inicio: Date; fin: Date }) => a.inicio < b.fin && b.inicio < a.fin;
-  // Votan a favor los que puso o movió el usuario (origen "usuario") fuera de lo que Orbit propuso
-  const puestos = guardados.filter((g) => g.origen === 'usuario' && !plan.bloques.some((p) => cruza(g, p)));
-  const sacados = plan.bloques.filter((p) => !guardados.some((g) => cruza(g, p)));
-  await registrarFranjas(usuarioId, tarea.id, [
-    ...puestos.map((b) => ({ franja: franjaDe(b.inicio, ctx.zona), voto: 1 })),
-    ...sacados.map((b) => ({ franja: franjaDe(b.inicio, ctx.zona), voto: -1 })),
-  ]);
+  await registrarMomentos(usuarioId, tarea.id, votosDelPlan(plan.bloques, guardados, ctx.zona));
 }
 
 /** DELETE /api/plan/[tareaId] → quita el plan futuro de la actividad. 200 { eliminados } */

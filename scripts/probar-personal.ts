@@ -3,7 +3,8 @@
  * Uso: npx tsx scripts/probar-personal.ts
  */
 import assert from 'node:assert/strict';
-import { aplicarFactor, factorPersonal, franjaDe, franjaPreferida, type SenalFranja, type SenalHoras } from '@/lib/estimacion/personal';
+import { aplicarFactor, factorPersonal, type SenalHoras } from '@/lib/estimacion/personal';
+import { momentoDe } from '@/lib/usuarios/ritmo';
 
 const ahora = new Date('2026-11-08T12:00:00Z');
 const hace = (dias: number) => new Date(ahora.getTime() - dias * 86_400_000);
@@ -46,14 +47,12 @@ prueba('Límites: nunca más de ×2 ni menos de ×0,5', () => {
 });
 prueba('Horas personales: 6 h × 1,22 = 7 h 30 (media hora)', () => assert.equal(aplicarFactor(6, 1.22), 7.5));
 
-const v = (franja: SenalFranja['franja'], voto: number, dias = 1): SenalFranja => ({ franja, voto, peso: 0.5, creadoEn: hace(dias) });
-prueba('Franja: sin votos suficientes, ninguna', () => assert.equal(franjaPreferida([v('noche', 1)], ahora), null));
-prueba('Franja: mover bloques a la noche y sacarlos de la tarde → noche', () =>
-  assert.equal(franjaPreferida([v('noche', 1), v('noche', 1), v('tarde', -1), v('noche', 1)], ahora), 'noche'));
-prueba('Franja de una hora local (La Paz)', () => {
-  assert.equal(franjaDe(new Date('2026-11-08T13:00:00Z'), 'America/La_Paz'), 'manana'); // 09:00
-  assert.equal(franjaDe(new Date('2026-11-08T20:00:00Z'), 'America/La_Paz'), 'tarde');  // 16:00
-  assert.equal(franjaDe(new Date('2026-11-09T00:30:00Z'), 'America/La_Paz'), 'noche');  // 20:30
+// Los votos por momento del día se prueban en scripts/probar-energia.ts
+prueba('Momento del día de una hora local (La Paz)', () => {
+  assert.equal(momentoDe(new Date('2026-11-08T13:00:00Z'), 'America/La_Paz'), 'manana');   // 09:00
+  assert.equal(momentoDe(new Date('2026-11-08T17:00:00Z'), 'America/La_Paz'), 'mediodia'); // 13:00
+  assert.equal(momentoDe(new Date('2026-11-08T20:00:00Z'), 'America/La_Paz'), 'tarde');    // 16:00
+  assert.equal(momentoDe(new Date('2026-11-09T00:30:00Z'), 'America/La_Paz'), 'noche');    // 20:30
 });
 
 console.log(fallas ? `\n${fallas} prueba(s) fallaron` : '\nTodas las pruebas pasaron');

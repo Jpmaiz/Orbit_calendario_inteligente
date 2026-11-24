@@ -23,10 +23,10 @@ export type ContextoDeUsuario = {
   minutosMateriaPorDia: Map<string, number>;
   minutosEstudioPorDia: Map<string, number>;
   propios: BloqueGuardado[];                 // TODOS los bloques futuros aceptados de esta actividad
-  /** "Mi ritmo" del usuario: horario de estudio, tope por día, días libres y franja preferida. */
+  /** "Mi ritmo" del usuario: horario de estudio, tope por día, días libres, energía por momento. */
   ritmo: Ritmo;
   /** Bloques aceptados del rango, de todas las actividades (para descontar lo ya planificado). */
-  bloquesAceptados?: { tareaId: string; inicio: Date; fin: Date }[];
+  bloquesAceptados?: { tareaId: string; materiaId: string | null; inicio: Date; fin: Date }[];
 };
 
 /**
@@ -111,7 +111,7 @@ export async function cargarContextoPlan(
     minutosMateriaPorDia,
     minutosEstudioPorDia,
     propios: propiosFuturos.map((b) => ({ id: b.id, inicio: b.fechaInicio, fin: b.fechaFin, tipo: b.motivo, estado: b.estado, origen: b.origen })),
-    bloquesAceptados: bloques.map((b) => ({ tareaId: b.tareaId, inicio: b.fechaInicio, fin: b.fechaFin })),
+    bloquesAceptados: bloques.map((b) => ({ tareaId: b.tareaId, materiaId: b.tarea.materiaId, inicio: b.fechaInicio, fin: b.fechaFin })),
   };
 }
 

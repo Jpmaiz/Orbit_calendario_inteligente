@@ -1,12 +1,11 @@
 /**
- * Pruebas del perfil (sin base de datos ni IA): "Mi ritmo", "Cuéntale a Orbit tu semana",
- * "Lo que Orbit sabe de ti" y "Tu semestre a la vista".
+ * Pruebas del perfil (sin base de datos ni IA): "Mi ritmo", "Lo que Orbit sabe de ti" y "Tu semestre a la vista".
+ * La energía por momento del día (D23) se prueba en scripts/probar-energia.ts.
  *
  * Uso: npx tsx scripts/probar-ritmo.ts
  */
 import assert from 'node:assert/strict';
 import { leerRitmo, normalizarRitmo, RITMO_POR_DEFECTO } from '@/lib/usuarios/ritmo';
-import { interpretarRespuesta, resumirRitmo } from '@/lib/usuarios/ritmoTexto';
 import { describirAprendizaje } from '@/lib/aprendizaje/describir';
 import { resumirSemestre } from '@/lib/agenda/semestre';
 import { huecosLibres, CONFIG_HUECOS } from '@/lib/plan/huecos';
@@ -42,56 +41,29 @@ prueba('El horario del ritmo recorta los huecos (08:00–21:00)', () => {
   assert.equal(d.libresMin, 13 * 60);
 });
 
-// ── Cuéntale a Orbit tu semana ──
-const respuestaIA = {
-  ritmo: { desde: '08:00', hasta: '25:00', maxHorasDia: 3, diasLibres: [7], franja: 'noche' },
-  compromisos: [
-    { titulo: 'trabajo', diasSemana: [2, 4], hora: '18:00', horaFin: '21:00' },
-    { titulo: 'Gimnasio', diasSemana: [9], hora: '07:00', horaFin: '08:00' }, // día inválido → fuera
-    { titulo: 'Fútbol', diasSemana: [6], hora: '10:00', horaFin: '09:00' },   // fin antes → fuera
-  ],
-};
-const leido = interpretarRespuesta(respuestaIA, RITMO_POR_DEFECTO);
-prueba('Aplica los campos válidos y descarta el inválido sin perder los demás', () => {
-  assert.equal(leido.ritmo.desde, '08:00');
-  assert.equal(leido.ritmo.hasta, '22:30'); // "25:00" no es una hora: queda la anterior
-  assert.equal(leido.ritmo.maxHorasDia, 3);
-  assert.deepEqual(leido.ritmo.diasLibres, [7]);
-  assert.equal(leido.ritmo.franja, 'noche');
-  assert.deepEqual(leido.cambios, ['desde', 'maxHorasDia', 'diasLibres', 'franja']);
-});
-prueba('Compromisos: solo los válidos, con mayúscula inicial', () => {
-  assert.deepEqual(leido.compromisos, [{ titulo: 'Trabajo', diasSemana: [2, 4], hora: '18:00', horaFin: '21:00' }]);
-});
-prueba('Resumen para confirmar', () => {
-  assert.deepEqual(resumirRitmo(leido.ritmo, leido.cambios, leido.compromisos), [
-    'Estudias de 08:00 a 22:30', 'Máximo 3 h de estudio por día', 'Sin estudio: domingo',
-    'Rindes mejor en la noche', 'Trabajo: mar y jue, 18:00–21:00',
-  ]);
-});
-prueba('Si la IA no devuelve nada útil: sin cambios', () => {
-  const r = interpretarRespuesta({ ritmo: {}, compromisos: [] }, RITMO_POR_DEFECTO);
-  assert.equal(r.cambios.length + r.compromisos.length, 0);
-});
-
 // ── Lo que Orbit sabe de ti ──
 const ahora = new Date('2026-11-18T16:00:00Z');
 const s = (tipo: string, razon: number) => ({ razon, peso: 1, materiaId: null, tipoTarea: tipo, creadoEn: new Date('2026-11-10T12:00:00Z') });
 prueba('Sin datos: "todavía te está conociendo"', () => {
-  const d = describirAprendizaje({ horas: [], franjas: [] }, ahora);
+  const d = describirAprendizaje({ horas: [], momentos: [] }, ahora);
   assert.equal(d.conociendo, true);
   assert.match(d.frases[0], /te está conociendo/);
 });
 prueba('Exámenes que toman más: en palabras, sin números', () => {
-  const d = describirAprendizaje({ horas: [s('examen', 1.6), s('examen', 1.5), s('examen', 1.4)], franjas: [] }, ahora);
+  const d = describirAprendizaje({ horas: [s('examen', 1.6), s('examen', 1.5), s('examen', 1.4)], momentos: [] }, ahora);
   assert.equal(d.conociendo, false);
   assert.match(d.frases[0], /exámenes te suelen tomar más/);
   assert.ok(d.frases.every((f) => !/\d/.test(f)));
 });
-prueba('Franja aprendida', () => {
-  const v = (voto: number) => ({ franja: 'noche' as const, voto, peso: 0.5, creadoEn: new Date('2026-11-15T12:00:00Z') });
-  const d = describirAprendizaje({ horas: [], franjas: [v(1), v(1), v(1)] }, ahora);
+prueba('Momento aprendido (no eligió ninguno alto)', () => {
+  const v = (voto: number) => ({ momento: 'noche' as const, voto, peso: 0.5, creadoEn: new Date('2026-11-15T12:00:00Z') });
+  const d = describirAprendizaje({ horas: [], momentos: [v(1), v(1), v(1)] }, ahora);
   assert.match(d.frases.join(' '), /estudiar en la noche/);
+});
+prueba('Si eligió su mejor momento, no se dice "aprendido"', () => {
+  const v = (voto: number) => ({ momento: 'noche' as const, voto, peso: 0.5, creadoEn: new Date('2026-11-15T12:00:00Z') });
+  const d = describirAprendizaje({ horas: [], momentos: [v(1), v(1), v(1)] }, ahora, { ...RITMO_POR_DEFECTO.energia, tarde: 'alta' });
+  assert.doesNotMatch(d.frases.join(' '), /estudiar en la noche/);
 });
 
 // ── Tu semestre a la vista ──
