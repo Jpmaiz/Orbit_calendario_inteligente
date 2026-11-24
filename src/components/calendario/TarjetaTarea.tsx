@@ -7,6 +7,9 @@ import ChipEstimacion, { type AvisoTiempo } from '../estimacion/ChipEstimacion';
 import { formatearHoras } from '../estimacion/estimacionFrontend';
 import type { Nota } from '../ia/borradorCaptura';
 import CambiarFecha from './CambiarFecha';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { SIN_RED } from '../pwa/errorRed';
 import { avisarAgendaActualizada } from './actualizacionAgenda';
 import { diaEnBolivia, yaPaso } from './organizarTareasDia';
 import type { EstimacionTarea, PrioridadCalculada, TareaConHoraDefinida } from '@/tipos/tarea';
@@ -83,6 +86,7 @@ export default function TarjetaTarea({ tarea, contexto, alTerminar }: Props) {
   const solicitudEnCurso = useRef(false);
   const menu = useRef<HTMLDivElement>(null);
   const ocupada = eliminando || actualizando;
+  const enLinea = useEnLinea();
   const fechaLimite = new Date(tarea.fechaLimite);
   const ahora = new Date();
   // Lo pasado no se reabre: solo se le cambia la fecha. "Planificar estudio" solo a futuro.
@@ -99,7 +103,7 @@ export default function TarjetaTarea({ tarea, contexto, alTerminar }: Props) {
   }, [menuAbierto]);
 
   async function eliminar() {
-    if (solicitudEnCurso.current || ocupada) return;
+    if (solicitudEnCurso.current || ocupada || !enLinea) return;
     solicitudEnCurso.current = true;
     establecerError(null);
     establecerEliminando(true);
@@ -115,7 +119,7 @@ export default function TarjetaTarea({ tarea, contexto, alTerminar }: Props) {
       iniciarActualizacion(() => router.refresh());
       alTerminar?.('eliminada');
     } catch {
-      establecerError('No se pudo conectar con el servidor. Intenta de nuevo.');
+      establecerError(navigator.onLine ? 'No se pudo conectar con el servidor. Intenta de nuevo.' : SIN_RED);
     } finally {
       establecerEliminando(false);
       establecerConfirmarEliminacion(false);
@@ -142,16 +146,18 @@ export default function TarjetaTarea({ tarea, contexto, alTerminar }: Props) {
       <svg aria-hidden="true" viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="currentColor"><circle cx="5" cy="12" r="1.7" /><circle cx="12" cy="12" r="1.7" /><circle cx="19" cy="12" r="1.7" /></svg>
     </button>
     {menuAbierto && <div role="menu" className="orbit-aparece absolute bottom-12 right-0 z-20 w-52 rounded-2xl border border-[#E3E8DE] bg-white p-1.5 shadow-[0_10px_28px_rgba(38,61,52,.14)]">
-      <button type="button" role="menuitem" onClick={() => { establecerMenuAbierto(false); establecerCambiandoFecha(true); }} className={itemMenu + ' text-[#263D34]'}>
+      <NecesitasInternet className="px-2.5 pb-1 pt-1.5" />
+      <button type="button" role="menuitem" disabled={!enLinea} onClick={() => { establecerMenuAbierto(false); establecerCambiandoFecha(true); }} className={itemMenu + ' text-[#263D34] disabled:opacity-40 disabled:hover:bg-transparent'}>
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 2.5v4M16 2.5v4" /></svg>
         Cambiar fecha
       </button>
-      <Link role="menuitem" href={'/dia/' + encodeURIComponent(tarea.id) + '/editar'} className={itemMenu + ' text-[#263D34]'}>
+      <Link role="menuitem" href={'/dia/' + encodeURIComponent(tarea.id) + '/editar'} aria-disabled={!enLinea} tabIndex={enLinea ? undefined : -1}
+        onClick={(e) => { if (!enLinea) e.preventDefault(); }} className={itemMenu + ' text-[#263D34] ' + (enLinea ? '' : 'pointer-events-none opacity-40')}>
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z" /></svg>
         Editar
       </Link>
-      <button type="button" role="menuitem" onClick={() => confirmarEliminacion ? void eliminar() : establecerConfirmarEliminacion(true)}
-        className={itemMenu + ' text-[#A34955] hover:bg-[#FCF0F1]'}>
+      <button type="button" role="menuitem" disabled={!enLinea} onClick={() => confirmarEliminacion ? void eliminar() : establecerConfirmarEliminacion(true)}
+        className={itemMenu + ' text-[#A34955] hover:bg-[#FCF0F1] disabled:opacity-40 disabled:hover:bg-transparent'}>
         <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
         {confirmarEliminacion ? 'Sí, eliminar' : 'Eliminar'}
       </button>

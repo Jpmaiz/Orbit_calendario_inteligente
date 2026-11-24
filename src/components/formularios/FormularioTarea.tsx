@@ -7,6 +7,9 @@ import { HORA_POR_TIPO, instanteEnZona } from '@/lib/fechas/resolverFecha';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { esErrorDeRed, SIN_RED } from '../pwa/errorRed';
 
 type Materia = { id: string; nombre: string };
 export type ValoresTarea = TareaConHoraDefinida & {
@@ -104,6 +107,7 @@ export default function FormularioTarea(props: Props = {}) {
   const [errores, establecerErrores] = useState<Partial<Record<Campo, string>>>({});
   const [error, establecerError] = useState<string | null>(null);
   const [enviando, establecerEnviando] = useState(false);
+  const enLinea = useEnLinea();
   const solicitudEnCurso = useRef(false);
   const avisoDuplicado = useRef<HTMLDivElement>(null);
   const [duplicado, establecerDuplicado] = useState<Duplicado | null>(null);
@@ -127,7 +131,7 @@ export default function FormularioTarea(props: Props = {}) {
         if (!controlador.signal.aborted) establecerMaterias(leerMaterias(datos));
       } catch (fallo) {
         if (!controlador.signal.aborted) {
-          establecerErrorMaterias(fallo instanceof Error ? fallo.message : 'No se pudieron cargar las materias.');
+          establecerErrorMaterias(esErrorDeRed(fallo) ? 'Sin conexión: no se pudieron cargar las materias.' : fallo instanceof Error ? fallo.message : 'No se pudieron cargar las materias.');
         }
       } finally {
         if (!controlador.signal.aborted) establecerCargandoMaterias(false);
@@ -229,7 +233,7 @@ export default function FormularioTarea(props: Props = {}) {
     confirmarNueva = false,
     creacion?: DatosCreacion,
   ) {
-    if (solicitudEnCurso.current) return;
+    if (solicitudEnCurso.current || !navigator.onLine) return;
     solicitudEnCurso.current = true;
     establecerEnviando(true);
     establecerError(null);
@@ -254,7 +258,7 @@ export default function FormularioTarea(props: Props = {}) {
       router.push('/dia');
       router.refresh();
     } catch {
-      establecerError('No se pudo conectar con el servidor. Intenta de nuevo.');
+      establecerError(navigator.onLine ? 'No se pudo conectar con el servidor. Intenta de nuevo.' : SIN_RED);
     } finally {
       solicitudEnCurso.current = false;
       establecerEnviando(false);
@@ -379,11 +383,12 @@ export default function FormularioTarea(props: Props = {}) {
         </div>
       )}
       <div aria-live="polite" aria-atomic="true">
-        {error && <p role="alert" className="mt-6 break-words rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">{error}</p>}
+        {error && error !== SIN_RED && <p role="alert" className="mt-6 break-words rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">{error}</p>}
       </div>
-      <div className="mt-7 flex flex-col gap-3 border-t border-[#EBEEE6] pt-6 sm:flex-row sm:justify-end">
+      <div className="mt-7 flex flex-col gap-3 border-t border-[#EBEEE6] pt-6 sm:flex-row sm:items-center sm:justify-end">
+        <NecesitasInternet className="justify-center sm:mr-auto" />
         {enviando ? <span aria-disabled="true" className="inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm text-[#78827B]">Cancelar</span> : <Link href="/dia" className={'inline-flex min-h-11 items-center justify-center rounded-xl px-5 py-3 text-sm font-semibold text-[#35695D] hover:bg-[#E7EDE6] ' + foco}>Cancelar</Link>}
-        <button type="submit" disabled={enviando || duplicado !== null} className={'min-h-11 rounded-xl bg-[#234F45] px-6 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-wait disabled:opacity-60 ' + foco}>
+        <button type="submit" disabled={enviando || duplicado !== null || !enLinea} className={'min-h-11 rounded-xl bg-[#234F45] px-6 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:opacity-60 ' + (enviando ? 'disabled:cursor-wait ' : 'disabled:cursor-not-allowed ') + foco}>
           {enviando ? (editando ? 'Guardando cambios…' : 'Creando tarea…') : (editando ? 'Guardar cambios' : 'Crear tarea')}
         </button>
       </div>

@@ -5,6 +5,7 @@ import {
   construirPeriodo, esPeriodoActual, leerPeriodoCreado, leerPeriodos, mensajePeriodo,
   type DatosPeriodos, type FormularioPeriodo, type PeriodoAcademico,
 } from './periodosFrontend';
+import { mensajeError } from '../pwa/errorRed';
 
 async function obtenerDatos(signal?: AbortSignal): Promise<DatosPeriodos> {
   const respuesta = await fetch('/api/periodos', { cache: 'no-store', signal });
@@ -49,7 +50,7 @@ export default function ProveedorPeriodos({ children }: { children: ReactNode })
       return resultado;
     } catch (error) {
       if (!signal?.aborted && version === versionConsulta.current) {
-        establecerErrorConsulta(error instanceof Error ? error.message : 'No se pudo conectar con el servidor.');
+        establecerErrorConsulta(mensajeError(error, 'No se pudo conectar con el servidor.'));
       }
       return null;
     } finally {
@@ -66,7 +67,7 @@ export default function ProveedorPeriodos({ children }: { children: ReactNode })
       establecerErrorConsulta(null);
     }, (error: unknown) => {
       if (!controlador.signal.aborted && version === versionConsulta.current) {
-        establecerErrorConsulta(error instanceof Error ? error.message : 'No se pudo conectar con el servidor.');
+        establecerErrorConsulta(mensajeError(error, 'No se pudo conectar con el servidor.'));
       }
     }).finally(() => {
       if (!controlador.signal.aborted && version === versionConsulta.current) establecerCargando(false);

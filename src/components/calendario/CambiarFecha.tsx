@@ -6,6 +6,9 @@ import GrupoHora from '../ia/GrupoHora';
 import { fechaElegidaISO } from '../ia/flujoCaptura';
 import { avisarAgendaActualizada } from './actualizacionAgenda';
 import { diaEnBolivia } from './organizarTareasDia';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { SIN_RED } from '../pwa/errorRed';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
 const formatoHora = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -25,6 +28,7 @@ export default function CambiarFecha({ tareaId, fechaLimite, horaDefinida, alCan
   const [porDefinir, establecerPorDefinir] = useState(!horaDefinida);
   const [guardando, establecerGuardando] = useState(false);
   const [error, establecerError] = useState<string | null>(null);
+  const enLinea = useEnLinea();
 
   // Sin hora definida, la tarea vence al terminar ese día.
   const instante = dia && (porDefinir || hora) ? fechaElegidaISO(dia + 'T' + (porDefinir ? '23:59' : hora)) : null;
@@ -35,7 +39,7 @@ export default function CambiarFecha({ tareaId, fechaLimite, horaDefinida, alCan
     : null;
 
   async function guardar() {
-    if (guardando || falta || !instante || sinCambios) return;
+    if (guardando || falta || !instante || sinCambios || !enLinea) return;
     establecerGuardando(true);
     establecerError(null);
     try {
@@ -52,7 +56,7 @@ export default function CambiarFecha({ tareaId, fechaLimite, horaDefinida, alCan
       avisarAgendaActualizada();
       alGuardar();
     } catch {
-      establecerError('No se pudo conectar con el servidor. Intenta de nuevo.');
+      establecerError(navigator.onLine ? 'No se pudo conectar con el servidor. Intenta de nuevo.' : SIN_RED);
     } finally {
       establecerGuardando(false);
     }
@@ -72,11 +76,12 @@ export default function CambiarFecha({ tareaId, fechaLimite, horaDefinida, alCan
         Hora por definir
       </label>
       {falta && <p aria-live="polite" className="text-[13px] text-[#916820]">{falta}</p>}
-      {error && <p role="alert" className="rounded-lg border border-[#EED4D7] bg-[#FCF0F1] px-3 py-2 text-[13px] text-[#A34955]">{error}</p>}
+      {error && error !== SIN_RED && <p role="alert" className="rounded-lg border border-[#EED4D7] bg-[#FCF0F1] px-3 py-2 text-[13px] text-[#A34955]">{error}</p>}
+      <NecesitasInternet />
       <div className="flex items-center gap-2">
         <button type="button" disabled={guardando} onClick={alCancelar}
           className={'min-h-11 rounded-xl px-3 text-sm font-medium text-[#647168] hover:bg-[#EAF0EB] ' + foco}>Cancelar</button>
-        <button type="button" disabled={guardando || !!falta || sinCambios} onClick={() => void guardar()}
+        <button type="button" disabled={guardando || !!falta || sinCambios || !enLinea} onClick={() => void guardar()}
           className={'min-h-11 flex-1 rounded-xl bg-[#234F45] text-sm font-semibold text-white transition-colors hover:bg-[#316457] disabled:bg-[#E3E8DE] disabled:text-[#8A958D] ' + foco}>
           {guardando ? 'Guardando…' : 'Guardar fecha'}
         </button>

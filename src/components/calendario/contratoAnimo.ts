@@ -1,4 +1,5 @@
 import { avisarAgendaActualizada } from './actualizacionAgenda';
+import { SIN_RED } from '../pwa/errorRed';
 
 /** v2.14 «¿Cómo estás hoy?»: tres botones opcionales; el back solo PROPONE y nada se mueve sin confirmar. */
 export type EstadoAnimo = 'energia' | 'normal' | 'cansado';
@@ -20,7 +21,7 @@ async function pedir(url: string, init?: RequestInit): Promise<unknown> {
   try {
     r = await fetch(url, { cache: 'no-store', ...init, headers: init?.body ? { 'Content-Type': 'application/json' } : undefined });
   } catch {
-    throw new Error('No hay conexión. Inténtalo de nuevo en un momento.');
+    throw new Error(SIN_RED);
   }
   const datos: unknown = await r.json().catch(() => null);
   if (!r.ok) {

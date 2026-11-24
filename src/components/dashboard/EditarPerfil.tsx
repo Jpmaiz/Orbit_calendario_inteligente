@@ -3,6 +3,9 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import AvatarPerfil from './AvatarPerfil';
 import IconoDashboard from './IconoDashboard';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { SIN_RED } from '../pwa/errorRed';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-4';
 
@@ -22,6 +25,7 @@ export default function EditarPerfil({ nombre, apodo, correo, fotoUrl, focoFoto,
   const [error, establecerError] = useState<string | null>(null);
   const [guardado, establecerGuardado] = useState(false);
   const hayCambios = nuevoNombre.trim() !== (apodo ?? '').trim();
+  const enLinea = useEnLinea();
 
   useEffect(() => {
     dialogo.current?.showModal();
@@ -32,7 +36,7 @@ export default function EditarPerfil({ nombre, apodo, correo, fotoUrl, focoFoto,
   async function guardar(evento: FormEvent<HTMLFormElement>) {
     evento.preventDefault();
     const valor = nuevoNombre.trim();
-    if (guardando || !hayCambios) return; // vacío = quitar el apodo
+    if (guardando || !hayCambios || !enLinea) return; // vacío = quitar el apodo
     establecerGuardando(true);
     establecerError(null);
     establecerGuardado(false);
@@ -49,7 +53,7 @@ export default function EditarPerfil({ nombre, apodo, correo, fotoUrl, focoFoto,
       establecerNombre(datos.apodo ?? '');
       establecerGuardado(true);
     } catch {
-      establecerError('No se pudo conectar. Inténtalo de nuevo en unos momentos.');
+      establecerError(navigator.onLine ? 'No se pudo conectar. Inténtalo de nuevo en unos momentos.' : SIN_RED);
     } finally {
       establecerGuardando(false);
     }
@@ -93,9 +97,10 @@ export default function EditarPerfil({ nombre, apodo, correo, fotoUrl, focoFoto,
         {error && <p role="alert" className="rounded-xl border border-[#EED4D7] bg-[#FCF5F5] p-3 text-sm leading-6 text-[#A34955]">{error}</p>}
         {guardado && <p role="status" className="rounded-xl bg-[#EDF3E8] p-3 text-sm text-[#245B4C]">Apodo actualizado.</p>}
         {guardando && <p role="status" className="text-sm text-[#647168]">Guardando cambios…</p>}
-        <div className="flex flex-wrap justify-end gap-3 border-t border-[#EBEEE6] pt-4">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-[#EBEEE6] pt-4">
+          <NecesitasInternet className="mr-auto" />
           <button type="button" disabled={guardando} onClick={() => dialogo.current?.close()} className={'min-h-11 rounded-xl border border-[#DDE5D7] px-4 py-2 text-sm font-medium text-[#35695D] hover:bg-[#F3F7EE] disabled:opacity-50 ' + foco}>{guardado ? 'Cerrar' : 'Cancelar'}</button>
-          <button type="submit" disabled={guardando || !hayCambios} className={'min-h-11 rounded-xl bg-[#234F45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-not-allowed disabled:opacity-50 ' + foco}>{guardando ? 'Guardando…' : 'Guardar cambios'}</button>
+          <button type="submit" disabled={guardando || !hayCambios || !enLinea} className={'min-h-11 rounded-xl bg-[#234F45] px-4 py-2 text-sm font-semibold text-white hover:bg-[#316457] disabled:cursor-not-allowed disabled:opacity-50 ' + foco}>{guardando ? 'Guardando…' : 'Guardar cambios'}</button>
         </div>
       </form>
     </dialog>

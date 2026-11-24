@@ -3,6 +3,9 @@
 import { useId, useRef, useState } from 'react';
 import { usePeriodos } from './ProveedorPeriodos';
 import { esPeriodoActual, type PeriodoAcademico } from './periodosFrontend';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { mensajeError, SIN_RED } from '../pwa/errorRed';
 
 const boton = 'min-h-11 rounded-xl border border-[#CEDFD5] bg-white px-3 py-2 text-xs font-semibold text-[#245B4C] hover:bg-[#E7F2E9] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
 const campo = 'mt-1 block min-h-11 w-full min-w-0 rounded-xl border border-[#CEDFD5] bg-white px-3 py-2 text-base text-[#263D34] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
@@ -22,9 +25,10 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
   const [resumenCerrado, establecerResumenCerrado] = useState(false);
   const enviando = useRef(false);
   const abierto = estado.formulario === origen;
+  const enLinea = useEnLinea();
 
   async function guardar() {
-    if (enviando.current || estado.guardando) return;
+    if (enviando.current || estado.guardando || !enLinea) return;
     enviando.current = true;
     onOcupadoChange?.(true);
     establecerError(null);
@@ -34,7 +38,7 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
       establecerResumenCerrado(false);
       onCreado?.(periodo);
     } catch (error) {
-      establecerError(error instanceof Error ? error.message : 'No se pudo conectar con el servidor.');
+      establecerError(mensajeError(error, 'No se pudo conectar con el servidor.'));
     } finally {
       enviando.current = false;
       onOcupadoChange?.(false);
@@ -47,6 +51,8 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
   </aside>;
 
   if (estado.datos?.actual) return null;
+  // Es opcional: sin conexión no se pide (salvo que ya esté llenando el formulario).
+  if (!abierto && (!enLinea || estado.errorConsulta === SIN_RED)) return null;
   if (!abierto && estado.pospuesto) {
     return origen === 'ia' ? <button type="button" className={boton} disabled={estado.guardando}
       onClick={() => estado.abrir(origen)}>Configurar semestre</button> : null;
@@ -84,12 +90,13 @@ export default function ConfiguracionPeriodo({ origen = 'dashboard', onCreado, o
               <input id={id + '-fin'} type="date" value={fin} onChange={(e) => establecerFin(e.target.value)} required className={campo} />
             </div>
           </div>
-          <button type="submit" className="min-h-11 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">
+          <NecesitasInternet />
+          <button type="submit" disabled={!enLinea} className="min-h-11 w-full rounded-xl bg-[#234F45] px-4 py-3 text-sm font-semibold text-white hover:bg-[#316457] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">
             {estado.guardando ? 'Guardando…' : 'Guardar semestre'}
           </button>
         </fieldset>
         {estado.guardando && <p role="status" className="text-xs text-[#35695D]">Guardando tu período…</p>}
-        {error && <p role="alert" className="whitespace-pre-wrap rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-3 text-sm text-[#A34955]">{error}</p>}
+        {error && error !== SIN_RED && <p role="alert" className="whitespace-pre-wrap rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-3 text-sm text-[#A34955]">{error}</p>}
       </form>
     )}
   </aside>;

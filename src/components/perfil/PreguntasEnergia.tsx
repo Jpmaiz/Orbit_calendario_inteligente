@@ -2,6 +2,7 @@
 
 import { useState, type CSSProperties } from 'react';
 import { guardarRitmo, type MomentoEnergia, type Momento, type Ritmo } from './contratoPerfil';
+import { mensajeError } from '../pwa/errorRed';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 const PREGUNTAS = ['¿Cuándo te concentras mejor?', '¿Cuándo te cuesta más?'];
@@ -26,7 +27,7 @@ export default function PreguntasEnergia({ momentos, alTerminar }: { momentos: M
       if (!saltar && cuesta) energia[cuesta] = 'baja';
       alTerminar(await guardarRitmo({ ...(Object.keys(energia).length ? { energia } : {}), energiaPreguntada: true }));
     } catch (e) {
-      establecerError(e instanceof Error ? e.message : 'No pude guardar. Inténtalo de nuevo.');
+      establecerError(mensajeError(e, 'No pude guardar. Inténtalo de nuevo.'));
       establecerGuardando(false);
     }
   }

@@ -4,6 +4,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { diaEnBolivia, sumarDias } from './organizarTareasDia';
 import { ANIMO_CAMBIAR, avisarAnimo, enviarAnimo, leerAnimo, NOMBRE_ANIMO, reacomodar, type CambioBloque, type EstadoAnimo, type SugerenciaAnimo } from './contratoAnimo';
 import { guardarRitmo, type CambioRitmo } from '../perfil/contratoPerfil';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { SIN_RED } from '../pwa/errorRed';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 const zona = 'America/La_Paz';
@@ -47,6 +49,7 @@ export default function ComoEstasHoy({ fechaActual }: { fechaActual: string }) {
   const [sugerencia, establecerSugerencia] = useState<SugerenciaAnimo>(null);
   const [paso, establecerPaso] = useState<Paso>({ tipo: 'preguntar' });
   const [listo, establecerListo] = useState(false);
+  const enLinea = useEnLinea();
 
   useEffect(() => {
     const abortar = new AbortController();
@@ -83,6 +86,8 @@ export default function ComoEstasHoy({ fechaActual }: { fechaActual: string }) {
       establecerPaso({ tipo: 'respuesta', texto, cambios });
     } catch (e) {
       establecerElegido(anterior);
+      // Sin red la burbuja se oculta sola: no hace falta un mensaje.
+      if (e instanceof Error && e.message === SIN_RED) { establecerPaso({ tipo: 'cerrado' }); return; }
       establecerPaso({ tipo: 'respuesta', texto: e instanceof Error ? e.message : 'No se pudo guardar.', cambios: [] });
     }
   }
@@ -102,7 +107,8 @@ export default function ComoEstasHoy({ fechaActual }: { fechaActual: string }) {
     try { await guardarRitmo(cambio as CambioRitmo); } catch { /* si falla, no insiste */ }
   }
 
-  if (!listo) return null;
+  // Es opcional: sin conexión no aparece (ni la burbuja ni la sugerencia).
+  if (!listo || !enLinea) return null;
 
   // Cerrado: nada en el flujo (lo elegido vive junto a la fecha). Solo la sugerencia, si hay.
   if (paso.tipo === 'cerrado') {

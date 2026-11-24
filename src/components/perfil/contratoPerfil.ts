@@ -1,4 +1,5 @@
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
+import { SIN_RED } from '../pwa/errorRed';
 
 /**
  * Contrato del Perfil (v2.13–2.14): Mi ritmo con la energía por momento, lo aprendido y el semestre.
@@ -116,7 +117,7 @@ async function pedir(url: string, init: RequestInit, otro: string): Promise<unkn
   try {
     respuesta = await fetch(url, { cache: 'no-store', ...init, headers: { 'Content-Type': 'application/json', ...init.headers } });
   } catch {
-    throw new ErrorPerfil('No hay conexión. Inténtalo de nuevo en un momento.', 0);
+    throw new ErrorPerfil(SIN_RED, 0);
   }
   const datos: unknown = await respuesta.json().catch(() => null);
   if (!respuesta.ok) {

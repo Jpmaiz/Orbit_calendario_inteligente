@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { leerAgenda, type AgendaDia } from './agendaDia';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
+import { mensajeError } from '../pwa/errorRed';
 
 type Carga = { clave: string; agenda: AgendaDia | null; error: string | null };
 
@@ -14,7 +15,8 @@ export function useAgendaRango(desde: string, hasta: string) {
   useEffect(() => {
     const actualizar = () => establecerIntento((valor) => valor + 1);
     window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
-    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
+    window.addEventListener('online', actualizar); // al volver internet, se trae lo nuevo
+    return () => { window.removeEventListener(AGENDA_ACTUALIZADA, actualizar); window.removeEventListener('online', actualizar); };
   }, []);
 
   useEffect(() => {
@@ -34,7 +36,7 @@ export function useAgendaRango(desde: string, hasta: string) {
       } catch (error) {
         if (!controlador.signal.aborted) establecerCarga({
           clave, agenda: null,
-          error: error instanceof Error ? error.message : 'No se pudo conectar con el servidor.',
+          error: mensajeError(error, 'No se pudo conectar con el servidor.'),
         });
       }
     }

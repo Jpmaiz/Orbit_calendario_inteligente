@@ -7,6 +7,8 @@ import OrbitaDelDia from './OrbitaDelDia';
 import LineaHoy from './LineaHoy';
 import ComoEstasHoy from './ComoEstasHoy';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
+import CargaFallida from '../pwa/CargaFallida';
+import { mensajeError, SIN_RED } from '../pwa/errorRed';
 import { diaEnBolivia, organizarTareasDia, sumarDias } from './organizarTareasDia';
 import {
   combinarTareas, leerAgenda, leerTareasConPrioridad,
@@ -54,7 +56,8 @@ export default function AgendaDiaVista({ fechaActual, inicial }: {
   useEffect(() => {
     const actualizar = () => establecerRevision((valor) => valor + 1);
     window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
-    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
+    window.addEventListener('online', actualizar); // al volver internet, se trae lo nuevo
+    return () => { window.removeEventListener(AGENDA_ACTUALIZADA, actualizar); window.removeEventListener('online', actualizar); };
   }, []);
 
   useEffect(() => {
@@ -71,8 +74,9 @@ export default function AgendaDiaVista({ fechaActual, inicial }: {
       ]);
       if (controlador.signal.aborted) return;
       const errores: string[] = [];
-      if (agenda.status === 'rejected') errores.push('Agenda: ' + (agenda.reason instanceof Error ? agenda.reason.message : 'No se pudo cargar.'));
-      if (tareas.status === 'rejected') errores.push('Tareas: ' + (tareas.reason instanceof Error ? tareas.reason.message : 'No se pudieron cargar.'));
+      // Sin red: un solo SIN_RED (se muestra tranquilo, sin «Failed to fetch»)
+      if (agenda.status === 'rejected') errores.push(mensajeError(agenda.reason) === SIN_RED ? SIN_RED : 'Agenda: ' + mensajeError(agenda.reason, 'No se pudo cargar.'));
+      if (tareas.status === 'rejected') errores.push(mensajeError(tareas.reason) === SIN_RED ? SIN_RED : 'Tareas: ' + mensajeError(tareas.reason, 'No se pudieron cargar.'));
       establecerCarga({
         fechaActual, errores,
         agenda: agenda.status === 'fulfilled' ? agenda.value : null,
@@ -92,6 +96,8 @@ export default function AgendaDiaVista({ fechaActual, inicial }: {
 
   const combinadas = combinarTareas(carga.agenda?.tareas ?? [], carga.tareas ?? []);
   const tareasDisponibles = carga.agenda !== null || carga.tareas !== null;
+  const sinRed = carga.errores.includes(SIN_RED);
+  const errores = carga.errores.filter((e) => e !== SIN_RED);
   const secciones = organizarTareasDia(combinadas.tareas, new Date(fechaActual))
     .filter((seccion) => seccion.tareas.length > 0);
 
@@ -99,9 +105,10 @@ export default function AgendaDiaVista({ fechaActual, inicial }: {
     <div className="min-w-0 space-y-6 md:space-y-8">
       <ComoEstasHoy fechaActual={fechaActual} />
       {carga.agenda && <OrbitaDelDia agenda={carga.agenda} />}
-      {(carga.errores.length > 0 || combinadas.sinPrioridad > 0) && (
+      {sinRed && <CargaFallida texto="No se pudo cargar tu día." error={SIN_RED} className="rounded-2xl bg-white px-5 py-4" />}
+      {(errores.length > 0 || combinadas.sinPrioridad > 0) && (
         <div role="alert" className="space-y-2 rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">
-          {carga.errores.map((mensaje) => <p key={mensaje}>{mensaje}</p>)}
+          {errores.map((mensaje) => <p key={mensaje}>{mensaje}</p>)}
           {combinadas.sinPrioridad > 0 && <p>Hay tareas del día sin prioridad calculada. Se muestran con sus datos de agenda.</p>}
           <button type="button" onClick={() => router.refresh()} className="min-h-11 rounded-lg px-2 font-semibold underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">Volver a cargar</button>
         </div>

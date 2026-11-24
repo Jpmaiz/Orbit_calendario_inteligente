@@ -4,6 +4,9 @@ import { useState, type CSSProperties } from 'react';
 import Dodecaedro from '../marca/Dodecaedro';
 import { leerAprendizaje, olvidarAprendizaje } from './contratoPerfil';
 import { useConsulta } from './useConsulta';
+import CargaFallida from '../pwa/CargaFallida';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { mensajeError } from '../pwa/errorRed';
 
 const paso = (i: number) => ({ '--i': i }) as CSSProperties;
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
@@ -23,6 +26,7 @@ export default function LoQueSabe() {
   const [estado, establecerEstado] = useState<'nada' | 'confirmar' | 'borrando' | 'listo'>('nada');
   const [error, establecerError] = useState<string | null>(null);
   const datos = carga?.datos;
+  const enLinea = useEnLinea();
 
   async function olvidar() {
     establecerEstado('borrando');
@@ -33,7 +37,7 @@ export default function LoQueSabe() {
       recargar();
     } catch (e) {
       establecerEstado('confirmar');
-      establecerError(e instanceof Error ? e.message : 'No pude borrar lo aprendido.');
+      establecerError(mensajeError(e, 'No pude borrar lo aprendido.'));
     }
   }
 
@@ -45,9 +49,7 @@ export default function LoQueSabe() {
     <h2 id="perfil-sabe" className="relative text-base font-bold">Lo que Orbit sabe de ti</h2>
 
     {!carga && <p role="status" className="relative text-sm text-[#647168]">Cargando…</p>}
-    {carga?.error && <div role="alert" className="relative text-sm text-[#647168]">
-      No pude cargar lo que Orbit aprendió. <button type="button" onClick={recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
-    </div>}
+    {carga?.error && <CargaFallida texto="No pude cargar lo que Orbit aprendió." recargar={recargar} className="relative" />}
 
     {datos && <ul className="relative space-y-2">
       {datos.frases.map((frase, i) => <li key={frase} className="orbit-aparece flex items-start gap-3 rounded-2xl bg-white/80 p-3 shadow-[0_1px_2px_rgba(35,79,69,.05)]" style={paso(i + 1)}>
@@ -58,7 +60,7 @@ export default function LoQueSabe() {
 
     {datos && !datos.conociendo && estado !== 'listo' && <div className="relative flex items-center justify-between gap-2.5">
       <p className="text-xs text-[#8A958D]">Basado en lo que hiciste en la app.</p>
-      {estado === 'nada' && <button type="button" onClick={() => establecerEstado('confirmar')}
+      {estado === 'nada' && enLinea && <button type="button" onClick={() => establecerEstado('confirmar')}
         className={'min-h-10 shrink-0 rounded-lg text-[13px] font-semibold text-[#647168] underline underline-offset-4 hover:text-[#263D34] ' + foco}>Empezar de cero</button>}
     </div>}
 
@@ -66,7 +68,7 @@ export default function LoQueSabe() {
       <p id="perfil-olvidar" className="text-sm leading-relaxed">Orbit olvidará lo que aprendió de tus horas y horarios. ¿Seguir?</p>
       {error && <p role="status" className="text-[13px] text-[#647168]">{error}</p>}
       <div className="flex gap-1.5">
-        <button type="button" onClick={olvidar} disabled={estado === 'borrando'}
+        <button type="button" onClick={olvidar} disabled={estado === 'borrando' || !enLinea}
           className={'min-h-11 rounded-full bg-[#263D34] px-4 text-[13.5px] font-semibold text-white disabled:opacity-70 ' + foco}>{estado === 'borrando' ? 'Borrando…' : 'Sí, empezar de cero'}</button>
         <button type="button" onClick={() => { establecerEstado('nada'); establecerError(null); }} disabled={estado === 'borrando'}
           className={'min-h-11 rounded-full px-3 text-[13.5px] font-semibold text-[#35695D] ' + foco}>Cancelar</button>

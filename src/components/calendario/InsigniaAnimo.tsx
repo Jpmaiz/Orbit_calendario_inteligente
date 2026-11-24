@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { Icono } from './ComoEstasHoy';
+import { useEnLinea } from '../pwa/useEnLinea';
 import { ANIMO_ELEGIDO, leerAnimo, NOMBRE_ANIMO, pedirCambioAnimo, type EstadoAnimo } from './contratoAnimo';
 
 /** Junto a la fecha del saludo: «· ⚡ a full». Tocarlo vuelve a abrir «¿Cómo vienes hoy?». */
 export default function InsigniaAnimo() {
   const [estado, establecerEstado] = useState<EstadoAnimo | null>(null);
+  const enLinea = useEnLinea(); // sin conexión se ve, pero no se puede cambiar
 
   useEffect(() => {
     const abortar = new AbortController();
@@ -17,7 +19,7 @@ export default function InsigniaAnimo() {
   }, []);
 
   if (!estado) return null;
-  return <button type="button" onClick={pedirCambioAnimo} aria-label={`Hoy vienes: ${NOMBRE_ANIMO[estado]}. Cambiar`}
+  return <button type="button" disabled={!enLinea} onClick={pedirCambioAnimo} aria-label={`Hoy vienes: ${NOMBRE_ANIMO[estado]}. Cambiar`}
     className="orbit-pop -my-3 ml-1.5 inline-flex items-center gap-1 rounded-full py-3 align-middle text-[#35695D] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]">
     <span aria-hidden="true" className="text-[#C2CAC4]">·</span>
     <Icono estado={estado} tam={13} />

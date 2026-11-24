@@ -7,6 +7,10 @@ import MapaEnergia, { SIGUIENTE } from './MapaEnergia';
 import PreguntasEnergia from './PreguntasEnergia';
 import FijoSemanal from './FijoSemanal';
 import { useConsulta } from './useConsulta';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import CargaFallida from '../pwa/CargaFallida';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { mensajeError, SIN_RED } from '../pwa/errorRed';
 import { aMinutos, guardarRitmo, leerEnergia, type CambioRitmo, type EnergiaPerfil, type Ritmo } from './contratoPerfil';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
@@ -59,6 +63,7 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
   const relojGuardado = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const idManual = useId();
   const datosEnergia = energia.carga?.datos ?? null;
+  const enLinea = useEnLinea();
 
   // Primera sugerencia que llega: queda hasta que la responda (sin efecto: se ajusta al renderizar).
   const nueva = datosEnergia?.sugerencia ?? null;
@@ -101,7 +106,7 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
         aplicar(await guardarRitmo(enviar));
       } catch (e) {
         establecerRitmo(confirmado.current);
-        establecerAviso(e instanceof Error ? e.message : 'No pude guardar tu ritmo.');
+        establecerAviso(mensajeError(e, 'No pude guardar tu ritmo.'));
       }
     }, 300);
   }
@@ -112,7 +117,7 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
     try {
       aplicar(await guardarRitmo(cambio));
     } catch (e) {
-      establecerAviso(e instanceof Error ? e.message : 'No pude guardar tu ritmo.');
+      establecerAviso(mensajeError(e, 'No pude guardar tu ritmo.'));
     }
   }
 
@@ -120,7 +125,8 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
   const momentos = (datosEnergia?.momentos ?? []).map((m) => ({
     ...m, nivel: ritmo.energia[m.momento] ?? m.nivel, aprendido: m.aprendido && ritmo.energia[m.momento] === m.nivel,
   }));
-  const preguntar = !!datosEnergia?.preguntar && !ritmo.energiaPreguntada && !preguntasListas;
+  // Lo opcional (las dos preguntas, la sugerencia) no aparece sin conexión.
+  const preguntar = enLinea && !!datosEnergia?.preguntar && !ritmo.energiaPreguntada && !preguntasListas;
   const ocupados: Ocupado[] = clases.map((c) => ({ dia: c.diaSemana, ini: aMinutos(c.horaInicio), fin: aMinutos(c.horaFin), titulo: c.titulo, color: c.materia?.color ?? '#4C5A51' }));
   const desdeMin = aMinutos(ritmo.desde), hastaMin = aMinutos(ritmo.hasta);
 
@@ -137,16 +143,16 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
           <h3 className="text-[14.5px] font-semibold">Tu energía en el día</h3>
           {!energia.carga && <span role="status" className="text-xs text-[#8A958D]">Cargando…</span>}
         </div>
-        {energia.carga?.error && <p role="alert" className="text-[13px] text-[#647168]">
-          No pude cargar tu energía. <button type="button" onClick={energia.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
-        </p>}
+        {energia.carga?.error && <CargaFallida texto="No pude cargar tu energía." recargar={energia.recargar} className="text-[13px]" />}
         {momentos.length > 0 && <>
-          <MapaEnergia momentos={momentos} alCambiar={(m) => cambiar({ energia: { [m.momento]: SIGUIENTE[m.nivel] } })} />
-          <p className="text-[12.5px] leading-snug text-[#8A958D]">Toca un momento para cambiarlo. Orbit pone el estudio más exigente donde rindes más.</p>
+          <MapaEnergia momentos={momentos} deshabilitado={!enLinea} alCambiar={(m) => cambiar({ energia: { [m.momento]: SIGUIENTE[m.nivel] } })} />
+          {enLinea
+            ? <p className="text-[12.5px] leading-snug text-[#8A958D]">Toca un momento para cambiarlo. Orbit pone el estudio más exigente donde rindes más.</p>
+            : <NecesitasInternet />}
         </>}
       </div>}
 
-    {sugerencia && <div role="status" className="orbit-aparece flex flex-col gap-2.5 rounded-[18px] bg-[#F1F6F2] p-3.5 shadow-[inset_0_0_0_1.5px_#A9CDB9]">
+    {sugerencia && enLinea && <div role="status" className="orbit-aparece flex flex-col gap-2.5 rounded-[18px] bg-[#F1F6F2] p-3.5 shadow-[inset_0_0_0_1.5px_#A9CDB9]">
       <p className="text-sm leading-relaxed">{sugerencia.texto}</p>
       <div className="flex gap-1.5">
         <button type="button" onClick={() => { const cambio = sugerencia.cambio; establecerSugerencia(null); void guardarYa(cambio); }}
@@ -164,16 +170,16 @@ export default function MiRitmo({ inicial, clases }: { inicial: Ritmo; clases: C
 
     <FijoSemanal />
 
-    {aviso && <p role="status" className="text-[13px] text-[#647168]">{aviso}</p>}
+    {aviso && aviso !== SIN_RED && <p role="status" className="text-[13px] text-[#647168]">{aviso}</p>}
 
-    <button type="button" aria-expanded={manual} aria-controls={idManual} onClick={() => establecerManual((v) => !v)}
-      className={'inline-flex min-h-10 items-center gap-1.5 self-start rounded-lg text-[13.5px] font-semibold text-[#35695D] ' + foco}>
+    <button type="button" aria-expanded={manual && enLinea} aria-controls={idManual} disabled={!enLinea} onClick={() => establecerManual((v) => !v)}
+      className={'inline-flex min-h-10 items-center gap-1.5 self-start rounded-lg text-[13.5px] font-semibold text-[#35695D] disabled:opacity-40 ' + foco}>
       Ajustar a mano
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
         className={'h-4 w-4 transition-transform duration-200 ' + (manual ? 'rotate-180' : '')}><path d="m6 9 6 6 6-6" /></svg>
     </button>
 
-    {manual && <div id={idManual} className="orbit-aparece flex flex-col gap-4">
+    {manual && enLinea && <div id={idManual} className="orbit-aparece flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2 text-[14.5px]">
         <span>Estudio de</span>
         <select aria-label="Hora de inicio del estudio" value={ritmo.desde} onChange={(e) => cambiar({ desde: e.target.value })} className={campo}>

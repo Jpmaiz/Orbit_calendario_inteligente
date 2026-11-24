@@ -15,6 +15,9 @@ import {
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
 import { leerDocumento, prepararArchivo, type DocumentoLeido } from './capturaArchivo';
 import { useDictado } from './useDictado';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { mensajeError } from '../pwa/errorRed';
 
 /** Evento que avisa a la barra (Calendario) cuántas cosas se acaban de agregar. */
 export const ORBIT_AGREGADO = 'orbit:agregado';
@@ -127,7 +130,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
     try {
       establecerMaterias(leerMaterias(await consultar('/api/materias')));
     } catch (error) {
-      establecerErrorMaterias(error instanceof Error ? error.message : 'No se pudieron cargar las materias.');
+      establecerErrorMaterias(mensajeError(error, 'No se pudieron cargar las materias.'));
     } finally {
       materiasEnCurso.current = false;
       establecerCargandoMaterias(false);
@@ -171,7 +174,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
       establecerDocumento(null);
       mostrarBorrador(nuevo);
     } catch (error) {
-      establecerError(error instanceof Error ? error.message : 'No se pudo conectar con el servidor.');
+      establecerError(mensajeError(error, 'No se pudo conectar con el servidor.'));
     } finally {
       terminar();
     }
@@ -195,7 +198,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
       mostrarBorrador(nuevo);
     } catch (error) {
       establecerArchivo(null);
-      establecerError(error instanceof Error ? error.message : 'No se pudo leer el archivo.');
+      establecerError(mensajeError(error, 'No se pudo leer el archivo.'));
     } finally {
       terminar();
       if (entradaArchivo.current) entradaArchivo.current.value = ''; // permite elegir el mismo archivo otra vez
@@ -256,7 +259,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
         : 'Duplicados y choques actualizados.');
       if (errores.length) establecerError(errores.join('\n'));
     } catch (error) {
-      establecerError(error instanceof Error ? error.message : 'No se pudo revisar el borrador. Tus cambios se conservaron.');
+      establecerError(mensajeError(error, 'No se pudo revisar el borrador. Tus cambios se conservaron.'));
     } finally {
       terminar();
     }
@@ -268,7 +271,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
     try {
       body = construirConfirmacion(borrador.interpretacionId, items, corregida);
     } catch (error) {
-      establecerError(error instanceof Error ? error.message : 'Revisa los datos pendientes.');
+      establecerError(mensajeError(error, 'Revisa los datos pendientes.'));
       return;
     }
     enCurso.current = true;
@@ -299,7 +302,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
       avisarAgendaActualizada();
       void recargarPeriodos();
     } catch (error) {
-      establecerError(error instanceof Error ? error.message : 'No se pudo conectar con el servidor. Se conservó el borrador.');
+      establecerError(mensajeError(error, 'No se pudo conectar con el servidor. Se conservó el borrador.'));
     } finally {
       terminar();
     }
@@ -329,6 +332,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
   const pendientes = incluidos.some((i) => problemasItem(i).length > 0) || erroresVinculos.length > 0;
   const faltaHora = incluidos.some((i) => i.clase !== 'evento_fijo' && !i.propuestaResuelta);
   const ocupada = enviando !== null || guardandoPeriodo;
+  const enLinea = useEnLinea();
   const esHorario = !!borrador && documento?.tipo === 'horario' && items.some((i) => i.clase === 'evento_fijo');
   const leyendo = enviando === 'extraer';
   const clasesHorario = esHorario ? contarClases(items) : 0;
@@ -421,7 +425,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
               <label htmlFor={(tituloId ?? 'orbit') + '-texto'} className="sr-only">¿Qué tienes en mente?</label>
               <textarea ref={campoTexto} id={(tituloId ?? 'orbit') + '-texto'} rows={3} value={texto} maxLength={2000} autoFocus
                 onChange={(e) => establecerTexto(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void extraer(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (enLinea) void extraer(); } }}
                 placeholder={placeholder}
                 className="block min-h-[4.5rem] w-full resize-none bg-transparent text-base leading-relaxed text-[#263D34] outline-none placeholder:text-[#9AA59D]" />
             </div>
@@ -429,18 +433,18 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
             {!texto.trim() && <div className="space-y-2">
               <p className="text-xs font-semibold text-[#647168]">Prueba con</p>
               <div className="flex flex-wrap gap-2">
-                {SUGERENCIAS.map((s, i) => <button key={s} type="button" onClick={() => void extraer(s)} style={{ ['--i' as string]: i }}
-                  className="orbit-aparece rounded-xl border border-[#CEDFD5] bg-white px-3 py-2 text-left text-xs text-[#263D34] transition-[border-color,transform] hover:-translate-y-px hover:border-[#35695D]">{s}</button>)}
-                <button type="button" onClick={() => entradaArchivo.current?.click()} style={{ ['--i' as string]: SUGERENCIAS.length }}
-                  className="orbit-aparece rounded-xl border border-dashed border-[#93B4A5] bg-[#EDF4E8] px-3 py-2 text-left text-xs font-semibold text-[#35695D] transition-transform hover:-translate-y-px">
+                {SUGERENCIAS.map((s, i) => <button key={s} type="button" disabled={!enLinea} onClick={() => void extraer(s)} style={{ ['--i' as string]: i }}
+                  className="orbit-aparece rounded-xl border border-[#CEDFD5] bg-white px-3 py-2 text-left text-xs text-[#263D34] transition-[border-color,transform] hover:-translate-y-px hover:border-[#35695D] disabled:pointer-events-none disabled:opacity-50">{s}</button>)}
+                <button type="button" disabled={!enLinea} onClick={() => entradaArchivo.current?.click()} style={{ ['--i' as string]: SUGERENCIAS.length }}
+                  className="orbit-aparece rounded-xl border border-dashed border-[#93B4A5] bg-[#EDF4E8] px-3 py-2 text-left text-xs font-semibold text-[#35695D] transition-transform hover:-translate-y-px disabled:pointer-events-none disabled:opacity-50">
                   Tu horario del SIAAN en PDF o foto
                 </button>
               </div>
             </div>}
 
             <div className="flex items-center gap-2 border-t border-[#E4E8DF] pt-3">
-              <label className={herramienta + ' cursor-pointer'} title="Horario, afiche o captura de chat">
-                <input ref={entradaArchivo} type="file" accept="image/*,application/pdf" className="sr-only"
+              <label className={herramienta + (enLinea ? ' cursor-pointer' : ' pointer-events-none opacity-50')} title="Horario, afiche o captura de chat">
+                <input ref={entradaArchivo} type="file" disabled={!enLinea} accept="image/*,application/pdf" className="sr-only"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) void extraerArchivo(f); }} />
                 <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z" /><circle cx="12" cy="13" r="3.5" /></svg>
                 Foto o PDF
@@ -452,8 +456,9 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
                   <svg viewBox="0 0 24 24" className={'h-[18px] w-[18px] ' + (dictado.escuchando ? 'animate-pulse' : '')} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>
                 </button>
               )}
-              <button type="submit" className={principal + ' ml-auto'} disabled={!texto.trim()}>Agregar</button>
+              <button type="submit" className={principal + ' ml-auto'} disabled={!texto.trim() || !enLinea}>Agregar</button>
             </div>
+            <NecesitasInternet />
             {dictado.escuchando && <p role="status" className="text-xs text-[#A34955]">Te escucho… habla y toca el micrófono para terminar.</p>}
           </fieldset>
         </form>
@@ -498,7 +503,7 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
             <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#C5A355]" />
             {faltaHora ? 'Responde la pregunta de la hora para guardar.' : 'Completa lo marcado o quítalo para continuar.'}
           </p>}
-          {corregida && <button type="button" className="min-h-9 text-xs font-semibold text-[#35695D] underline-offset-4 hover:underline" disabled={ocupada || incluidos.length === 0 || incluidos.length > 20} onClick={() => void revisarCambios()}>
+          {corregida && <button type="button" className="min-h-9 text-xs font-semibold text-[#35695D] underline-offset-4 hover:underline" disabled={ocupada || incluidos.length === 0 || incluidos.length > 20 || !enLinea} onClick={() => void revisarCambios()}>
             {enviando === 'revisar' ? 'Revisando…' : 'Volver a revisar duplicados y choques'}
           </button>}
           {estadoRevision && <p role="status" className="text-xs text-[#526A5A]">{estadoRevision}</p>}
@@ -507,10 +512,11 @@ export default function CapturaRapida({ tituloId, ocupado: bloqueado = false, on
             <button type="button" className={botonCaptura + ' px-4'} disabled={ocupada} onClick={volverAEscribir}>
               {archivo ? 'Otro archivo' : 'Volver'}
             </button>
-            <button type="button" className={principal + ' flex-1'} disabled={ocupada || pendientes || incluidos.length === 0 || incluidos.length > 20} onClick={() => void confirmar()}>
+            <button type="button" className={principal + ' flex-1'} disabled={ocupada || pendientes || incluidos.length === 0 || incluidos.length > 20 || !enLinea} onClick={() => void confirmar()}>
               {enviando === 'confirmar' ? 'Guardando…' : esHorario ? 'Agregar mi horario' : incluidos.length > 1 ? `Agregar ${incluidos.length}` : 'Agregar'}
             </button>
           </div>
+          <NecesitasInternet />
         </section>
       )}
 

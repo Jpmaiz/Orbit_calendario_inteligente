@@ -12,7 +12,8 @@ export function useConsulta<T>(url: string, leer: (valor: unknown) => T) {
   useEffect(() => {
     const actualizar = () => establecerRevision((valor) => valor + 1);
     window.addEventListener(AGENDA_ACTUALIZADA, actualizar);
-    return () => window.removeEventListener(AGENDA_ACTUALIZADA, actualizar);
+    window.addEventListener('online', actualizar); // al volver internet, se trae lo nuevo
+    return () => { window.removeEventListener(AGENDA_ACTUALIZADA, actualizar); window.removeEventListener('online', actualizar); };
   }, []);
   useEffect(() => {
     const controlador = new AbortController();

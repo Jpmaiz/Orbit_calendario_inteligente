@@ -12,7 +12,7 @@ const NIVEL: Record<Nivel, { texto: string; barras: number; fondo: string; tinta
 export const SIGUIENTE: Record<Nivel, Nivel> = { alta: 'normal', normal: 'baja', baja: 'alta' };
 
 /** Los 4 momentos del día: un toque cicla Rindes más → Normal → Te cuesta. Lo que queda fuera del horario se ve apagado. */
-export default function MapaEnergia({ momentos, alCambiar }: { momentos: MomentoEnergia[]; alCambiar: (m: MomentoEnergia) => void }) {
+export default function MapaEnergia({ momentos, alCambiar, deshabilitado = false }: { momentos: MomentoEnergia[]; alCambiar: (m: MomentoEnergia) => void; deshabilitado?: boolean }) {
   return <div role="group" aria-label="Tu energía en el día" className="grid grid-cols-4 gap-2">
     {momentos.map((m) => {
       const n = NIVEL[m.nivel];
@@ -21,9 +21,9 @@ export default function MapaEnergia({ momentos, alCambiar }: { momentos: Momento
         <span className="text-[13px] font-semibold">{m.nombre}</span>
         <span className="text-[11px] leading-tight">fuera de tu horario</span>
       </div>;
-      return <button key={m.momento} type="button" onClick={() => alCambiar(m)}
+      return <button key={m.momento} type="button" disabled={deshabilitado} onClick={() => alCambiar(m)}
         aria-label={`${m.nombre}, de ${m.desde} a ${m.hasta}: ${n.texto.toLowerCase()}${m.aprendido ? ' (lo aprendió Orbit)' : ''}. Tocar para cambiar`}
-        className={'group relative flex min-h-[104px] flex-col justify-between rounded-2xl p-2.5 text-left transition-[background,transform] duration-200 active:scale-95 ' + foco}
+        className={'group relative flex min-h-[104px] flex-col justify-between rounded-2xl p-2.5 text-left transition-[background,transform,opacity] duration-200 active:scale-95 disabled:opacity-60 disabled:active:scale-100 ' + foco}
         style={{ background: n.fondo, color: n.tinta }}>
         <span className="flex flex-col">
           <span className="text-[13px] font-bold leading-tight">{m.nombre}</span>

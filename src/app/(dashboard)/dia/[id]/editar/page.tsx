@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import FormularioTarea from '@/components/formularios/FormularioTarea';
 import { esDificultad } from '@/tipos/tarea';
 import type { ValoresTarea } from '@/components/formularios/FormularioTarea';
+import { mensajeError } from '@/components/pwa/errorRed';
 
 type Carga =
   | { id: string; estado: 'cargando' }
@@ -70,7 +71,7 @@ export default function PaginaEditarTarea() {
         }
       } catch (fallo) {
         if (!controlador.signal.aborted) {
-          establecerCarga({ id, estado: 'error', mensaje: fallo instanceof TypeError ? 'No se pudo conectar con el servidor. Intenta de nuevo.' : fallo instanceof Error ? fallo.message : 'No se pudo cargar la tarea.' });
+          establecerCarga({ id, estado: 'error', mensaje: mensajeError(fallo, 'No se pudo cargar la tarea.') });
         }
       }
     }

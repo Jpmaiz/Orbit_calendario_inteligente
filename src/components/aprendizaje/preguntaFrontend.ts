@@ -1,3 +1,5 @@
+import { mensajeError } from '../pwa/errorRed';
+
 export type RespuestaPregunta = 'menos' | 'justo' | 'mas';
 export type Pregunta = {
   tareaId: string; titulo: string; texto: string; horasSugeridas: number; opciones: RespuestaPregunta[];
@@ -49,7 +51,7 @@ function crearSesion() {
         const pregunta = leerPregunta(datos);
         actualizar({ pregunta, terminada: pregunta === null });
       } catch (e) {
-        actualizar({ error: e instanceof Error ? e.message : 'No se pudo consultar la pregunta.' });
+        actualizar({ error: mensajeError(e, 'No se pudo consultar la pregunta.') });
       } finally {
         actualizar({ consultando: false });
         consulta = null;
@@ -72,7 +74,7 @@ function crearSesion() {
       }
       actualizar({ pregunta: null, terminada: true });
     } catch (e) {
-      actualizar({ error: e instanceof Error ? e.message : 'No se pudo guardar. Puedes reintentar.' });
+      actualizar({ error: mensajeError(e, 'No se pudo guardar. Puedes reintentar.') });
     } finally {
       actualizar({ enviando: false });
     }

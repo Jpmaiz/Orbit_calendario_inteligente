@@ -2,6 +2,8 @@ import type { BloqueSemana } from './agendaSemana';
 import { formatoHoraBolivia, inicioDiaBolivia, sumarDias } from './agendaSemana';
 import type { BloqueEstudioAgenda, TareaAgenda } from './agendaDia';
 import { diaEnBolivia, yaPaso } from './organizarTareasDia';
+import CargaFallida from '../pwa/CargaFallida';
+import { SIN_RED } from '../pwa/errorRed';
 
 export const botonCalendario = 'min-h-11 rounded-xl border border-[#DEE8E1] bg-white px-4 text-sm font-medium text-[#35695D] transition-colors hover:bg-[#EDF3EE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B]';
 export const fechaCompleta = new Intl.DateTimeFormat('es-BO', {
@@ -99,7 +101,8 @@ export function TarjetaActividad({ bloque, mostrarTipo = true, fecha, alAbrirTar
 export function EstadoAgenda({ cargando, error, recargar }: { cargando: boolean; error: string | null; recargar: () => void }) {
   return <>
     {cargando && <p role="status" className="rounded-2xl bg-white p-6 text-sm text-[#35695D]">Cargando tu agenda…</p>}
-    {error && <div role="alert" className="rounded-2xl border border-[#EED4D7] bg-[#FCF0F1] p-4 text-sm text-[#A34955]">
+    {error === SIN_RED && <CargaFallida texto="No se pudo cargar tu agenda." error={error} className="rounded-2xl bg-white px-5 py-4" />}
+    {error && error !== SIN_RED && <div role="alert" className="rounded-2xl border border-[#EED4D7] bg-[#FCF0F1] p-4 text-sm text-[#A34955]">
       <p>{error.includes('America/La_Paz') ? 'Revisa la zona horaria de tu perfil para mostrar el calendario.' : error}</p>
       <button type="button" className={botonCalendario + ' mt-3'} onClick={recargar}>Volver a cargar</button>
     </div>}

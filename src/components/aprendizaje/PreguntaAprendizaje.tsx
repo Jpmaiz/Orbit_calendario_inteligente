@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { ESTADO_INICIAL, obtenerSesionPregunta, type RespuestaPregunta } from './preguntaFrontend';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { SIN_RED } from '../pwa/errorRed';
 
 const textos: Record<RespuestaPregunta, string> = {
   menos: 'Me tomó menos', justo: 'Estuvo bien', mas: 'Me tomó más',
@@ -13,6 +15,7 @@ export default function PreguntaAprendizaje({ claveConsulta }: { claveConsulta: 
   const sesion = useMemo(() => obtenerSesionPregunta(claveConsulta), [claveConsulta]);
   const estado = useSyncExternalStore(sesion.subscribe, sesion.getSnapshot, snapshotServidor);
   const puedeConsultar = useRef<() => boolean>(() => false);
+  const enLinea = useEnLinea();
 
   useEffect(() => {
     const nodo = raiz.current;
@@ -50,8 +53,10 @@ export default function PreguntaAprendizaje({ claveConsulta }: { claveConsulta: 
   }, [sesion]);
 
   const pregunta = estado.pregunta;
+  // Es opcional: sin conexión (o si falló por red) no aparece; vuelve sola cuando hay internet.
+  const visible = enLinea && estado.error !== SIN_RED;
   return <div ref={raiz} className="min-h-px">
-    {!estado.terminada && (pregunta || estado.error) && <aside aria-label="Pregunta de la semana" aria-busy={estado.enviando}
+    {visible && !estado.terminada && (pregunta || estado.error) && <aside aria-label="Pregunta de la semana" aria-busy={estado.enviando}
       className="space-y-3 rounded-2xl border border-[#E3E8DE] bg-[#FAFBF7] p-4 text-[#263D34]">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">

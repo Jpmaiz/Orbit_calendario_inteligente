@@ -2,6 +2,8 @@
 
 import { useId, useState } from 'react';
 import { aMinutos, crearCompromisos } from './contratoPerfil';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import { useEnLinea } from '../pwa/useEnLinea';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 const TIPOS = ['Trabajo', 'Gimnasio', 'Deporte', 'Otro'];
@@ -18,6 +20,7 @@ const chip = (activo: boolean) => 'min-h-11 rounded-xl px-3 text-[13.5px] font-s
 /** «Algo fijo cada semana»: trabajo, gimnasio… con botones y selectores. Se guarda como clase fija sin materia (tiempo ocupado). */
 export default function FijoSemanal() {
   const [abierto, establecerAbierto] = useState(false);
+  const enLinea = useEnLinea();
   const [tipo, establecerTipo] = useState('Trabajo');
   const [otro, establecerOtro] = useState('');
   const [dias, establecerDias] = useState<number[]>([]);
@@ -29,10 +32,10 @@ export default function FijoSemanal() {
   const valido = titulo.length > 0 && dias.length > 0 && aMinutos(hasta) > aMinutos(desde);
 
   async function guardar() {
-    if (!valido) return;
+    if (!valido || !enLinea) return;
     establecerEstado('guardando');
     const fallidos = await crearCompromisos([{ titulo, diasSemana: dias, hora: desde, horaFin: hasta }]);
-    if (fallidos.length) { establecerEstado({ error: 'No pude guardarlo. Inténtalo de nuevo.' }); return; }
+    if (fallidos.length) { establecerEstado({ error: navigator.onLine ? 'No pude guardarlo. Inténtalo de nuevo.' : 'Necesitas internet para esto.' }); return; }
     establecerEstado({ listo: `Listo: «${titulo}» quedó como tiempo ocupado. Orbit no te pondrá estudio ahí.` });
     establecerAbierto(false);
     establecerDias([]);
@@ -40,8 +43,8 @@ export default function FijoSemanal() {
   }
 
   if (!abierto) return <div className="flex flex-col gap-2">
-    <button type="button" onClick={() => { establecerAbierto(true); establecerEstado('nada'); }}
-      className={'flex min-h-[52px] items-center gap-3 rounded-2xl px-3.5 text-left shadow-[inset_0_0_0_1px_#DCE3D8] transition-colors hover:bg-[#F6F8F3] ' + foco}>
+    <button type="button" disabled={!enLinea} onClick={() => { establecerAbierto(true); establecerEstado('nada'); }}
+      className={'flex min-h-[52px] items-center gap-3 rounded-2xl px-3.5 text-left shadow-[inset_0_0_0_1px_#DCE3D8] transition-colors hover:bg-[#F6F8F3] disabled:opacity-50 disabled:hover:bg-transparent ' + foco}>
       <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#EAF1EC] text-lg font-semibold text-[#245B4C]">+</span>
       <span className="flex flex-col">
         <span className="text-[14.5px] font-semibold">Algo fijo cada semana</span>
@@ -79,9 +82,10 @@ export default function FijoSemanal() {
         {HORAS.filter((h) => aMinutos(h) > aMinutos(desde)).map((h) => <option key={h} value={h}>{h}</option>)}
       </select>
     </div>
-    {typeof estado === 'object' && 'error' in estado && <p role="status" className="text-[13px] text-[#647168]">{estado.error}</p>}
+    {typeof estado === 'object' && 'error' in estado && enLinea && <p role="status" className="text-[13px] text-[#647168]">{estado.error}</p>}
+    <NecesitasInternet />
     <div className="flex items-center gap-1.5">
-      <button type="button" onClick={guardar} disabled={!valido || estado === 'guardando'}
+      <button type="button" onClick={guardar} disabled={!valido || estado === 'guardando' || !enLinea}
         className={'min-h-11 rounded-full bg-[#35695D] px-5 text-sm font-semibold text-white hover:bg-[#2D5C51] disabled:bg-[#E9EDE5] disabled:text-[#8A958D] ' + foco}>
         {estado === 'guardando' ? 'Guardando…' : 'Guardar'}
       </button>

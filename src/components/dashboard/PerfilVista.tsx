@@ -17,6 +17,8 @@ import { leerPerfilRitmo, leerSemestre, type Semestre } from '../perfil/contrato
 import RuedaSemestre from '../perfil/RuedaSemestre';
 import MiRitmo from '../perfil/MiRitmo';
 import LoQueSabe from '../perfil/LoQueSabe';
+import CargaFallida from '../pwa/CargaFallida';
+import InstalarOrbit from '../pwa/InstalarOrbit';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 const modulo = 'rounded-[28px] bg-white p-[18px] shadow-[inset_0_0_0_1px_#E3E8DE]';
@@ -78,9 +80,7 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
         </section>
 
         {!semestre.carga && <div role="status" className="orbit-aparece col-span-2 flex h-40 items-center justify-center rounded-[28px] text-sm text-[#CFE0D7]" style={{ ...paso(1), background: '#1F4A40' }}>Cargando tu semestre…</div>}
-        {semestre.carga?.error && <div role="alert" className={'col-span-2 text-sm text-[#647168] ' + modulo}>
-          No pude cargar tu semestre. <button type="button" onClick={semestre.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
-        </div>}
+        {semestre.carga?.error && <CargaFallida texto="No pude cargar tu semestre." recargar={semestre.recargar} className={'col-span-2 ' + modulo} />}
         {datosSemestre && (semestreVacio(datosSemestre)
           ? <section aria-label="Tu semestre a la vista" className="orbit-aparece col-span-2 flex flex-col items-center gap-3 rounded-[28px] px-[22px] py-7 text-center"
             style={{ ...paso(1), background: 'radial-gradient(circle at 50% 30%, #2F6656 0, #1F4A40 70%)' }}>
@@ -123,9 +123,7 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
           </>)}
 
         {!perfil.carga && <div role="status" className={'col-span-2 text-sm text-[#647168] ' + modulo}>Cargando tu ritmo…</div>}
-        {perfil.carga?.error && <div role="alert" className={'col-span-2 text-sm text-[#647168] ' + modulo}>
-          No pude cargar tu ritmo. <button type="button" onClick={perfil.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
-        </div>}
+        {perfil.carga?.error && <CargaFallida texto="No pude cargar tu ritmo." recargar={perfil.recargar} className={'col-span-2 ' + modulo} />}
         {perfil.carga?.datos && <MiRitmo inicial={perfil.carga.datos.ritmo} clases={agenda.agenda?.clases ?? []} />}
 
         <LoQueSabe />
@@ -133,9 +131,7 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
         <section aria-labelledby="perfil-materias" className={'orbit-aparece col-span-2 flex flex-col gap-3 ' + modulo} style={paso(5)}>
           <h2 id="perfil-materias" className="text-base font-bold">Materias</h2>
           {!materias.carga && <p role="status" className="text-sm text-[#647168]">Cargando materias…</p>}
-          {materias.carga?.error && <p role="alert" className="text-sm text-[#647168]">
-            No se pudieron cargar las materias. <button type="button" onClick={materias.recargar} className={'font-semibold text-[#35695D] underline underline-offset-4 ' + foco}>Reintentar</button>
-          </p>}
+          {materias.carga?.error && <CargaFallida texto="No se pudieron cargar las materias." recargar={materias.recargar} />}
           {materias.carga?.datos?.length === 0 && <p className="text-sm leading-relaxed text-[#647168]">Tus materias aparecerán aquí cuando las registres.</p>}
           {!!materias.carga?.datos?.length && <ul className="flex flex-wrap gap-2">
             {materias.carga.datos.map((materia) => {
@@ -149,6 +145,8 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
             })}
           </ul>}
         </section>
+
+        <InstalarOrbit style={paso(6)} />
       </div>
 
       <form action={cerrarSesionAction} className="flex justify-center pb-6 pt-1">

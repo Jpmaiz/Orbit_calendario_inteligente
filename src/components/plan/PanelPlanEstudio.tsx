@@ -4,6 +4,10 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent
 import { leerAgenda, type AgendaDia } from '../calendario/agendaDia';
 import { diaEnBolivia, sumarDias } from '../calendario/organizarTareasDia';
 import { cargarPlan, eliminarPlan, guardarPlan, type DatosPlan } from './contratoPlan';
+import NecesitasInternet from '../pwa/NecesitasInternet';
+import CargaFallida from '../pwa/CargaFallida';
+import { useEnLinea } from '../pwa/useEnLinea';
+import { mensajeError, SIN_RED } from '../pwa/errorRed';
 import {
   aEditable, aISO, ajustar, armarDias, choqueDe, crearEn, duracion, H0, H1, hhmm, libres, MAX_DIAS, MIN_BLOQUE,
   type BloqueEditable, type DiaPlan, type Tramo,
@@ -52,6 +56,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
   const [accion, setAccion] = useState<'guardar' | 'quitar' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const ocupada = cargando || accion !== null;
+  const enLinea = useEnLinea();
 
   useEffect(() => {
     montado.current = true;
@@ -92,7 +97,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
         const primero = editables.length ? Math.min(...editables.map((b) => b.dia)) : 0;
         setInicio(Math.max(0, Math.min(primero, nuevos.length - 2)));
       } catch (e) {
-        if (!abort.signal.aborted) setError(e instanceof Error ? e.message : 'No se pudo consultar el plan.');
+        if (!abort.signal.aborted) setError(mensajeError(e, 'No se pudo consultar el plan.'));
       } finally {
         if (!abort.signal.aborted) setCargando(false);
       }
@@ -169,7 +174,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
       setSucio(false);
       setSel(null);
     } catch (e) {
-      if (montado.current) setError(e instanceof Error ? e.message : 'No se pudo guardar. Tus cambios siguen aquí.');
+      if (montado.current) setError(mensajeError(e, 'No se pudo guardar. Tus cambios siguen aquí.'));
     } finally {
       solicitud.current = false;
       if (montado.current) setAccion(null);
@@ -190,7 +195,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
   const futuros = bloques.filter((b) => !b.enCurso).length;
   const guardadoFuturo = (datos?.guardado ?? []).some((b) => !b.enCurso);
   const quitaPlan = futuros === 0 && guardadoFuturo;
-  const puedeGuardar = !!datos && !ocupada && conflictos.size === 0 && (quitaPlan || (futuros > 0 && (sucio || !guardadoFuturo)));
+  const puedeGuardar = enLinea && !!datos && !ocupada && conflictos.size === 0 && (quitaPlan || (futuros > 0 && (sucio || !guardadoFuturo)));
   const textoBoton = accion === 'guardar' ? 'Guardando…' : accion === 'quitar' ? 'Quitando…'
     : quitaPlan ? 'Quitar plan' : !sucio && guardadoFuturo ? 'Plan guardado' : 'Guardar plan';
   const limite = datos ? new Date(datos.tarea.fechaLimite) : null;
@@ -362,7 +367,8 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
             </ul>
           </section>
 
-          {error && <p role="alert" className="whitespace-pre-wrap rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-3 text-sm text-[#A34955]">{error}</p>}
+          {error && error !== SIN_RED && <p role="alert" className="whitespace-pre-wrap rounded-xl border border-[#EED4D7] bg-[#FCF0F1] p-3 text-sm text-[#A34955]">{error}</p>}
+          <NecesitasInternet className="self-center" />
 
           <footer className="flex items-center gap-2">
             <button type="button" disabled={accion !== null} onClick={() => { if (!solicitud.current) dialogo.current?.close(); }}
@@ -375,7 +381,8 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
           </footer>
         </>)}
 
-      {!datos && !cargando && error && <div role="alert" className="space-y-2 rounded-xl bg-[#FCF0F1] p-3 text-sm text-[#A34955]">
+      {!datos && !cargando && error === SIN_RED && <CargaFallida texto="No se pudo consultar el plan." error={error} className="rounded-xl bg-[#F6F8F3] p-3" />}
+      {!datos && !cargando && error && error !== SIN_RED && <div role="alert" className="space-y-2 rounded-xl bg-[#FCF0F1] p-3 text-sm text-[#A34955]">
         <p>{error}</p>
       </div>}
     </div>
