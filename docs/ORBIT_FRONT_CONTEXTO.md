@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.13 · 18/11/2026)
+# Orbit — Contexto del backend para el front (v2.14 · 23/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.14 (23/11) — energía por momento del día, sin texto libre](#novedades-214)
 ★ [Novedades de la v2.13 (18/11) — perfil: mi ritmo, lo aprendido, semestre](#novedades-213)
 ★ [Novedades de la v2.12 (18/11) — calendario: plan, duración de exámenes, ventana](#novedades-212)
 ★ [Novedades de la v2.11 (17/11) — apodo en el perfil](#novedades-211)
@@ -32,6 +33,76 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-214"></a>
+## ★ Novedades de la v2.14 (23/11/2026) — Energía por momento del día, sin texto libre
+
+**Sin migración** (todo va en `usuarios.ritmo` y `senales_aprendizaje`, que ya existen). Decisión D23.
+
+**Regla nueva:** lo que el estudiante dice de sí mismo (cuándo rinde, cómo está hoy, cuánto tardó) se responde con
+**botones, selectores o chips, nunca con texto libre**. El único texto libre que queda es la captura (el mensaje o la foto del docente).
+
+**0. Se retira "Cuéntale a Orbit tu semana"**
+- `POST /api/perfil/ritmo/interpretar` **ya no existe** (404). Quitar el cuadro de texto y `interpretarSemana` de `contratoPerfil.ts`.
+- Trabajo, gimnasio, etc.: se agregan en el horario como clase fija sin materia (`POST /api/eventos`), con días en botones y horas con selector.
+
+**1. Mi ritmo trae la energía** (`GET /api/perfil` y `PATCH /api/perfil`)
+```ts
+ritmo: {
+  desde, hasta, maxHorasDia, diasLibres,            // igual que antes
+  energia: { manana: Nivel; mediodia: Nivel; tarde: Nivel; noche: Nivel };  // Nivel = 'alta' | 'normal' | 'baja'
+  energiaPreguntada: boolean;                       // ya vio las dos preguntas (respondió o saltó)
+  menosEstudio: number[];                           // días (1–7) con la mitad del tope ("sueles estar cansado")
+  franja: 'manana' | 'tarde' | 'noche' | null;      // SOLO compatibilidad: primer momento alto. No usar en pantallas nuevas.
+}
+```
+- Momentos: **mañana** (inicio del horario–12:00), **mediodía** (12:00–15:00), **tarde** (15:00–19:00), **noche** (19:00–fin del horario).
+- **Las dos preguntas de la primera vez** (se pueden saltar): "¿Cuándo te concentras mejor?" y "¿Cuándo te cuesta más?",
+  con botones Mañana · Mediodía · Tarde · Noche · No sé. Guardar:
+  `PATCH /api/perfil { ritmo: { energia: { <mejor>: "alta", <cuesta>: "baja" }, energiaPreguntada: true } }`
+  ("No sé" = no mandar ese momento; saltar = solo `energiaPreguntada: true`). No dejar elegir el mismo momento en las dos.
+- **Un toque por momento** en el perfil: cicla alta → normal → baja → alta. `PATCH /api/perfil { ritmo: { energia: { tarde: "baja" } } }`.
+- `PATCH { ritmo: { franja } }` (front viejo) sigue funcionando: ese momento pasa a alta.
+
+**2. `GET /api/perfil/energia`** — el mapa del perfil
+```ts
+{
+  momentos: [{ momento, nombre: 'Mañana', desde: '07:00', hasta: '12:00', disponible: boolean, nivel: Nivel, aprendido: boolean }],
+  preguntar: boolean,   // true = mostrar las dos preguntas (nunca las vio)
+  sugerencia: { texto: string, cambio: { energia: {...} } } | null
+}
+```
+- `aprendido: true` = Orbit lo marcó como alto por su cuenta (el usuario no eligió ninguno). Mostrar una etiqueta "aprendido".
+- `disponible: false` = ese momento queda fuera de su horario de estudio (pintarlo apagado).
+- `sugerencia`: "Últimamente mueves tus bloques a la noche. ¿Marco ese momento como el mejor para ti?". Botones
+  **Sí** → `PATCH /api/perfil { ritmo: sugerencia.cambio }` · **No** → nada. Aparece una sola vez (no se repite en 60 días).
+
+**3. Plan de estudio: cada bloque trae su momento y su razón** (`GET /api/plan/[tareaId]`)
+```ts
+propuesta.bloques: [{ inicio, fin, minutos, tipo, demanda: 'profundo' | 'practica' | 'repaso', momento, razon: string | null }]
+```
+- Mostrar `razon` debajo del bloque cuando no es null: "Tu mejor momento", "Repaso al final del día", "Único hueco libre antes de la fecha".
+- El estudio profundo va donde hay energía alta y no donde es baja (salvo que no quede otro hueco); el repaso, al final del día.
+- Orbit aprende sin preguntar: mover un bloque a otra hora del **mismo día** le enseña tu mejor momento; moverlo a otro día no.
+  El front no hace nada extra: basta con mandar `origen: "usuario"` en los bloques movidos (como ya lo hace).
+
+**4. "¿Cómo estás hoy?"** — arriba de Tu día, tres botones opcionales: **Con energía · Normal · Cansado**
+- `GET /api/dia/animo` → `{ hoy: 'energia' | 'normal' | 'cansado' | null, sugerencia: { texto, cambio: { menosEstudio } } | null }`.
+  `hoy` marca el botón ya elegido. Sin respuesta, no insistir ni notificar.
+- `POST /api/dia/animo { estado }` → `{ estado, propuesta: { cambios: [{ id, tareaId, titulo, de: { inicio, fin }, a: { inicio, fin }, razon }], mensaje } }`.
+  - **Cansado:** el estudio profundo de hoy pasa a otros días (si alcanza el tiempo). `mensaje` dice qué se mueve y qué no
+    ("No puedo mover «Examen de Redes»: no queda otro día antes de la fecha.").
+  - **Con energía:** un bloque futuro traído a hoy. `mensaje` = "¿Adelanto 1 h de «Redes» para hoy a las 20:00?".
+  - **Normal:** `cambios: []`, `mensaje: null`.
+  - **No mueve nada.** Mostrar los cambios (de → a) y, si acepta: `POST /api/dia/reacomodar { cambios: [{ id, inicio: a.inicio, fin: a.fin }] }`.
+- `POST /api/dia/reacomodar` → `{ bloques }`; 400 regla, 404 bloque, 409 ya empezó. Todo o nada. Después, recargar Tu día.
+- `sugerencia` (pocas veces): "Los lunes sueles tener poca energía. ¿Te pongo menos estudio ese día?" →
+  **Sí** = `PATCH /api/perfil { ritmo: sugerencia.cambio }`. Aparece una sola vez (no se repite en 60 días).
+
+**5. "Lo que Orbit sabe de ti"** dice ahora "Sueles estudiar en la noche, así que Orbit pone ahí tu estudio más exigente"
+solo cuando lo aprendió (si el usuario eligió su momento, no lo repite). "Empezar de cero" también olvida los "¿Cómo estás hoy?".
 
 ---
 

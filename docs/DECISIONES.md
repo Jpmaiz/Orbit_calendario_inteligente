@@ -139,3 +139,20 @@ cosas que llevar, bibliografía, duración, otros detalles) llega como lista `no
 **Por qué:** el usuario pidió entender el número cuando le interesa, sin ensuciar la tarjeta; las notas en grupos se leen y se
 quitan una por una. La IA percibe (reparte), el sistema valida (categorías fijas, sin repetidas) y el usuario confirma.
 
+### D23. Energía por momento del día, sin texto libre (23/11)
+**Qué:** "Mi ritmo" guarda la energía del usuario en cuatro momentos (mañana, mediodía, tarde, noche: alta, normal o baja), que
+se marca con dos preguntas de botones y un toque por momento. El planificador pone cada tipo de estudio en su momento: el profundo
+(nivel cognitivo 3–4 o proyecto) donde hay energía alta y nunca donde es baja salvo que no quede otro hueco; el repaso al final del
+día. Aprende de lo que el usuario mueve: otra hora del mismo día vota (+1 / −1), otro día no vota, agregar +1, borrar sin reemplazo
+−0,5; si el usuario no eligió ningún momento alto, ~3 movimientos y 2 de ventaja lo marcan como "aprendido"; si eligió otro, con ~5
+se le pregunta una vez (60 días sin repetir). "¿Cómo estás hoy?" (opcional) propone aliviar el día (cansado) o adelantar un bloque
+(con energía); nada se mueve sin confirmar y ese día no cuenta para aprender. Tres "cansado" el mismo día de la semana en 8 semanas
+sugieren poner menos estudio ese día (la mitad del tope).
+**Se retira** "Cuéntale a Orbit tu semana" (`POST /api/perfil/ritmo/interpretar`): los compromisos van al horario como clase fija.
+**Por qué:** el texto libre deja entrar respuestas vagas o exageradas, obliga a la IA a interpretarlas y hace que dos respuestas
+iguales no signifiquen lo mismo; con opciones, cada respuesta cuesta un toque y vale lo mismo para todos. El efecto de sincronía
+existe pero no en todos (29 de 64 estudios en adultos de 18 a 45 años; Chauhan et al., 2025): por eso es una preferencia que se
+aprende, no una regla. Dormir entre sesiones mejora la retención (Mazza et al., 2016): por eso el repaso va al final del día.
+**Código:** `src/lib/usuarios/ritmo.ts`, `src/lib/aprendizaje/energia.ts`, `src/lib/plan/planificador.ts`, `src/lib/plan/animo.ts`;
+pruebas en `scripts/probar-energia.ts`.
+

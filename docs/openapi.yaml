@@ -253,7 +253,8 @@ paths:
       summary: Propone un plan de estudio en los huecos libres hasta la fecha (no guarda)
       description: >
         Código determinista (src/lib/plan). Bloques de 60 min (50 + 10 de pausa), máximo 2 h de la materia y 4 h de estudio
-        por día, examen en al menos 3 días con repaso el día anterior y nada el mismo día del examen.
+        por día, examen en al menos 3 días con repaso el día anterior y nada el mismo día del examen. Cada estudio a su momento
+        (D23): el profundo donde el usuario tiene energía alta y no donde es baja (salvo que no quede otro hueco); el repaso al final del día.
       parameters:
         - { name: horas, in: query, required: false, schema: { type: number }, description: "Total elegido con − / +. Si falta, la estimación" }
       responses:
@@ -268,7 +269,7 @@ paths:
                   propuesta:
                     type: object
                     properties:
-                      bloques: { type: array, items: { type: object, properties: { inicio: { type: string }, fin: { type: string }, minutos: { type: integer }, tipo: { type: string, enum: [estudio, repaso] } } } }
+                      bloques: { type: array, items: { type: object, properties: { inicio: { type: string }, fin: { type: string }, minutos: { type: integer }, tipo: { type: string, enum: [estudio, repaso] }, demanda: { type: string, enum: [profundo, practica, repaso] }, momento: { type: string, enum: [manana, mediodia, tarde, noche] }, razon: { type: [string, "null"], example: "Tu mejor momento" } } } }
                       minutosNecesarios: { type: integer }
                       minutosPlanificados: { type: integer }
                       faltanMin: { type: integer, description: "> 0: no alcanza el tiempo" }
@@ -323,6 +324,51 @@ paths:
                 horas: { type: number, description: "Opcional: horas exactas; mandan sobre la respuesta" }
       responses: { "200": { description: "{ ok: true }" } }
 
+  /api/perfil/energia:
+    get:
+      tags: [Perfil]
+      summary: Energía por momento del día (D23), para el mapa del perfil
+      description: >
+        Se cambia con PATCH /api/perfil { ritmo: { energia: { noche: "alta" } } }, sin texto libre. La sugerencia queda registrada al
+        mostrarse y no se repite en 60 días.
+      responses:
+        "200":
+          description: "{ momentos: [{ momento, nombre, desde, hasta, disponible, nivel, aprendido }], preguntar, sugerencia: { texto, cambio: { energia } } | null }"
+  /api/dia/animo:
+    get:
+      tags: [Día]
+      summary: Lo que el usuario marcó hoy en "¿Cómo estás hoy?" y, a veces, una sugerencia ("Los lunes sueles tener poca energía…")
+      responses:
+        "200": { description: "{ hoy: energia | normal | cansado | null, sugerencia: { texto, cambio: { menosEstudio } } | null }" }
+    post:
+      tags: [Día]
+      summary: Guarda cómo está hoy y devuelve una propuesta (no mueve nada)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [estado], properties: { estado: { type: string, enum: [energia, normal, cansado] } } }
+      responses:
+        "200": { description: "{ estado, propuesta: { cambios: [{ id, tareaId, titulo, de: { inicio, fin }, a: { inicio, fin }, razon }], mensaje } }" }
+        "400": { description: Estado inválido }
+  /api/dia/reacomodar:
+    post:
+      tags: [Día]
+      summary: Aplica los cambios confirmados de "¿Cómo estás hoy?" (todo o nada)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cambios]
+              properties:
+                cambios: { type: array, minItems: 1, maxItems: 10, items: { type: object, required: [id, inicio, fin], properties: { id: { type: string }, inicio: { type: string, format: date-time }, fin: { type: string, format: date-time } } } }
+      responses:
+        "200": { description: "{ bloques: [{ id, tareaId, inicio, fin }] }" }
+        "400": { description: "Misma duración, en cuartos de hora, desde ahora, antes de la fecha y sin cruzarse con nada" }
+        "404": { description: Bloque no encontrado }
+        "409": { description: El bloque ya empezó }
   /api/eventos:
     get:
       tags: [Clases]
