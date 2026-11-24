@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import TarjetaTarea from './TarjetaTarea';
 import OrbitaDelDia from './OrbitaDelDia';
 import LineaHoy from './LineaHoy';
+import ComoEstasHoy from './ComoEstasHoy';
 import { AGENDA_ACTUALIZADA } from './actualizacionAgenda';
 import { diaEnBolivia, organizarTareasDia, sumarDias } from './organizarTareasDia';
 import {
@@ -96,6 +97,7 @@ export default function AgendaDiaVista({ fechaActual, inicial }: {
 
   return (
     <div className="min-w-0 space-y-6 md:space-y-8">
+      <ComoEstasHoy fechaActual={fechaActual} />
       {carga.agenda && <OrbitaDelDia agenda={carga.agenda} />}
       {(carga.errores.length > 0 || combinadas.sinPrioridad > 0) && (
         <div role="alert" className="space-y-2 rounded-xl border border-[#EED4D7] bg-[#FCF0F1] px-4 py-3 text-sm leading-6 text-[#A34955]">

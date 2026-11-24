@@ -1,7 +1,8 @@
 import { avisarAgendaActualizada } from '../calendario/actualizacionAgenda';
 
 export type OrigenBloque = 'orbit' | 'usuario';
-export type BloquePlan = { inicio: string; fin: string; tipo: 'estudio' | 'repaso' };
+/** razon (v2.14): por qué Orbit lo puso ahí («Tu mejor momento»…); solo en la propuesta, nunca se manda al guardar. */
+export type BloquePlan = { inicio: string; fin: string; tipo: 'estudio' | 'repaso'; razon?: string | null };
 /** Lo que se manda al guardar (v2.10): cuartos de hora, de 30 min a 4 h, con su origen. */
 export type BloqueAGuardar = BloquePlan & { origen: OrigenBloque };
 /** enCurso: empezó y no terminó; el back lo conserva y no se edita. */
@@ -48,7 +49,7 @@ function bloque(v: unknown): BloquePlan {
   const inicio = instante(b.inicio), fin = instante(b.fin);
   if (+new Date(fin) <= +new Date(inicio)) throw new Error('Intervalo de estudio inválido.');
   if (b.tipo !== 'estudio' && b.tipo !== 'repaso') throw new Error('Tipo de bloque desconocido.');
-  return { inicio, fin, tipo: b.tipo };
+  return { inicio, fin, tipo: b.tipo, razon: typeof b.razon === 'string' && b.razon.trim() ? b.razon.trim() : null };
 }
 function guardado(v: unknown): BloqueGuardado {
   const b = objeto(v);
@@ -71,7 +72,7 @@ export function leerPlan(v: unknown): DatosPlan {
   };
 }
 export function construirBodyPlan(bloques: readonly BloqueAGuardar[]) {
-  return { bloques: bloques.map((b) => ({ ...bloque(b), origen: b.origen })) };
+  return { bloques: bloques.map((b) => { const { inicio, fin, tipo } = bloque(b); return { inicio, fin, tipo, origen: b.origen }; }) };
 }
 function leerGuardado(v: unknown): ResultadoPlan {
   const d = objeto(v);

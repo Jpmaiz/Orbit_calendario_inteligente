@@ -16,6 +16,8 @@ export type DiaPlan = { dia: string; desde: number; hasta: number; ocupados: Ocu
 export type BloqueEditable = {
   clave: string; dia: number; ini: number; fin: number;
   tipo: BloquePlan['tipo']; origen: OrigenBloque; enCurso: boolean; idGuardado: string | null;
+  /** Por qué lo sugirió Orbit; se muestra solo mientras el bloque sigue siendo de Orbit. */
+  razon?: string | null;
 };
 
 const formatoHora = new Intl.DateTimeFormat('en-GB', { timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -96,7 +98,7 @@ export function aEditable(
   const finMin = diaEnBolivia(fin) === dias[indice].dia ? minutoBolivia(fin) : 1440;
   return {
     clave, dia: indice, ini: minutoBolivia(inicio), fin: finMin, tipo: b.tipo, origen: b.origen,
-    enCurso: !!b.enCurso, idGuardado: b.id ?? null,
+    enCurso: !!b.enCurso, idGuardado: b.id ?? null, razon: b.razon ?? null,
   };
 }
 

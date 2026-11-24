@@ -295,6 +295,7 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
                         className={'absolute inset-0 flex flex-col items-start overflow-hidden rounded-[9px] px-2 pb-1.5 pt-2.5 text-left disabled:cursor-default ' + foco}>
                         <span className="text-[13px] font-semibold leading-tight">{b.enCurso ? 'En curso' : etiqueta}</span>
                         <span className="tabular-nums text-xs opacity-90">{hhmm(b.ini)} – {hhmm(b.fin)}</span>
+                        {orbit && b.razon && !b.enCurso && <span className="mt-0.5 text-[11px] font-medium leading-tight opacity-80">{b.razon}</span>}
                       </button>
                       {!b.enCurso && !ocupada && (['ini', 'fin'] as const).map((borde) => <button type="button" key={borde}
                         aria-label={(borde === 'ini' ? 'Ajustar inicio, ' + hhmm(b.ini) : 'Ajustar fin, ' + hhmm(b.fin)) + '. Usa las flechas arriba y abajo'}
@@ -347,7 +348,10 @@ export default function PanelPlanEstudio({ tareaId, titulo, horaDefinida = true,
                 </div>
                 {g.delDia.map((b) => <div key={b.clave} className="flex min-h-10 items-center gap-2.5 rounded-[10px] bg-white pl-3 pr-0.5 shadow-[inset_0_0_0_1px_#E3E8DE]">
                   <span aria-hidden="true" className={'h-2 w-2 shrink-0 rounded-[3px] ' + (b.origen === 'orbit' ? 'border-[1.5px] border-dashed border-[#6FA08B] bg-[#E3F1E8]' : 'bg-[#35695D]')} />
-                  <span className="flex-1 text-sm tabular-nums">{hhmm(b.ini)} – {hhmm(b.fin)}</span>
+                  <span className="flex flex-1 flex-col py-1.5">
+                    <span className="text-sm tabular-nums">{hhmm(b.ini)} – {hhmm(b.fin)}</span>
+                    {b.origen === 'orbit' && b.razon && !b.enCurso && <span className="text-xs text-[#4C6A5D]">{b.razon}</span>}
+                  </span>
                   <span className="text-[13px] text-[#647168]">{duracion(b.fin - b.ini)} · {b.enCurso ? 'en curso' : b.tipo === 'repaso' ? 'Repaso' : b.origen === 'orbit' ? 'Orbit' : 'Tuyo'}</span>
                   {b.enCurso ? <span className="w-2" /> : <button type="button" disabled={ocupada} aria-label={`Quitar ${g.nombre} de ${hhmm(b.ini)} a ${hhmm(b.fin)}`} onClick={() => quitar(b.clave)}
                     className={'grid h-10 w-10 place-items-center rounded-lg text-[#647168] hover:bg-[#F1F5F0] ' + foco}>
