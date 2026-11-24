@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import AgendaDiaVista from '@/components/calendario/AgendaDiaVista';
+import InsigniaAnimo from '@/components/calendario/InsigniaAnimo';
 import PreguntaAprendizaje from '@/components/aprendizaje/PreguntaAprendizaje';
 import { diaEnBolivia, sumarDias } from '@/components/calendario/organizarTareasDia';
 import { cargarAgenda, cargarTareas } from '@/lib/agenda/consultas';
@@ -74,9 +75,10 @@ export default async function PaginaDia() {
       {/* Sin animación de entrada: es lo primero que se ve (LCP) y un fade desde opacidad 0 lo atrasa */}
       <header className="flex items-end justify-between gap-4">
         <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-          <time dateTime={fechaActual.toISOString()} className="block text-[13px] font-semibold uppercase tracking-[0.12em] text-[#8A958D]">
-            {fechaCorta}
-          </time>
+          <p className="text-[13px] font-semibold tracking-[0.12em] text-[#8A958D]">
+            <time dateTime={fechaActual.toISOString()} className="uppercase">{fechaCorta}</time>
+            {usuarioId && <InsigniaAnimo />}
+          </p>
           <h1 className="mt-1.5 text-[30px] font-semibold leading-[1.1] tracking-[-0.025em] text-[#1F3B31] md:text-4xl">
             {saludoDe(fechaActual)},<br /><span className="break-words">{primerNombre}</span>
           </h1>

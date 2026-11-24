@@ -59,3 +59,12 @@ export async function reacomodar(cambios: CambioBloque[]): Promise<void> {
   });
   avisarAgendaActualizada();
 }
+
+/** Nombres cortos y con onda para cada estado (burbuja e insignia del saludo). */
+export const NOMBRE_ANIMO: Record<EstadoAnimo, string> = { energia: 'A full', normal: 'Tranqui', cansado: 'Modo ahorro' };
+
+/** La burbuja avisa lo elegido; la insignia del saludo pide volver a abrirla. */
+export const ANIMO_ELEGIDO = 'orbit:animo-elegido';
+export const ANIMO_CAMBIAR = 'orbit:animo-cambiar';
+export const avisarAnimo = (estado: EstadoAnimo) => window.dispatchEvent(new CustomEvent<EstadoAnimo>(ANIMO_ELEGIDO, { detail: estado }));
+export const pedirCambioAnimo = () => window.dispatchEvent(new Event(ANIMO_CAMBIAR));
