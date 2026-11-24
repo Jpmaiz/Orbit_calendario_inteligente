@@ -156,3 +156,14 @@ aprende, no una regla. Dormir entre sesiones mejora la retención (Mazza et al.,
 **Código:** `src/lib/usuarios/ritmo.ts`, `src/lib/aprendizaje/energia.ts`, `src/lib/plan/planificador.ts`, `src/lib/plan/animo.ts`;
 pruebas en `scripts/probar-energia.ts`.
 
+### D24. PWA con Serwist (24/11)
+**Qué:** Orbit se instala como app (manifiesto en `src/app/manifest.ts`, íconos en `public/icons/`) y funciona sin conexión con un
+service worker de Serwist para Turbopack (`src/app/sw.ts`, servido en `/serwist/sw.js`). Estrategia: primero la red; sin conexión, lo
+último guardado de páginas y GET de `/api`; si nunca se abrió, `/~offline`. Nunca se guardan Supabase ni la IA, y los cambios
+necesitan internet. Al llegar a `/login` o `/registro` se borran las cachés con datos del usuario. El middleware deja pasar el service
+worker, el manifiesto, los íconos y `/~offline`. `sw.ts` queda fuera del tsconfig principal (usa los tipos de webworker).
+**Por qué:** los estudiantes usan Orbit desde el celular y con conexión irregular; ver el día sin internet y abrir Orbit como una app
+reduce fricción. Primero la red para no mostrar datos viejos cuando hay conexión.
+**Despliegue:** `vercel.json` fija la región `gru1` (São Paulo, junto a la base); el build corre `prisma generate`.
+**Siguiente:** notificaciones push (VAPID + `web-push` + Vercel Cron), que requieren el despliegue con HTTPS.
+

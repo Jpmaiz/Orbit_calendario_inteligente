@@ -47,5 +47,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|api).*)'],
+  // Fuera del middleware: estáticos, la API y lo de la PWA (service worker, manifiesto, íconos, página sin conexión),
+  // que tienen que responder aunque no haya sesión
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|icon.svg|apple-icon.png|manifest.webmanifest|icons/|serwist/|~offline|api).*)'],
 };

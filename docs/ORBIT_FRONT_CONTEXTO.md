@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.14 · 23/11/2026)
+# Orbit — Contexto del backend para el front (v2.15 · 24/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.15 (24/11) — PWA: se instala y funciona sin conexión](#novedades-215)
 ★ [Novedades de la v2.14 (23/11) — energía por momento del día, sin texto libre](#novedades-214)
 ★ [Novedades de la v2.13 (18/11) — perfil: mi ritmo, lo aprendido, semestre](#novedades-213)
 ★ [Novedades de la v2.12 (18/11) — calendario: plan, duración de exámenes, ventana](#novedades-212)
@@ -33,6 +34,25 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-215"></a>
+## ★ Novedades de la v2.15 (24/11/2026) — PWA: se instala y funciona sin conexión
+
+Decisión D24. Paquetes nuevos: `@serwist/turbopack`, `serwist`, `esbuild` (devDependencies).
+
+- **Manifiesto:** `src/app/manifest.ts` → `/manifest.webmanifest` (nombre, colores, íconos en `public/icons/`). Abre en `/dia`.
+- **Service worker:** `src/app/sw.ts`, servido en `/serwist/sw.js` por `src/app/serwist/[path]/route.ts`. Se registra en el
+  layout raíz con `SerwistProvider` y **solo corre en producción** (`npm run build` + `npm start`); en `npm run dev` no guarda nada.
+- **Sin conexión:** se ve lo último abierto (páginas y GET de `/api`). Si una pantalla nunca se abrió, sale `/~offline`.
+  Nunca se guardan Supabase ni `/api/ia/*`; los POST/PATCH/DELETE necesitan internet.
+- **Aviso:** `src/components/pwa/AvisoConexion.tsx` muestra "Sin conexión: ves lo último guardado…" arriba. Se puede restilizar.
+- **Privacidad:** al entrar a `/login` o `/registro` se borran las cachés con datos del usuario (`src/lib/pwa/cache.ts`).
+- **Pendiente para el front (opcional):** botón "Instalar Orbit" con el evento `beforeinstallprompt` (Android/Chrome) y, en iPhone,
+  una nota: Compartir → "Agregar a inicio".
+- **Probar:** `npm run build` y `npm start`, abrir `http://localhost:3000`; en Chrome aparece "Instalar". En DevTools → Application
+  se ven el manifiesto y el service worker; con Network → Offline se prueba sin conexión.
 
 ---
 
