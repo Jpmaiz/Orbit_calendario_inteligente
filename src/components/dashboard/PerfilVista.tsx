@@ -19,6 +19,7 @@ import MiRitmo from '../perfil/MiRitmo';
 import LoQueSabe from '../perfil/LoQueSabe';
 import CargaFallida from '../pwa/CargaFallida';
 import InstalarOrbit from '../pwa/InstalarOrbit';
+import Avisos from '../perfil/Avisos';
 
 const foco = 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#28746B] focus-visible:ring-offset-2';
 const modulo = 'rounded-[28px] bg-white p-[18px] shadow-[inset_0_0_0_1px_#E3E8DE]';
@@ -146,7 +147,8 @@ export default function PerfilVista({ nombre, apodo = null, correo, fotoUrl = nu
           </ul>}
         </section>
 
-        <InstalarOrbit style={paso(6)} />
+        <Avisos style={paso(6)} />
+        <InstalarOrbit style={paso(7)} />
       </div>
 
       <form action={cerrarSesionAction} className="flex justify-center pb-6 pt-1">

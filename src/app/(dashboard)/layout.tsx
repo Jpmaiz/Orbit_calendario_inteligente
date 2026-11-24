@@ -1,6 +1,7 @@
 import ProveedorPeriodos from '@/components/periodos/ProveedorPeriodos';
 import ConfiguracionPeriodo from '@/components/periodos/ConfiguracionPeriodo';
 import ControlesDashboard from '@/components/dashboard/ControlesDashboard';
+import BurbujaAvisos from '@/components/pwa/BurbujaAvisos';
 import { obtenerUsuario } from '@/lib/supabase/servidor';
 import { asegurarPerfil } from '@/lib/usuarios/perfil';
 
@@ -23,6 +24,8 @@ export default async function LayoutDashboard({
           {children}
         </main>
         <ControlesDashboard ubicacion="navegacion" />
+        {/* Solo con sesión: «¿Te avisamos antes de estudiar?» una vez, en la app instalada */}
+        {usuario && <BurbujaAvisos />}
       </div>
     </ProveedorPeriodos>
   );
