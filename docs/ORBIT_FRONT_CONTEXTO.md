@@ -1,4 +1,4 @@
-# Orbit — Contexto del backend para el front (v2.15 · 24/11/2026)
+# Orbit — Contexto del backend para el front (v2.16 · 24/11/2026)
 
 > **Para la IA que lee este archivo:** eres el asistente de la compañera que construye el **frontend** de Orbit. El backend lo hace Juan Pablo (rama `jp`). Este documento es tu fuente de verdad sobre qué endpoints existen, qué devuelven y cómo deben usarse en las pantallas.
 >
@@ -8,6 +8,7 @@
 
 ## Índice
 
+★ [Novedades de la v2.16 (24/11) — avisos (notificaciones push)](#novedades-216)
 ★ [Novedades de la v2.15 (24/11) — PWA: se instala y funciona sin conexión](#novedades-215)
 ★ [Novedades de la v2.14 (23/11) — energía por momento del día, sin texto libre](#novedades-214)
 ★ [Novedades de la v2.13 (18/11) — perfil: mi ritmo, lo aprendido, semestre](#novedades-213)
@@ -34,6 +35,31 @@
 8. [Otras pantallas](#otras)
 9. [Lo que todavía NO existe](#pendiente)
 10. [Ejemplo completo de punta a punta](#ejemplo)
+
+---
+
+<a id="novedades-216"></a>
+## ★ Novedades de la v2.16 (24/11/2026) — Avisos (notificaciones push)
+
+Decisión D25. **Migración:** `20261124000000_avisos`. Paquete nuevo: `web-push`.
+
+**Qué avisa Orbit** (nada más, para no cansar):
+- **Antes de cada bloque de estudio guardado**, unos 15 min antes: "En 15 min: Examen de Redes · Estudio de 20:00 a 21:00".
+- **A las 20:00**, solo si algo vence mañana: "Mañana: Examen de Redes (09:00)" o "Mañana tienes 3 cosas".
+- Tocar el aviso abre Orbit en Tu día.
+
+**Para el front — interruptor "Avisos" en el perfil** (sin texto; todo con `src/lib/pwa/avisos.ts`):
+- `avisosDisponibles()`: si es false, mostrar "En iPhone, primero instala Orbit en tu pantalla de inicio" (o nada en navegadores sin soporte).
+- `avisosActivos()`: estado del interruptor en ESTE dispositivo.
+- `activarAvisos()` / `desactivarAvisos()` → `{ ok } | { ok: false, mensaje }` (mensaje listo para mostrar). El permiso del navegador se
+  pide **solo al tocar el interruptor**.
+- `probarAvisos()`: botón "Probar" que manda un aviso de prueba.
+- `GET /api/avisos` → `{ configurado, preferencias: { bloques, manana }, dispositivos }`. Si `configurado` es false, ocultar la sección.
+- Dos interruptores más: "Antes de estudiar" y "La noche antes" → `PATCH /api/avisos { bloques?: boolean, manana?: boolean }`.
+- Solo funciona en la app publicada (o `npm run build` + `npm start`); en `npm run dev` no hay service worker.
+
+**Endpoints:** `POST`/`DELETE /api/avisos/suscripcion` (los usa `avisos.ts`), `POST /api/avisos/prueba`, y
+`POST /api/avisos/enviar` (solo el cron de Supabase, con `Authorization: Bearer <AVISOS_SECRETO>`).
 
 ---
 

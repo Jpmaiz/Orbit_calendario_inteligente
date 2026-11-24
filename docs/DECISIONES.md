@@ -167,3 +167,15 @@ reduce fricción. Primero la red para no mostrar datos viejos cuando hay conexi�
 **Despliegue:** `vercel.json` fija la región `gru1` (São Paulo, junto a la base); el build corre `prisma generate`.
 **Siguiente:** notificaciones push (VAPID + `web-push` + Vercel Cron), que requieren el despliegue con HTTPS.
 
+### D25. Avisos push: pocos y útiles (24/11)
+**Qué:** dos avisos, cada uno con su interruptor: antes de cada bloque de estudio guardado (entre 2 y 20 min antes) y a las 20:00, solo
+si algo vence mañana (si no vence nada, silencio). Se envían con web-push y claves VAPID a cada dispositivo donde el usuario los activó
+(`suscripciones_push`, con RLS para que la API pública de Supabase no la lea). Cada aviso queda en `recordatorios` con una clave única
+("bloque:<id>", "manana:<fecha>"): nunca llega dos veces. Las suscripciones vencidas (404/410) se borran solas.
+**Cuándo corre:** Supabase Cron (pg_cron + pg_net) llama a `POST /api/avisos/enviar` cada 5 min con un secreto. Vercel Hobby solo permite
+cron una vez al día, que no alcanza para avisar antes de un bloque. Además, la llamada frecuente mantiene activa la base (no se pausa).
+**Por qué:** los avisos son lo que hace volver a una app del celular, pero muchos cansan y se apagan. El permiso se pide solo cuando el
+usuario toca el interruptor. Nada de texto libre: interruptores.
+**Código:** `src/lib/avisos/`, `src/app/api/avisos/`, `src/lib/pwa/avisos.ts` y el service worker (`src/app/sw.ts`); pruebas en
+`scripts/probar-avisos.ts`.
+

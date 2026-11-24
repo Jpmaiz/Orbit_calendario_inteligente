@@ -369,6 +369,57 @@ paths:
         "400": { description: "Misma duración, en cuartos de hora, desde ahora, antes de la fecha y sin cruzarse con nada" }
         "404": { description: Bloque no encontrado }
         "409": { description: El bloque ya empezó }
+  /api/avisos:
+    get:
+      tags: [Avisos]
+      summary: Estado de los avisos del usuario (D25)
+      responses:
+        "200": { description: "{ configurado, preferencias: { bloques, manana }, dispositivos }" }
+    patch:
+      tags: [Avisos]
+      summary: Interruptores de los avisos
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, properties: { bloques: { type: boolean }, manana: { type: boolean } } }
+      responses:
+        "200": { description: "{ preferencias }" }
+  /api/avisos/suscripcion:
+    post:
+      tags: [Avisos]
+      summary: Activa los avisos en este dispositivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [suscripcion], properties: { suscripcion: { type: object, description: "PushSubscription.toJSON()" } } }
+      responses:
+        "200": { description: "{ dispositivos }" }
+    delete:
+      tags: [Avisos]
+      summary: Apaga los avisos en este dispositivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [endpoint], properties: { endpoint: { type: string } } }
+      responses:
+        "200": { description: "{ eliminados }" }
+  /api/avisos/prueba:
+    post:
+      tags: [Avisos]
+      summary: Manda un aviso de prueba
+      responses:
+        "200": { description: "{ enviados }" }
+        "409": { description: Ningún dispositivo tiene los avisos activados }
+  /api/avisos/enviar:
+    post:
+      tags: [Avisos]
+      summary: "Solo Supabase Cron (cada 5 min, Authorization: Bearer AVISOS_SECRETO): manda los avisos que tocan"
+      responses:
+        "200": { description: "{ usuarios, bloques, resumenes }" }
+        "401": { description: Secreto incorrecto }
   /api/eventos:
     get:
       tags: [Clases]
